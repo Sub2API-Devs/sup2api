@@ -1173,6 +1173,7 @@ function usageSummary(rows: any[], query: Record<string, string>) {
       case 'group': return u.group_name
       case 'endpoint': return u.endpoint
       case 'platform': return u.platform
+      case 'protocol': return u.protocol
       case 'none': return ''
       case 'hour': return zoned(u.created_at, tz).hour
       default: return zoned(u.created_at, tz).day
@@ -1289,7 +1290,7 @@ function usageCSV(rows: any[], q: Record<string, string>, self: boolean) {
 on('GET', '/usage/summary', (req) => usageSummary(usageRows, req.query))
 on('GET', '/me/usage/summary', (req) =>
   req.query.group_by === 'user' || req.query.group_by === 'upstream_model'
-    ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip')
+    ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip')
     : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
 // GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.

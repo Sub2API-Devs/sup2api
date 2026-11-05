@@ -15,9 +15,11 @@ const auth = useAuthStore()
 const extraTabs = computed<TabItem[]>(() => (auth.has('balance:self:read') ? [{ key: 'ledger', label: t('stats.tabs.ledger') }] : []))
 const tab = ref('records')
 
-// The page owns the header; the records and the ledger tab each follow their
-// own `revision` and report their loading state, so no ref reaches into a
-// child's methods. A refresh on the ledger tab reloads only the ledger.
+// The page owns the header and the refresh button, which sits in the search
+// bar (#actions of UsageRecords) rather than on a row of its own; the records
+// and the ledger tab each follow their own `revision` and report their
+// loading state, so no ref reaches into a child's methods. A refresh on the
+// ledger tab reloads only the ledger.
 const recordsRevision = ref(0)
 const ledgerRevision = ref(0)
 const recordsLoading = ref(false)
@@ -32,11 +34,7 @@ function refresh() {
 
 <template>
   <div>
-    <SPageHeader :title="t('usage.myTitle')" :description="t('usage.myDescription')">
-      <template #actions>
-        <SButton :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
-      </template>
-    </SPageHeader>
+    <SPageHeader :title="t('usage.myTitle')" :description="t('usage.myDescription')" />
 
     <UsageRecords
       v-model:loading="recordsLoading"
@@ -47,6 +45,9 @@ function refresh() {
       :extra-tabs="extraTabs"
       @update:tab="tab = $event"
     >
+      <template #actions>
+        <SButton size="sm" :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
+      </template>
       <template #tab-ledger>
         <MyLedgerTab v-model:loading="ledgerLoading" :revision="ledgerRevision" />
       </template>

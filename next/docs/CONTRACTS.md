@@ -4629,7 +4629,7 @@ native 执行路径（Worker 维护 CLI agent 会话、原生工具目录、历�
 - `group_by` 新增：
   - `hour`：`YYYY-MM-DD HH:00`，按 `tz` 的整点分桶；范围（`from` 缺省 30 天前，`to` 缺省现在）超过 31 天 400。
   - `none`：只返回一行合计，`key` 为 `""`；没有匹配的行时也返回这一行（全 0）。
-  - `group`（键为分组名，分组已删时为 id）、`endpoint`、`platform`。
+  - `group`（键为分组名，分组已删时为 id）、`endpoint`、`platform`、`protocol`（请求类型，即协议标识如 `anthropic.messages`；使用记录页第一行的「请求类型」下拉用它列出当前搜索范围内出现过的值，查询时不带 `protocol` 筛选本身）。
   - `day` 改为按 `tz` 的日历日（缺省 UTC，旧调用不变）。
 - 每行新增字段：`total_tokens`（输入 + 输出 + 缓存读 + 缓存写，含 1 小时写）、`standard_cost`（`total_cost / rate_multiplier` 之和，倍率为 0 的行计 0）、`latency_ms_avg` 与 `first_token_ms_avg`（只算成功且该时间大于 0 的请求，四舍五入为整数毫秒，没有时为 0）。
 - 自助接口仍拒绝 `group_by=user`；其余维度都不涉及上游信息。

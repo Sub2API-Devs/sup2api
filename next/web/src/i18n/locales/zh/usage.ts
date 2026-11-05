@@ -41,7 +41,7 @@ export default {
     request_id: '请求 ID',
     client_request_id: '客户端请求 ID',
     platform: '平台',
-    protocol: '协议',
+    protocol: '请求类型',
     endpoint: '端点',
     status_code: 'HTTP 状态码',
     error_type: '错误类型',

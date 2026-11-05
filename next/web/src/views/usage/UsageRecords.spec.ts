@@ -16,10 +16,14 @@ vi.mock('@/composables/useList', () => ({
   }
 }))
 const summaries: string[] = []
+const extras: Record<string, Record<string, unknown>> = {}
+const protocolRows = ref<Array<{ key: string }>>([])
 vi.mock('./useUsageSummary', () => ({
-  useUsageSummary: (_p: string, _f: unknown, groupBy: unknown) => {
-    summaries.push(typeof groupBy === 'function' ? groupBy() : String(groupBy))
-    return { rows: ref([]), loading: ref(false), error: ref(null), reload: vi.fn() }
+  useUsageSummary: (_p: string, _f: unknown, groupBy: unknown, _enabled?: unknown, extra?: unknown) => {
+    const by = typeof groupBy === 'function' ? groupBy() : String(groupBy)
+    summaries.push(by)
+    extras[by] = typeof extra === 'function' ? extra() : ((extra as Record<string, unknown>) ?? {})
+    return { rows: by === 'protocol' ? protocolRows : ref([]), loading: ref(false), error: ref(null), reload: vi.fn() }
   }
 }))
 const replace = vi.fn()
@@ -49,6 +53,7 @@ describe('usage records page', () => {
     localStorage.clear()
     lists.length = 0
     summaries.length = 0
+    protocolRows.value = []
     replace.mockClear()
     query = {}
     i18n.global.locale.value = 'zh'
@@ -145,6 +150,27 @@ describe('usage records page', () => {
     expect(lists[0].filters.user_id).toBeUndefined()
     expect(lists[0].filters.group_name).toBeUndefined()
     expect(lists[0].filters.from).toBe('2026-10-01T00:00:00.000Z')
+  })
+
+  it('offers the request types under the search as filter options, leaving the type filter itself out of that query', async () => {
+    protocolRows.value = [{ key: 'anthropic.messages' }, { key: '' }, { key: 'openai.chat' }]
+    const w = render()
+    await flushPromises()
+    expect(summaries).toContain('protocol')
+    expect(extras.protocol).toEqual({ protocol: '' })
+    expect(w.findComponent({ name: 'UsageFilters' }).props('protocolOptions')).toEqual(['anthropic.messages', 'openai.chat'])
+  })
+
+  it('renders the page actions in the search bar beside Export', async () => {
+    const w = mount(UsageRecords, {
+      props: { listPath: '/me/usage', summaryPath: '/me/usage/summary', defaultRange: '7d' },
+      slots: { actions: '<button data-testid="page-refresh" />' },
+      global: { plugins: [i18n], stubs: { SChart: true } }
+    })
+    await flushPromises()
+    const bar = w.get('form')
+    expect(bar.find('[data-testid="page-refresh"]').exists()).toBe(true)
+    expect(bar.find('[data-testid="export-usage"]').exists()).toBe(true)
   })
 
   it('exports the searched requests, and reports a failed export', async () => {

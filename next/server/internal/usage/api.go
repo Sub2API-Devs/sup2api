@@ -710,6 +710,10 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		join = ` LEFT JOIN groups gg ON gg.id = u.group_id`
 	case "endpoint":
 		key = `u.endpoint`
+	case "protocol":
+		// The request type: the protocol id (anthropic.messages, openai.chat, …)
+		// the usage records page lists in its request-type filter.
+		key = `u.protocol`
 	case "platform":
 		key = `u.platform`
 	case "ip":
@@ -718,7 +722,7 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		order = ` ORDER BY count(*) DESC, k LIMIT ` + strconv.Itoa(maxIPGroups)
 	case "user":
 		if self != nil {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip"))
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip"))
 			return
 		}
 		key = `u.user_id::text`
@@ -728,12 +732,12 @@ func (s *Service) summarize(c *gin.Context, self *int64) {
 		// The model the upstream was asked for is upstream-side detail
 		// (hideUpstream): operators only.
 		if self != nil {
-			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform or ip"))
+			httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip"))
 			return
 		}
 		key = `u.upstream_model`
 	default:
-		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, upstream_model, user, api_key, group, endpoint, platform or ip"))
+		httpapi.Fail(c, core.ErrInvalidArgument.WithMessage("group_by must be day, hour, none, model, upstream_model, user, api_key, group, endpoint, platform, protocol or ip"))
 		return
 	}
 	if extra == "" {

@@ -41,7 +41,7 @@ export default {
     request_id: 'Request ID',
     client_request_id: 'Client request ID',
     platform: 'Platform',
-    protocol: 'Protocol',
+    protocol: 'Request type',
     endpoint: 'Endpoint',
     status_code: 'HTTP status',
     error_type: 'Error type',

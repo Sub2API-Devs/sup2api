@@ -5,8 +5,9 @@
 // tab the page adds (`extraTabs`, rendered from the #tab-<key> slot). Every
 // part follows the same filters, which a link may preset (?user_id=, ?from=,
 // …); Export downloads them as CSV. The open tab is ?tab= in the URL. The
-// page header (title, refresh) stays with the view and bumps `revision`. The
-// totals and charts are on the overview page (UsageOverview).
+// page header (title) stays with the view; its refresh button is rendered
+// from the #actions slot beside Export and bumps `revision`. The totals and
+// charts are on the overview page (UsageOverview).
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -93,9 +94,14 @@ watch(tab, (v) => {
   }
 }, { immediate: true })
 const ips = useUsageSummary(props.summaryPath, filters, 'ip', () => tab.value === 'ips')
+// The request types under the search, for the type select: queried without
+// the type filter itself, so the other types stay on offer once one is picked.
+const protocols = useUsageSummary(props.summaryPath, filters, 'protocol', true, () => ({ protocol: '' }))
+const protocolOptions = computed(() => protocols.rows.value.map((r) => r.key).filter((k) => k !== ''))
 
 function reload() {
   reloadList()
+  protocols.reload()
   if (tab.value === 'errors') errors.reload()
   if (tab.value === 'ips') ips.reload()
 }
@@ -124,7 +130,7 @@ async function exportCsv() {
 
 <template>
   <div class="flex flex-col gap-4">
-    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" @update:model-value="Object.assign(filters, $event)">
+    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" :protocol-options="protocolOptions" @update:model-value="Object.assign(filters, $event)">
       <template #range>
         <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
       </template>
@@ -132,6 +138,7 @@ async function exportCsv() {
         <UsageLiveStats :realtime-path="`${listPath}/realtime`" :summary-path="summaryPath" :filters="filters" :revision="revision" />
       </template>
       <template #actions>
+        <slot name="actions" />
         <SButton type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
       </template>
     </UsageFilters>

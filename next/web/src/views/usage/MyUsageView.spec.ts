@@ -6,7 +6,7 @@ import MyUsageView from './MyUsageView.vue'
 
 // The records and the ledger are stubbed down to their revision: what this
 // spec checks is which one a refresh reloads and which one's loading drives
-// the header button. The tabs live in UsageRecords, which reports the open
+// the refresh button (rendered into the records' #actions slot). The tabs live in UsageRecords, which reports the open
 // one (update:tab) and renders the ledger from its #tab-ledger slot.
 const mocks = vi.hoisted(() => ({ can: true }))
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ has: () => mocks.can }) }))
@@ -15,7 +15,7 @@ vi.mock('./UsageRecords.vue', () => ({
     name: 'UsageRecords',
     props: ['revision', 'listPath', 'summaryPath', 'defaultRange', 'extraTabs'],
     emits: ['update:loading', 'update:tab'],
-    template: '<div><div data-testid="records">{{ revision }}</div><span data-testid="extra">{{ extraTabs.map((x) => x.key).join() }}</span><slot name="tab-ledger" /></div>'
+    template: '<div><slot name="actions" /><div data-testid="records">{{ revision }}</div><span data-testid="extra">{{ extraTabs.map((x) => x.key).join() }}</span><slot name="tab-ledger" /></div>'
   }
 }))
 vi.mock('@/views/ledger/MyLedgerTab.vue', () => ({ default: { name: 'MyLedgerTab', props: ['revision'], emits: ['update:loading'], template: '<div data-testid="ledger">{{ revision }}</div>' } }))
@@ -51,7 +51,7 @@ describe('Mine > usage records page', () => {
     expect(revisions(w)).toEqual({ records: '1', ledger: '1' })
   })
 
-  it('spins the header button from the open tab only', async () => {
+  it('spins the refresh button from the open tab only', async () => {
     const w = render()
     await flushPromises()
     w.findComponent({ name: 'UsageRecords' }).vm.$emit('update:loading', true)

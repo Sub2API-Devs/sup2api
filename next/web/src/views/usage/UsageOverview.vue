@@ -54,6 +54,9 @@ const granularityOptions = computed(() => [
 ])
 
 const totals = useUsageSummary(props.summaryPath, filters, 'none')
+// The request types under the search, for the type select (see UsageRecords).
+const protocols = useUsageSummary(props.summaryPath, filters, 'protocol', true, () => ({ protocol: '' }))
+const protocolOptions = computed(() => protocols.rows.value.map((r) => r.key).filter((k) => k !== ''))
 
 // The caller's API key names for the "by API key" breakdown (keyed by id).
 const keyNames = reactive(new Map<string, string>())
@@ -74,6 +77,7 @@ watch(
   () => props.revision,
   () => {
     totals.reload()
+    protocols.reload()
     revisionCharts.value++
   }
 )
@@ -86,7 +90,7 @@ function filterBy(patch: Record<string, string>) {
 
 <template>
   <div class="flex flex-col gap-4">
-    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" @update:model-value="Object.assign(filters, $event)">
+    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" :protocol-options="protocolOptions" @update:model-value="Object.assign(filters, $event)">
       <template #range>
         <div class="flex flex-wrap items-center gap-2">
           <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />

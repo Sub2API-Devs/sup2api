@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // The search toolbar of the usage lists: time range (#range) and the common
-// filters on the first row, the rest behind "More filters", then the totals
-// (#stats) with extra toggles (#actions) beside Reset / Search. Text filters
+// filters on the first row (the request type select lists the protocol ids
+// seen under the current search, `protocolOptions`), the rest behind "More
+// filters", then the totals (#stats) with extra toggles (#actions) beside
+// Reset / Search. Text filters
 // apply on Search (or Enter) only; the time range slot applies at once.
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -13,7 +15,9 @@ const props = withDefaults(defineProps<{
   /** The account filters, for an operator who may read accounts. */
   accounts?: boolean
   groupOptions?: Array<{ value: string | number; label: string }>
-}>(), { admin: false, accounts: false, groupOptions: () => [] })
+  /** The request types (protocol ids) under the current search, for the first-row select. */
+  protocolOptions?: string[]
+}>(), { admin: false, accounts: false, groupOptions: () => [], protocolOptions: () => [] })
 const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>] }>()
 const { t } = useI18n()
 const expanded = ref(false)
@@ -24,12 +28,12 @@ const primary = [
   { key: 'client_ip', icon: 'globe' }
 ]
 const advanced = computed(() => [
-  'api_key_id', 'group_id', 'group_name', 'request_id', 'client_request_id', 'platform', 'protocol', 'endpoint', 'status_code', 'error_type',
+  'api_key_id', 'group_id', 'group_name', 'request_id', 'client_request_id', 'platform', 'endpoint', 'status_code', 'error_type',
   ...(props.admin ? ['user_id', 'user_email'] : []),
   ...(props.admin && props.accounts ? ['account_id', 'account_name'] : []),
   ...(props.admin ? ['plugin_key', 'account_type', 'node_id', 'upstream_model', 'upstream_protocol'] : [])
 ])
-const keys = computed(() => [...primary.map(p => p.key), ...advanced.value, 'success', 'stream', 'billing_status'])
+const keys = computed(() => [...primary.map(p => p.key), 'protocol', ...advanced.value, 'success', 'stream', 'billing_status'])
 watch(() => props.modelValue, value => {
   for (const key of keys.value) draft[key] = String(value[key] ?? '')
 }, { deep: true, immediate: true })
@@ -39,6 +43,14 @@ const groupChoices = computed(() => [
   ...(props.groupOptions?.filter(option => option.value !== '').map(option => ({ ...option, value: String(option.value) })) || [])
 ])
 const successOptions = computed(() => [{ value: '', label: t('common.status') }, { value: 'true', label: t('usage.success.ok') }, { value: 'false', label: t('usage.success.failed') }])
+// A type preset by a link or an earlier search stays selectable even when the
+// current range no longer has it.
+const protocolChoices = computed(() => {
+  const values = [...props.protocolOptions]
+  const current = String(draft.protocol || '')
+  if (current && !values.includes(current)) values.push(current)
+  return [{ value: '', label: t('usage.search.protocol') }, ...values.map(value => ({ value, label: value }))]
+})
 const streamOptions = computed(() => [{ value: '', label: t('usage.search.stream') }, { value: 'true', label: t('usage.stream') }, { value: 'false', label: t('usage.nonStream') }])
 const billingOptions = computed(() => [
   { value: '', label: t('usage.billing.statusLabel') },
@@ -79,6 +91,13 @@ function reset() {
           :maxlength="256"
           :mono="p.key === 'client_ip'"
           :data-testid="`filter-${p.key}`"
+        />
+        <SSelect
+          v-model="draft.protocol"
+          size="sm"
+          :aria-label="t('usage.search.protocol')"
+          :options="protocolChoices"
+          data-testid="filter-protocol"
         />
         <SSelect
           v-model="draft.success"

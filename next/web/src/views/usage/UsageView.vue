@@ -13,8 +13,10 @@ const auth = useAuthStore()
 const canGroups = auth.has('group:read')
 const groups = canGroups ? useGroupsLookup().groups : ref<Group[]>([])
 const groupOptions = computed(() => groups.value.map((g) => ({ value: g.id, label: g.name })))
-// The page owns the header; the records component follows `revision` and
-// reports its loading state, so no ref reaches into its methods.
+// The page owns the header and the refresh button, which sits in the search
+// bar (#actions) rather than on a row of its own; the records component
+// follows `revision` and reports its loading state, so no ref reaches into
+// its methods.
 const revision = ref(0)
 const loading = ref(false)
 function refresh() {
@@ -24,11 +26,7 @@ function refresh() {
 
 <template>
   <div>
-    <SPageHeader :title="t('usage.title')" :description="t('usage.description')">
-      <template #actions>
-        <SButton :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
-      </template>
-    </SPageHeader>
+    <SPageHeader :title="t('usage.title')" :description="t('usage.description')" />
     <UsageRecords
       v-model:loading="loading"
       :revision="revision"
@@ -37,6 +35,10 @@ function refresh() {
       default-range="today"
       admin
       :group-options="canGroups ? groupOptions : undefined"
-    />
+    >
+      <template #actions>
+        <SButton size="sm" :loading="loading" icon="refresh" @click="refresh">{{ t('common.refresh') }}</SButton>
+      </template>
+    </UsageRecords>
   </div>
 </template>

@@ -179,7 +179,7 @@ func TestUsageSummaryPromptTokens(t *testing.T) {
 			require.NotContains(t, detail, "private")
 		}
 		for _, prefix := range []string{"/usage", "/me/usage"} {
-			for _, by := range []string{"day", "model", "ip"} {
+			for _, by := range []string{"day", "model", "ip", "protocol"} {
 				rows := f.get(f.user, prefix+"/summary?from=2026-09-01T00:00:00Z&group_by="+by+"&request_id="+tc.id, 200)["data"].([]any)
 				require.Len(t, rows, 1)
 				require.Equal(t, tc.prompt, rows[0].(map[string]any)["prompt_tokens"], tc.id+" "+by)

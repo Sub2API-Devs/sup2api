@@ -78,6 +78,21 @@ describe('shared usage search', () => {
     expect(w.find('[data-testid="filter-account_name"]').exists()).toBe(true)
   })
 
+  it('selects the request type on the first row from the types under the search, keeping a preset one', async () => {
+    const w = mount(UsageFilters, { props: { modelValue: { protocol: 'vid.gen' }, protocolOptions: ['anthropic.messages', 'openai.chat'] }, global })
+    const select = w.get('[data-testid="filter-protocol"]')
+    const options = select.findAll('option')
+    expect(options.map(option => option.text()).slice(1)).toEqual(['anthropic.messages', 'openai.chat', 'vid.gen'])
+    expect(options[0].text()).not.toContain('usage.search.')
+    expect(options[(select.element as HTMLSelectElement).selectedIndex].text()).toBe('vid.gen')
+    expect(w.find('[data-testid="usage-advanced-filters"]').exists()).toBe(false)
+    await select.setValue('2')
+    await w.get('form').trigger('submit')
+    expect(w.emitted('update:modelValue')![0]![0]).toMatchObject({ protocol: 'openai.chat' })
+    await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
+    expect(w.find('[data-testid="filter-protocol"]').element.closest('[data-testid="usage-advanced-filters"]')).toBeNull()
+  })
+
   it('keeps administrative fields out of self-service and synchronizes external request-id filters', async () => {
     const w = mount(UsageFilters, { props: { modelValue: {} }, global })
     await w.get('[data-testid="toggle-usage-filters"]').trigger('click')
