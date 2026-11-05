@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-06 核心 **0.1.249**（`f0206570c`，北京时间 03:39–03:40；计划 `b09cc87ec7d20b6ba8237a01a77dbb6f` completed/13，约 52 秒，没有暂停；没有迁移，schema 仍 `dc1a1d43…b9cc`；Host API 仍 9；内置插件与 0.1.248 相同，插件和外壳不变）：
+- 内容：只有按钮、没有筛选的页头在宽屏把按钮放进顶栏（11 个页面）；使用记录筛选栏压行、列设置并入导出那一行；概览的重置/搜索接在筛选行末尾；插件页标题对齐菜单。只有前端改动。
+- 核验：两节点 0.1.249，api.prophey.ai `/readyz` 200，发布后 5 分钟两节点错误日志 0；线上首页引用的 `index-Cc1JN-qI.js` 与构建产物一致，含 `s-page-actions`。
+- 回滚：回 0.1.248 不涉及 schema。
+- 脚本 `stage/0.1.249/`；manifest `ae343c3a…0ace`；备份 `backups/core-0.1.249`（`7170b275…dcbc`）；工作树 `~/sup2api/release-0.1.249`。
+
 2026-11-06 核心 **0.1.248**（`b15cd0f4b`，北京时间 03:06–03:07；计划 `87d287cc0449845ee54058d514c921df` completed/13，约 57 秒，没有暂停；没有迁移，schema 仍 `dc1a1d43…b9cc`；Host API 仍 9；内置插件与 0.1.247 相同，插件和外壳不变）：
 - 内容：账号页工具栏并成一行（`fec69fd04` 自动刷新改成按钮加菜单，`b15cd0f4b` 2xl 以下收窄搜索框和三个下拉框，中文 1366px 起一行）。只有前端改动。
 - 核验：两节点 0.1.248，api.prophey.ai `/readyz` 200，发布后 5 分钟两节点错误日志 0；线上首页引用的 `index-BFoESFsp.css` 与构建产物一致，含 `2xl:w-56`。
