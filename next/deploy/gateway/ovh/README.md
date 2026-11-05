@@ -4,6 +4,13 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-05 核心 **0.1.245**（`4364f3abf`，北京时间 17:05–17:06；核心 manifest `ccf0d8f3…`，计划 `2a52db3281eb6628f62afb123bc92fd7` completed/13，约 52 秒，没有暂停；**迁移 0087**（只新增 `auth_flows`、`user_totp`、`user_totp_backup_codes`、`user_passkeys`、`login_sessions`），schema `d522e9a7…14d3` → `1d892be5…34a5`；Host API 仍 9；内置插件与 0.1.244 相同，插件和外壳不变）：
+- 内容：通行密钥登录、二次验证、登录会话、个人中心、钱包、模型与价格（CONTRACTS §79）。
+- 核验：两节点 0.1.245，api.prophey.ai `/readyz` 200，发布后约 9 分钟错误日志 0；`POST /auth/passkey/begin` 带线上 Origin 回 RP `api.prophey.ai`、UV required，说明 Host 经 Caddy 保留、新表可用；`/me/two-factor`、`/me/prices` 未登录回 401；线上前端资源含新登录页。滚动时主节点本机探测 503 约 10 秒，和上次一样。没有用真实账号在线上走过二次验证和通行密钥，也没有查库。
+- 未设 `SUB2API_WEBAUTHN_RP_ID`：设它要重建两个节点的容器，这次没动。故障切到 ovh 时跳板改 Host，这期间通行密钥登录不可用，密码和二次验证不受影响。以后设成 `api.prophey.ai` 不影响已注册的通行密钥。
+- 回滚：迁移只新增表。回到 0.1.244 没有验证过，回滚前确认旧核心接受新 schema；回滚后已开二次验证的账号只凭密码就能登录。
+- 脚本 `stage/0.1.245/`；备份 `backups/core-0.1.245`（`c845e965…`）。
+
 2026-11-05 核心 **0.1.244**（`43060bee5`，北京时间 14:40–14:45；核心 manifest `6d582ed4…ebfc`，计划 `ed0ade8eb9f0bd5f7b8a2e92210b1431` completed/13，约 62 秒，没有暂停；**无迁移**，schema 仍 `d522e9a7…14d3`；Host API 仍 9；内置插件与 0.1.243 相同，插件和外壳不变）：
 - 内容：使用记录页的标签页改成“日志类型”筛选（CONTRACTS §66.7），第一行新增“请求类型”筛选，`summary` 支持 `group_by=protocol`（`c282bf8fb`）。
 - 核验：两节点 0.1.244，api.prophey.ai `/readyz` 200，发布后 5 分钟错误日志 0，线上前端资源含新筛选。发布前在 mock 控制台里用浏览器看过，线上页面没有登录看过，也没有查库。
