@@ -130,6 +130,11 @@ func headers(in map[string]string) map[string]string {
 			out[key] = value
 		}
 	}
+	// The client's tools-used list (2.1.318) goes along as it came; the
+	// Worker decides whether its CLI sends it (features.ToolsUsedCapability).
+	if key := strings.ToLower(features.ToolsUsedHeader); features.ValidToolsUsed(in[key]) {
+		out[key] = in[key]
+	}
 	return out
 }
 

@@ -100,6 +100,7 @@
             "x-claude-code-compaction",
             "x-cc-context-compacted",
             "x-claude-code-context-compacted",
+            "x-claude-code-sandy-plover",
             "user-agent"
           ]
         }
@@ -159,6 +160,7 @@
             "x-claude-code-compaction",
             "x-cc-context-compacted",
             "x-claude-code-context-compacted",
+            "x-claude-code-sandy-plover",
             "user-agent"
           ]
         }

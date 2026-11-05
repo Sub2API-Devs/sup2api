@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 	"github.com/Sub2API-Devs/sup2api/next/sdk/manifest"
 )
 
@@ -23,7 +24,7 @@ func TestManifestPassesTheForwardedHeaders(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"anthropic-version", "anthropic-beta"}
+	want := []string{"anthropic-version", "anthropic-beta", strings.ToLower(features.ToolsUsedHeader)}
 	for _, header := range agentContextHeaders {
 		want = append(want, strings.ToLower(header.Header))
 	}
