@@ -7,7 +7,7 @@
 # core also writes the Worker answer (in/resp-N.json: headers, trailers, body,
 # first-byte/end timing). extra.sh adds the r3 phases.
 #
-# RUN_MODE=all|calib|values|extra|conc|classify|thirdparty  SMOKE=1  CALIB2=1
+# RUN_MODE=all|calib|values|extra|conc|classify|thirdparty|state  SMOKE=1  CALIB2=1
 # CC_VERSION         the gateway CLI version (default 2.1.304): policy cli_version,
 #                    the manifest entry the Workers pin, the shim's target
 # CLIENT_CC_VERSION  the version in the kit's synthetic CC client values (billing
@@ -170,12 +170,17 @@ set_log_level() { # $1 port
   echo "request log level :$1 $REQUEST_LOG: $(curl -s -X PUT -H 'Authorization: Bearer ccg-audit-admin-key' -H 'content-type: application/json' -d "$body" http://127.0.0.1:$1/admin/request-logs | head -c 200)"
 }
 
-start_worker w1 8787 $T/acct 'CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-ccgaudit-fake'
+# With STATE_SOCKET (docker.sh state) w1 keeps its session memory in the
+# shared Valkey, as an account container with the socket mount does.
+W1_ENV="CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-ccgaudit-fake"
+[ -n "${STATE_SOCKET:-}" ] && W1_ENV="$W1_ENV CCG_STATE_SOCKET=$STATE_SOCKET CCG_STATE_USER=$STATE_USER CCG_STATE_PASSWORD=$STATE_PASSWORD"
+start_worker w1 8787 $T/acct "$W1_ENV"
 start_worker w3 8777 $T/acct2 'ANTHROPIC_API_KEY=ccg-audit-upstream-key CCG_RESOURCE_ISSUER_ID=ccg-audit-issuer CCG_RESOURCE_ISSUER_GENERATION=ccg-audit-generation-0001 WORKER_CLI_PATH=/t/bin/claude-shim'
 set_log_level 8787
 set_log_level 8777
 printf '{}' > $T/policy.json; printf '{}' > $T/policy3.json
-start_proxy p1 8788 8787 $T/policy.json ''
+: > $T/drop-p1
+start_proxy p1 8788 8787 $T/policy.json "DROP_HEADERS_FILE=$T/drop-p1"
 start_proxy p3 8778 8777 $T/policy3.json 'CREDIT_SIM=1 WORKER_API_KEY=ccg-audit-gateway-key'
 
 if [ "$MODE" = values ]; then
@@ -204,6 +209,13 @@ if [ "$MODE" = thirdparty ]; then
   sleep 1
   echo "== captures"; for d in $CAP/tp-*/; do echo "$(basename $d) a=$(ls $d/a 2>/dev/null | grep -c '^req-') b=$(ls $d/b 2>/dev/null | grep -c '^req-') in=$(ls $d/in 2>/dev/null | grep -c '^in-')"; done
   echo "thirdparty done"; exit 0
+fi
+if [ "$MODE" = state ]; then
+  . $T/state.sh
+  kill $(cat $T/proxy-*.pid) $(cat $T/worker-*.pid) 2>/dev/null
+  sleep 1
+  echo "== captures"; for d in $CAP/st-*/; do echo "$(basename $d) a=$(ls $d/a 2>/dev/null | grep -c '^req-') b=$(ls $d/b 2>/dev/null | grep -c '^req-') in=$(ls $d/in 2>/dev/null | grep -c '^in-')"; done
+  echo "state done"; exit 0
 fi
 if [ "$MODE" = extra ]; then
   . $T/extra.sh all

@@ -15,7 +15,7 @@
 // that is not Claude Code cannot name itself a subagent, a compaction or any
 // other kind, nor set the agent, prompt or loop headers.
 import { createHash, createHmac } from 'node:crypto';
-import { uuidPattern as uuid } from './shared.js';
+import { uuidPattern as uuid, object } from './shared.js';
 
 const clientFields = {
   request_class: /^[a-z][a-z_]{0,31}$/,
@@ -38,22 +38,83 @@ const clientFields = {
 // The client's own loop state, sent on as the client sent it.
 const loopFields = ['prev_tool_durations', 'cc_compaction_request', 'claude_code_compaction', 'cc_context_compacted', 'claude_code_context_compacted'];
 
+// CC 2.1.318's WebSearch tool's query source (the side query that runs the
+// web_search server tool).
+const webSearchQuerySource = 'web_search_tool';
+
 // readRequestAgent is the Worker's context, or null without one (an older
 // Worker, or the CLI run by hand), which keeps the native main-thread request.
+// Its tools_used (toolsUsed) is there only when the Worker lets the request
+// send Claude Code's tools-used header (request_tools_used_v1, below).
 export function readRequestAgent(raw = process.env.CCG_REQUEST_AGENT) {
   if (!raw) return null;
   let value;
   try { value = JSON.parse(raw); } catch { throw Error('Invalid Worker agent context'); }
   const client = value?.client ?? {};
+  const toolsUsed = value?.tools_used === undefined ? undefined : readToolsUsed(value.tools_used);
   if (!value || value.version !== 1 || typeof value.map !== 'boolean' ||
       value.key !== undefined && !/^[0-9a-f]{64}$/.test(value.key) || value.map && value.key === undefined ||
       !client || typeof client !== 'object' || Array.isArray(client) ||
       Object.entries(client).some(([name, text]) => !Object.hasOwn(clientFields, name) || typeof text !== 'string' || !clientFields[name].test(text)) ||
-      Object.keys(value).some(name => !['version', 'map', 'key', 'client'].includes(name))) {
+      value.tools_used !== undefined && toolsUsed === null ||
+      Object.keys(value).some(name => !['version', 'map', 'key', 'client', 'tools_used'].includes(name))) {
     throw Error('Invalid Worker agent context');
   }
-  return { map: value.map, key: value.key, client };
+  return { map: value.map, key: value.key, client, ...toolsUsed && { toolsUsed } };
 }
+
+// Claude Code's tools-used header (x-claude-code-sandy-plover;
+// SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.6, contracts features/tools_used.go).
+// The Worker's tools_used holds the client's own header value (client, as it
+// came) and its memory of the session's set (memory, in first-use order); a
+// name is one Claude Code keeps (tGn; its stand-in for an unreadable one,
+// unreadable-tools-used-before-summary, is one too). The limits are the
+// contract's: the value's bytes and items (Claude Code's own 7168 characters
+// and 64 items fit), and the memory the Worker hands over.
+const toolName = /^[A-Za-z0-9_.:-]{1,256}$/;
+const maxToolsUsedBytes = 8192, maxToolsUsedItems = 64, maxToolsUsedMemory = 257;
+
+// validToolsUsed says whether value has the header's shape (features.
+// ValidToolsUsed): a JSON array of at most 64 objects, each a name and only
+// the connector fields Claude Code adds (url and directory_entry strings,
+// unresolved true).
+export function validToolsUsed(value) {
+  if (typeof value !== 'string' || value === '' || Buffer.byteLength(value, 'utf8') > maxToolsUsedBytes) return false;
+  let items;
+  try { items = JSON.parse(value); } catch { return false; }
+  return Array.isArray(items) && items.length <= maxToolsUsedItems && items.every(item => object(item) &&
+    typeof item.name === 'string' && toolName.test(item.name) &&
+    Object.entries(item).every(([key, field]) => key === 'name' || (key === 'url' || key === 'directory_entry') && typeof field === 'string' || key === 'unresolved' && field === true));
+}
+
+// readToolsUsed is the Worker's tools_used, or null when it is malformed.
+function readToolsUsed(value) {
+  if (!object(value) || Object.keys(value).some(name => name !== 'client' && name !== 'memory')) return null;
+  if (value.client !== undefined && !validToolsUsed(value.client)) return null;
+  if (value.memory !== undefined && (!Array.isArray(value.memory) || value.memory.length > maxToolsUsedMemory ||
+      value.memory.some(name => typeof name !== 'string' || !toolName.test(name)))) return null;
+  return { ...value.client !== undefined && { client: value.client }, ...value.memory !== undefined && { memory: [...value.memory] } };
+}
+
+// The request's part in the header, which the patched send point reads
+// (request-tools-used.js, installed where the version's patch sends the
+// header): undefined without a Worker context (Claude Code's own header),
+// else the Worker's tools_used (null: send none), the request's messages and
+// the set the request reports (reported). The CLI's own merge registers
+// itself (useToolsUsedMerge) when its module loads; a CLI without it has
+// nothing to merge and reports nothing.
+let toolsUsedRequest, toolsUsedMerge;
+export function useToolsUsedMerge(merge) { toolsUsedMerge = merge; }
+// prepareToolsUsed runs once a request's messages are final, before it is
+// sent: the session's set is merged then (build and direct alike).
+export function prepareToolsUsed(context, messages) {
+  toolsUsedRequest = context ? { tools: context.toolsUsed ?? null, messages: Array.isArray(messages) ? messages : [] } : undefined;
+  if (toolsUsedRequest?.tools && toolsUsedMerge) toolsUsedRequest.reported = toolsUsedMerge(toolsUsedRequest.tools, toolsUsedRequest.messages);
+}
+export const requestToolsUsed = () => toolsUsedRequest;
+// toolsUsedReport is what the response metadata reports (tools_used), or
+// undefined when the request merged nothing.
+export const toolsUsedReport = () => toolsUsedRequest?.reported;
 
 // derive maps one value, one label per kind of ID. An account without a key
 // (API key) still gets stable IDs it never sent.
@@ -79,16 +140,22 @@ function uuidV4(bytes) {
 // sent are derived in either mode. shape is set for a request converted to
 // the first-party shape (2026-11-03, first-party-shape.js): the upstream
 // session and what the Worker proved of the conversation (spawn, previous);
-// builtInAgents are CC's own agent types.
-export function resolveAgentContext(context, { billing, prompt = '', querySourceFor, loopHeaders, builtInAgents = [], shape, compaction = false }) {
+// builtInAgents are CC's own agent types. searchQuery says a converted
+// request offers only server tools, web_search among them: CC's WebSearch
+// tool's own search, a side query (2.1.318 querySource web_search_tool,
+// request class auxiliary, 2026-11-05).
+export function resolveAgentContext(context, { billing, prompt = '', querySourceFor, loopHeaders, builtInAgents = [], shape, compaction = false, searchQuery = false }) {
   if (loopFields.some(field => typeof loopHeaders?.[field] !== 'string')) throw Error('Missing native loop header names');
   const { map, key } = context;
   const own = (label, value) => map ? derive(key, label, value) : undefined;
   const claudeCode = billing !== null && billing !== undefined;
   const client = claudeCode ? context.client : {};
   // A converted request whose last prompt is CC's compaction prompt is CC's
-  // compaction request (request-build.js); its client sends no class header.
-  const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subagent === 'true' ? 'subagent' : shape && claudeCode && compaction ? 'compaction' : 'main');
+  // compaction request (request-build.js), and one that offers only the
+  // web_search server tool is WebSearch's search; their client sends no
+  // class header.
+  const sideQuery = client.request_class === undefined && Boolean(shape) && claudeCode && billing.cc_is_subagent !== 'true' && !compaction && searchQuery;
+  const requestClass = client.request_class ?? (claudeCode && billing.cc_is_subagent === 'true' ? 'subagent' : shape && claudeCode && compaction ? 'compaction' : sideQuery ? 'auxiliary' : 'main');
   const clientPrompt = client.prompt_id ?? (claudeCode && uuid.test(billing.cc_prompt_id ?? '') ? billing.cc_prompt_id : undefined);
   const promptId = clientPrompt !== undefined ? (map ? uuidV4(own('prompt', clientPrompt)) : clientPrompt)
     : claudeCode ? undefined : uuidV4(derive(key, 'prompt-text', prompt));
@@ -130,8 +197,10 @@ export function resolveAgentContext(context, { billing, prompt = '', querySource
     // workflow needs a run CC would have; the class is stated instead.
     if (requestClass === 'workflow') result.explicitClass = 'workflow';
   } else {
-    result.querySource = requestClass === 'compaction' ? 'compact' : 'sdk';
-    if (requestClass !== 'main' && requestClass !== 'compaction') result.explicitClass = requestClass;
+    // WebSearch's search goes as CC's own query source: CC then writes the
+    // auxiliary class and leaves out what a side query does not carry.
+    result.querySource = requestClass === 'compaction' ? 'compact' : sideQuery ? webSearchQuerySource : 'sdk';
+    if (requestClass !== 'main' && requestClass !== 'compaction' && !sideQuery) result.explicitClass = requestClass;
     // A main thread's prompt ID for a request converted to the first-party
     // shape whose client sent none: CC makes one per prompt submission and
     // keeps it for the turn's requests and its subagents. It is derived from

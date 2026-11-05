@@ -252,7 +252,7 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   // session, this thread's earlier request, the Agent call that spawned it).
   const thirdParty = firstPartyShapeOn() ? billing.thirdPartyBilling(initial.systemBlocks) : null;
   const shape = thirdParty && { session: requestSessionID(), previous: previousSession(), spawn: spawnContext() };
-  const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content, ...shape && { shape, compaction: compactionRequest(content.messages) } });
+  const agent = resolveAgent?.({ billing: clientBilling, prompt: fingerprint[0].message.content, ...shape && { shape, compaction: compactionRequest(content.messages), searchQuery: webSearchQuery(external.tools) } });
   const prompt = !agent || agent.requestClass === 'main' ? markPrompt(records, agent?.promptId, entrypoint) : undefined;
   // A header this build writes continues the upstream session (the Worker's
   // request-id and turn, request-session.js); so does one it converts. Any
@@ -287,6 +287,14 @@ export async function buildRequest(components, headers, signal, resolveAgent, { 
   const conversion = thirdParty && { client: thirdParty, system: content.system, messages: content.messages, previous: shape.previous?.thread === thread ? shape.previous : undefined };
   const { converted, ...finished } = finishBuilt(built, { body, headers, external, controls, policy, nativeBilling: native.billing, agent, clientBilling, clientBetas, layers, identity, conversion });
   return { ...finished, session: sessionReport(continued, conversion ? converted : undefined, agent) };
+}
+
+// webSearchQuery says whether a request offers only server tools, web_search
+// among them: what CC's WebSearch tool sends for its search (a client tool
+// has no type, or type custom).
+function webSearchQuery(tools) {
+  return Array.isArray(tools) && tools.length > 0 && tools.every(tool => typeof tool?.type === 'string' && tool.type !== 'custom') &&
+    tools.some(tool => tool.type.startsWith('web_search_'));
 }
 
 // compactionRequest says whether the last user message is CC's compaction

@@ -4,7 +4,9 @@
 
 ## 当前版本
 
-**下一候选（源码已改，ELF 待编译）：Claude Code 2.1.316 / `ccgateway-v47-count-tokens`**（插件 0.1.128）：在 v46 上加 `claude request --count`（能力 `request_count_tokens_v1`，2026-11-04 用户决定），把客户端字节原样发到上游计数端点，不加计费头、身份和会话。发布要先发核心（它才认计数目标并豁免资源），再发插件；未升级的账号核心会跳过，不影响账号状态。
+**下一候选（已在 ovh 编译与验证，待发布，只给新账号）：Claude Code 2.1.318 / `ccgateway-v56-cc-2-1-318`**（ELF `9998134d397044deb411870952a1d8de5f11b2763eb16d95b4091ffcbde92681`，插件版本 TBD，需要带同一次改动的 Worker、控制器与 guard）：v47 的逻辑移到官方 2.1.318，另加 2.1.318 的工具清单头 `x-claude-code-sandy-plover`（能力 `request_tools_used_v1`，Worker 按会话记住工具集合，客户端没发时补发），三方形状的 WebSearch side query 按官方的 `auxiliary` 构建。迁移记录见 [CLAUDE-CODE-2.1.318-MIGRATION](../../docs/CLAUDE-CODE-2.1.318-MIGRATION.md)，会话记忆见 [SESSION-MEMORY-TOOLS-USED-DESIGN](../../docs/SESSION-MEMORY-TOOLS-USED-DESIGN.md)。
+
+**上一候选：Claude Code 2.1.316 / `ccgateway-v47-count-tokens`**（插件 0.1.128）：在 v46 上加 `claude request --count`（能力 `request_count_tokens_v1`，2026-11-04 用户决定），把客户端字节原样发到上游计数端点，不加计费头、身份和会话。发布要先发核心（它才认计数目标并豁免资源），再发插件；未升级的账号核心会跳过，不影响账号状态。
 
 **候选（已在 ovh 编译与离线验证，待发布）：Claude Code 2.1.316 / `ccgateway-v46-shape-prompt-text`**（定制 ELF SHA-256 `2125d0b0953f3ee789f82fc39d4b6d7ec9ebb252f5ed88aac5189f46fd0b0b41`，插件版本 TBD，需要带同一次改动的 Worker）：v45 在 82 号账号实测后的修正——同一轮的派生 prompt id 不再随客户端的缓存标记变化；Worker 侧读压缩的应答、应答一结束就记入会话记忆，续接请求带上 `diagnostics.previous_message_id`、子代理带上父线程的 prompt id 与 agent type（[迁移记录](../../docs/CLAUDE-CODE-2.1.316-MIGRATION.md)第 12 节）。
 
@@ -18,6 +20,7 @@
 
 **更早：Claude Code 2.1.310 / `ccgateway-v36-content-guard`**（插件 0.1.109–0.1.113，ELF `06d428b6…19fe`）。仓库里 2.1.312、2.1.310 与 2.1.304 的 profile 与锚点仍在，测试照常覆盖（`CCG_CLI_VERSION=2.1.312|2.1.310|2.1.304 npm test`）；它们的标签随支持模块的变化先后升为 `ccgateway-v39-session-state`/`v40-session-state`，2026-11-02 再升为 `ccgateway-v45-runtime-version`/`v46-runtime-version`，随后（v44 改了共用的 `request-error.js`）升为 `ccgateway-v48-stored-login`（2.1.310）与 `ccgateway-v49-stored-login`（2.1.304），v45 起为 `v51`/`v52-first-party-shape`，这两个版本不再单独发布。v33（`ccgateway-v33-bun-1-4-4`，插件 0.1.105，ELF `720f4645…2463`）起编译用的 Bun 等于官方内嵌版本（profile `bunVersion`，`package-release.cjs` 核对），TLS 指纹因此与官方相同（[CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 缺口第 8 条）。
 
+- 2.1.316 → 2.1.318 的分析、迁移与验证：[CLAUDE-CODE-2.1.318-MIGRATION](../../docs/CLAUDE-CODE-2.1.318-MIGRATION.md)
 - 2.1.312 → 2.1.316 的分析、迁移与验证：[CLAUDE-CODE-2.1.316-MIGRATION](../../docs/CLAUDE-CODE-2.1.316-MIGRATION.md)
 - 2.1.310 → 2.1.312 的分析、迁移与验证：[CLAUDE-CODE-2.1.312-MIGRATION](../../docs/CLAUDE-CODE-2.1.312-MIGRATION.md)
 - 2.1.304 → 2.1.310 的分析、迁移与验证：[CLAUDE-CODE-2.1.310-MIGRATION](../../docs/CLAUDE-CODE-2.1.310-MIGRATION.md)
@@ -26,7 +29,7 @@
 
 CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力列表只有一处——各版 profile 的 `capabilities`（四版相同，2.1.316 另有 `build_injection_tools_v2`）：
 
-`request_direct`、`request_build`、`request_oauth`、`request_error_stderr`、`request_raw_http_errors`、`request_policy_mode_v1`、`build_attachment_sources_v2`、`build_billing_sources_v1`、`build_content_preservation_v1`、`container_resource_reporting_v1`、`request_identity_v1`、`build_identity_line_v1`、`direct_billing_v1`、`request_agent_context_v1`、`build_injection_v1`、`request_levels_v1`、`client_user_agent_v1`、`request_capture_v1`、`management_http_v1`（v34 起）、`build_session_state_v1`（v38 起：`CCG_REQUEST_IDENTITY.previous` 与响应元数据 `session`，见 [计费头文档](../../docs/CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) 第 5 节）、`build_injection_tools_v2`（只有 2.1.316 / v43 起：build 能注入 `Skill`、`ToolSearch`、`ListAgents`、`ReportFindings`、`ScheduleWakeup`、`Workflow` 六个工具，定义与官方首轮逐字相同；旧 CLI 不认这些名字，核心按这项能力挑 CLI）。
+`request_direct`、`request_build`、`request_oauth`、`request_error_stderr`、`request_raw_http_errors`、`request_policy_mode_v1`、`build_attachment_sources_v2`、`build_billing_sources_v1`、`build_content_preservation_v1`、`container_resource_reporting_v1`、`request_identity_v1`、`build_identity_line_v1`、`direct_billing_v1`、`request_agent_context_v1`、`build_injection_v1`、`request_levels_v1`、`client_user_agent_v1`、`request_capture_v1`、`management_http_v1`（v34 起）、`build_session_state_v1`（v38 起：`CCG_REQUEST_IDENTITY.previous` 与响应元数据 `session`，见 [计费头文档](../../docs/CLAUDE-CODE-BILLING-AND-PROMPT-INJECTION.md) 第 5 节）、`request_tools_used_v1`（只有 2.1.318 / v56：工具清单头，见下方版本记录）、`build_injection_tools_v2`（2.1.316 / v43 起：build 能注入 `Skill`、`ToolSearch`、`ListAgents`、`ReportFindings`、`ScheduleWakeup`、`Workflow` 六个工具，定义与官方首轮逐字相同；旧 CLI 不认这些名字，核心按这项能力挑 CLI）。
 
 各能力的含义与核心、Worker 怎样要求它们，见 [build 设计](../../docs/BUILD-REQUEST-COMPONENTS-DESIGN.md) §10。2.1.296 时期 mods 工具扩展的 `native_tools`、`mods_dispatch` 两项随该扩展在 v23 删除（见文末）。
 
@@ -65,9 +68,9 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 | 文件 | 作用 |
 |---|---|
 | `patch-cli.cjs` | 补丁器（版本无关，见上节）：校验 profile 里每个模块的 SHA-256，执行 `patches/<版本>.cjs` 的锚点，按 AST 从请求构建器收集 beta 顺序填入 `request-betas.js`、从 SDK 找 beta Messages 端点填入 `model-request.js`、复制追加提示词拼接函数为 `ccgatewayJoinAppend`、导出 system 记录工厂为 `ccgatewaySystemRecord`；替换文本按原文插入（不解释 `$` 模式）；写出 `ccgateway-patch.json`（补丁标签、能力、改前改后哈希） |
-| `patches/2.1.304.cjs`、`patches/2.1.310.cjs`、`patches/2.1.312.cjs`、`patches/2.1.316.cjs` | 各版锚点（2.1.312、2.1.316 的分别由 `tools/upgrade/examples/derive-anchors-2.1.312.cjs`、`derive-anchors-2.1.316.cjs` 生成） |
-| `profiles/linux-x64-2.1.304.json`、`profiles/linux-x64-2.1.310.json`、`profiles/linux-x64-2.1.312.json`、`profiles/linux-x64-2.1.316.json` | 各版 profile |
-| `request-entry.inc.js` | 插进 CLI 入口函数（2.1.304 `Ve`、2.1.310 `Ye`、2.1.312 `Ke`、2.1.316 `qe`）的三行桩：`--ccgateway-info` 与加载 `request-entry.js` 的 `request` 分支；入口的参数列表与设置来源名由锚点给（`entryStub(<参数>, <设置>)`） |
+| `patches/2.1.304.cjs`、`patches/2.1.310.cjs`、`patches/2.1.312.cjs`、`patches/2.1.316.cjs`、`patches/2.1.318.cjs` | 各版锚点（2.1.312、2.1.316、2.1.318 的分别由 `tools/upgrade/examples/derive-anchors-2.1.312.cjs`、`derive-anchors-2.1.316.cjs`、`derive-anchors-2.1.318.cjs` 生成） |
+| `profiles/linux-x64-2.1.304.json`、`profiles/linux-x64-2.1.310.json`、`profiles/linux-x64-2.1.312.json`、`profiles/linux-x64-2.1.316.json`、`profiles/linux-x64-2.1.318.json` | 各版 profile |
+| `request-entry.inc.js` | 插进 CLI 入口函数（2.1.304 `Ve`、2.1.310 `Ye`、2.1.312 `Ke`、2.1.316 `qe`、2.1.318 `Xe`）的三行桩：`--ccgateway-info` 与加载 `request-entry.js` 的 `request` 分支；入口的参数列表与设置来源名由锚点给（`entryStub(<参数>, <设置>)`） |
 | `request-entry.js` | `claude request` 的入口支持模块：CC 的 fast-path 策略（拒绝时写 403 帧）、需要时才加载命令与原生绑定 |
 | `request-natives.js` | 请求用到的原生绑定组合（身份、计费头、登录 beta、指纹、query source、层词表），供 `request-entry.js` 传给命令 |
 | `request-command.js` | `claude request` 入口：读输入、direct 计费头、调 build、身份与身份行、beta 装配（一次）、发送、错误帧、请求记录 |
@@ -104,6 +107,12 @@ CLI 经 `claude --ccgateway-info` 报告版本、补丁标签和能力；能力�
 5. **打包**（Linux x64，会运行 ELF 核对 `runtimeVersion`；ovh 上用 `node:22-bookworm-slim` 容器）：`node package-release.cjs /absolute/path/claude-linux-native /absolute/path/patched/ccgateway-patch.json /absolute/path/new-release`（脚本旁要有 `profiles/` 与 `runtime-check.cjs`）。产物是 `<版本>/claude`、`<版本>/ccgateway-patch.json` 与 `manifest.json`。
 6. **放进 Worker 构建上下文**：用新目录替换 `cli-mods/release/`（不进 Git）。`companions/worker/Dockerfile` 按 `ARG CLAUDE_VERSION` 安装到 `/opt/ccgateway/cli/` 并核对 SHA 与补丁标签；控制器创建或配对更新账号容器时再按 manifest 校验，Worker 启动时校验固定版本、补丁标签与哈希。
 7. **测试**：`npm test`（默认最新 profile 的版本；`CCG_CLI_VERSION=<版本>` 指定）。原生对账测试在 `artifacts/claude-<版本>/linux-restored` 存在时必须真跑，缺失时跳过并打印 `CCG_NATIVE_TEST_SKIPPED`，`CCG_REQUIRE_ARTIFACTS=1` 时改为失败。原生夹具变化时用 `CCG_UPDATE_CONTRACT_FIXTURES=1` 重生成并逐项审查。离线端到端回归、组装对账等在 ovh 一次性容器里跑，见 [CLI-TEST-PLAN](../../docs/CLI-TEST-PLAN.md) 与 `test/e2e/README.md`。
+
+## 版本记录（2.1.318）
+
+| 版本 | 插件 | 内容 | 现状 |
+|---|---|---|---|
+| v56 `cc-2-1-318` | TBD | 移到 Claude Code 2.1.318（2026-11-03 构建，commit `ca1fa9de`，Bun 1.4.4 修订 `424a542a9`），逻辑与 v47 相同（v48 验证用、未发布：锚点由 `derive-anchors-2.1.318.cjs` 生成，新增 program-use-case-ids 与 tool-provenance 的 build 判断）。另加：① 工具清单头 `x-claude-code-sandy-plover`（能力 `request_tools_used_v1`，支持模块 `request-tools-used.js`）：发送点用 Worker 给的会话记忆、客户端值、wire 消息里原生 `nD` 提取的名字合并后发出，客户端值原样；UA 低于 2.1.318 或没有 `tools_used` 时删头；应答元数据回报 `tools_used`。② 三方形状的 WebSearch side query（没有类别头、只提供 `web_search` 服务端工具）按 query source `web_search_tool` 构建，类别 `auxiliary`，不加 prompt/turn/diagnostics。共用模块变了，旧版本标签升为 316 `v57`、312 `v58`、310 `v59`、304 `v60`（只补丁、不发布）。验证：TLS identical；离线回归去掉新头后对 v47、v48 都是 0 of 73；L4–L7 全过；真 Valkey 与会话记忆 13 个场景（迁移记录第 8 节）。ELF `9998134d…2681`（ovh 构建标记 v56b） | 候选 |
 
 ## 版本记录（2.1.316）
 

@@ -149,9 +149,12 @@ test('login errors become authentication errors with the native message', () => 
   assert.equal(localErrorFrame(lock, { phase: 'transport' }).status, 502);
 });
 
-// StoredLoginHeldBackError (2.1.316, chunk-7c9mpntp.js) in its official shape:
-// a TelemetrySafeError with message, telemetryMessage and errorClass, and no
-// .code. Its reason is read from errorClass, the class found by name.
+// StoredLoginHeldBackError (2.1.316 chunk-7c9mpntp.js, 2.1.318 chunk-0t3rqhrf.js)
+// in its official shape: a TelemetrySafeError with message, telemetryMessage and
+// errorClass, and no .code. Its reason is read from errorClass, the class found
+// by name. 2.1.318 adds the reason session_owner; request-error.js has no
+// mapping for it yet, so it stays the transport mapping (502 cli_transport_error
+// with the native message).
 class TelemetrySafe extends Error {
   constructor(message, telemetryMessage, errorClass) { super(message); this.name = 'TelemetrySafeError'; this.telemetryMessage = telemetryMessage ?? message; this.errorClass = errorClass; }
 }
@@ -159,6 +162,8 @@ const storedLoginMessages = {
   admin: "Your organization's settings need an update. Ask your administrator to fix the API key helper configuration.",
   settings_unloaded: "Couldn't load your organization's settings. Check your connection, then restart Claude Code.",
   restart_needed: 'Restart Claude Code to finish signing in.',
+  // 2.1.318, unmapped.
+  session_owner: 'This session belongs to another account, so nothing was sent. Send a message to choose which account to use.',
 };
 class StoredLoginHeldBack extends TelemetrySafe {
   constructor(reason) { super(storedLoginMessages[reason], 'Stored login held back', `stored_login_refused_${reason}`); this.name = 'StoredLoginHeldBackError'; }
@@ -182,6 +187,16 @@ test('a stored login CC holds back answers by its errorClass with the native mes
     // Found in the causes too, with its own message.
     const wrapped = localErrorFrame(new Error('request failed', { cause: error }), { phase: 'transport' });
     assert.deepEqual([wrapped.status, wrapped.error.code, wrapped.error.message], [status, code, storedLoginMessages[reason]]);
+  }
+  // The reason 2.1.318 adds has no mapping yet: it falls through to the
+  // generic mapping of its phase (the transport failure in transport, the 400
+  // of a build input otherwise), message and errorClass still native.
+  for (const [phase, status, type, code, source] of [['transport', 502, 'api_error', 'cli_transport_error', 'transport'],
+    [undefined, 502, 'api_error', 'cli_transport_error', 'transport'], ['build', 400, 'invalid_request_error', 'cli_invalid_request', 'input'],
+    ['input', 400, 'invalid_request_error', 'cli_invalid_request', 'input']]) {
+    const frame = localErrorFrame(new StoredLoginHeldBack('session_owner'), { phase });
+    assert.deepEqual([frame.status, frame.error.type, frame.error.code, frame.error.message], [status, type, code, storedLoginMessages.session_owner], String(phase));
+    assert.equal(frame.source, source);
   }
   // An unknown reason, or the errorClass on another class, keeps the transport mapping.
   const unknown = localErrorFrame(new StoredLoginHeldBack('future'), { phase: 'transport' });

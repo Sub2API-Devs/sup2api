@@ -24,6 +24,8 @@ const P = 'a606b757-b9e1-4f6f-8eb0-88ffd9569a8d', Q = '0f4b6d43-5c8e-4b51-9e0a-3
 test('the third-party header is recognized only alone, readable and from a first-party-capable version', () => {
   const short = prefix + ' cc_version=2.1.316.057; cc_entrypoint=sdk-cli;';
   assert.deepEqual(thirdPartyBilling([block(short), block('line')]), { cc_version: '2.1.316.057', cc_entrypoint: 'sdk-cli' });
+  // The current version reads the same (2.1.318).
+  assert.deepEqual(thirdPartyBilling([block(prefix + ' cc_version=2.1.318.f3f; cc_entrypoint=sdk-cli;'), block('line')]), { cc_version: '2.1.318.f3f', cc_entrypoint: 'sdk-cli' });
   assert.deepEqual(thirdPartyBilling([block(prefix + ' cc_version=2.1.316.18e; cc_entrypoint=sdk-cli; cc_is_subagent=true;')]), { cc_version: '2.1.316.18e', cc_entrypoint: 'sdk-cli', cc_is_subagent: 'true' });
   assert.deepEqual(thirdPartyBilling([block(prefix + ' cc_version=2.1.304.0cd; cc_entrypoint=cli; cc_workload=cron;')]), { cc_version: '2.1.304.0cd', cc_entrypoint: 'cli', cc_workload: 'cron' });
   assert.deepEqual(thirdPartyBilling([block(prefix + ' cc_version=2.2.0.abc; cc_entrypoint=cli;')]).cc_version, '2.2.0.abc');
@@ -45,6 +47,9 @@ test('the first-party header is the native line with the client\'s own values', 
   assert.equal(completeBillingHeader(line, client, { build_billing_sources: { cc_version: 'worker' } }), line);
   // cc_workload is the client's, in the native place after cch.
   assert.equal(completeBillingHeader(line, { ...client, cc_workload: 'cron' }), prefix + ` cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=00000; cc_workload=cron; cc_prompt_id=${P}; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;`);
+  // The current version's own header is completed the same way.
+  const current = { cc_version: '2.1.318.fff', cc_entrypoint: 'sdk-cli' };
+  assert.equal(completeBillingHeader(line.replace('2.1.316.fff', '2.1.318.fff'), current), prefix + ` cc_version=2.1.318.fff; cc_entrypoint=sdk-cli; cch=00000; cc_prompt_id=${P}; cc_turn_origin=sdk; cc_prompt_index=0; cc_turn_index=1;`);
   const withWorkload = native([['cc_version', '2.1.316.fff'], ['cc_entrypoint', 'sdk-cli'], ['cch', '00000'], ['cc_workload', 'mine'], ['cc_is_subagent', 'true']]);
   assert.equal(completeBillingHeader(withWorkload, { ...client, cc_is_subagent: 'true' }), prefix + ' cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=00000; cc_is_subagent=true;');
   assert.equal(completeBillingHeader(withWorkload, { ...client, cc_is_subagent: 'true', cc_workload: 'cron' }), prefix + ' cc_version=2.1.316.057; cc_entrypoint=sdk-cli; cch=00000; cc_workload=cron; cc_is_subagent=true;');
@@ -65,7 +70,7 @@ test('the body goes in the native member order; members CC never writes keep the
   assert.equal(nativeBodyOrder.at(-1), 'diagnostics');
 });
 
-// CC 2.1.316's query source naming (nue).
+// CC 2.1.316's query source naming (nue; 2.1.318: Tme, the same list).
 const querySourceFor = (type, builtIn) => builtIn ? (type ? `agent:builtin:${type}` : 'agent:default') : (type ? `agent:custom:${type}` : 'agent:custom');
 const resolve = (client, billing, extra = {}) => resolveAgentContext({ map: true, key: 'ab'.repeat(32), client }, { billing, prompt: 'task', querySourceFor, loopHeaders: layers.loopHeaders, builtInAgents: ['general-purpose', 'Explore'], ...extra });
 const subHeader = { cc_version: '2.1.316.18e', cc_entrypoint: 'sdk-cli', cc_is_subagent: 'true' };
@@ -322,7 +327,7 @@ test('added betas agree with the body: global scope, diagnostics, 1-hour markers
     assert.deepEqual(bodyBetas({ messages: [{ role: 'user', content: [{ ...block('x'), cache_control: { type: 'ephemeral', ttl: '1h' } }] }] }, ['scope-beta'], []), ['ttl-beta']);
     assert.deepEqual(bodyBetas({ tools: [{ name: 't', cache_control: { type: 'ephemeral', ttl: '1h' } }] }, [], ['ttl-beta']), ['ttl-beta']);
     // The first-party shape carries the scope beta on every request (a
-    // subagent's prompt has no global block): official 2.1.316 captures.
+    // subagent's prompt has no global block): official 2.1.316 and 2.1.318 captures.
     assert.deepEqual(bodyBetas({ system: [block('h'), { ...block('agent prompt'), cache_control: { type: 'ephemeral' } }], diagnostics: { previous_message_id: null } }, [], added, { firstParty: true }), ['scope-beta', 'effort-beta', 'diag-beta']);
   } finally { await fs.rm(dir, { recursive: true, force: true }); }
 });
@@ -361,6 +366,53 @@ test('a converted request whose last prompt is CC\'s compaction prompt is the ma
     const off = await withEnv({ CCG_FIRST_PARTY_SHAPE: undefined, CCG_REQUEST_IDENTITY: identity({ previous }) }, () => f.adapter.buildRequest(request(thirdPartySystem(), messages), {}, signal(), f.resolver(context)));
     assert.equal(off.agent.requestClass, 'main');
   } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+// 2026-11-05 e2e (state.sh st-multi-tp): a third-party client's WebSearch
+// search went upstream as the main thread, with a prompt ID, turn fields and
+// diagnostics, and broke the main thread's chain (the next main request lost
+// cc_prev_req and diagnostics).
+test('a converted request that offers only the web_search server tool is WebSearch\'s side query', async () => {
+  const f = await fixture();
+  try {
+    const context = { map: true, key: 'ab'.repeat(32), client: {} };
+    const previous = { thread: 'main', request_id: 'req_one', turn_position: { prompt_index: 0, turn_index: 1 }, prompt_hash: 'a'.repeat(64), message_id: 'msg_one', prompt_id: P };
+    const search = { ...request(thirdPartySystem()), tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }] };
+    const out = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity({ previous }) }, () => f.adapter.buildRequest(search, {}, signal(), f.resolver(context)));
+    // CC's own query source: CC writes the auxiliary class from it.
+    assert.equal(out.agent.requestClass, 'auxiliary');
+    assert.equal(out.agent.querySource, 'web_search_tool');
+    assert.equal(out.agent.explicitClass, undefined);
+    assert.equal(out.agent.promptId, undefined);
+    assert.equal(out.agent.derivePromptId, undefined);
+    // No prompt or turn, not the main thread's: nothing of the thread is
+    // used or kept.
+    assert.equal(firstLine(out.body), header(' cch=00000;'));
+    assert.equal(out.session, undefined);
+    // A client tool beside it, or no conversion: the main thread as before.
+    const mixed = { ...search, tools: [...search.tools, { name: 'Bash', inputSchema: { type: 'object' } }] };
+    const main = await withEnv({ CCG_FIRST_PARTY_SHAPE: '1', CCG_REQUEST_IDENTITY: identity({ previous }) }, () => f.adapter.buildRequest(mixed, {}, signal(), f.resolver(context)));
+    assert.equal(main.agent.requestClass, 'main');
+    const off = await withEnv({ CCG_FIRST_PARTY_SHAPE: undefined, CCG_REQUEST_IDENTITY: identity({ previous }) }, () => f.adapter.buildRequest(search, {}, signal(), f.resolver(context)));
+    assert.equal(off.agent.requestClass, 'main');
+  } finally { await fs.rm(f.dir, { recursive: true, force: true }); }
+});
+
+test('the side query class: only converted, classless, not a subagent or a compaction', () => {
+  const main = { cc_version: '2.1.318.8fb', cc_entrypoint: 'sdk-cli' };
+  const side = resolve({}, main, { shape: { session: 's' }, searchQuery: true });
+  assert.equal(side.requestClass, 'auxiliary');
+  assert.equal(side.querySource, 'web_search_tool');
+  assert.equal(side.explicitClass, undefined);
+  assert.equal(side.derivePromptId, undefined);
+  assert.equal(resolve({}, main, { searchQuery: true }).requestClass, 'main', 'not converted');
+  assert.equal(resolve({}, main, { shape: { session: 's' }, searchQuery: true, compaction: true }).requestClass, 'compaction');
+  assert.equal(resolve({ agent_id: 'a1' }, subHeader, { shape: { session: 's' }, searchQuery: true }).requestClass, 'subagent');
+  // The client's own class wins (a first-party client names its side query).
+  const named = resolve({ request_class: 'auxiliary' }, main, { shape: { session: 's' }, searchQuery: true });
+  assert.equal(named.querySource, 'sdk');
+  assert.equal(named.explicitClass, 'auxiliary');
+  assert.equal(resolve({}, null, { shape: { session: 's' }, searchQuery: true }).requestClass, 'main', 'not Claude Code\'s');
 });
 
 test('the static sections are rendered with the deferred tools the client reminder names', async () => {

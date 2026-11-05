@@ -7,7 +7,7 @@ import { parseRequestOptions, parseRequestJSON, parseBuildJSON } from './ccgatew
 import { normalizeBetas, finalBetas } from './ccgateway-request-headers.js';
 import { betaOrder, bodyBetas } from './ccgateway-request-betas.js';
 import { validateDirectPolicy } from './ccgateway-request-policy.js';
-import { readRequestAgent, resolveAgentContext, setClientUserAgent } from './ccgateway-request-agent.js';
+import { readRequestAgent, resolveAgentContext, setClientUserAgent, prepareToolsUsed, toolsUsedReport } from './ccgateway-request-agent.js';
 import { continueDirectSession, requestThread } from './ccgateway-request-session.js';
 import { httpErrorFrame, localErrorFrame, encodeErrorFrame, maxErrorBody } from './ccgateway-request-error.js';
 
@@ -75,8 +75,11 @@ export async function runRequestCommand(args, natives = {}) {
     }
     ctx.state.phase = 'output';
     // session is the turn this request's own header used (request-session.js),
-    // which the Worker keeps for the session's next request once it is answered.
-    if (ctx.options.meta) await fs.writeFile(ctx.options.meta, JSON.stringify({ status: ctx.run.response.status, statusText: ctx.run.response.statusText, headers: ctx.run.response.headers, request: { mode: ctx.options.mode, ...ctx.run.response.request }, ...ctx.session && { session: ctx.session } }, null, 2) + '\n');
+    // which the Worker keeps for the session's next request once it is answered;
+    // tools_used is the session's tools-used set as this request left it
+    // (request-agent.js prepareToolsUsed), which the Worker adds to its memory.
+    const toolsUsed = toolsUsedReport();
+    if (ctx.options.meta) await fs.writeFile(ctx.options.meta, JSON.stringify({ status: ctx.run.response.status, statusText: ctx.run.response.statusText, headers: ctx.run.response.headers, request: { mode: ctx.options.mode, ...ctx.run.response.request }, ...ctx.session && { session: ctx.session }, ...toolsUsed && { tools_used: toolsUsed } }, null, 2) + '\n');
     await streamResponse(ctx, ctx.run.response);
     return 0;
   } catch (error) {
@@ -159,7 +162,8 @@ const messagesOf = body => Array.isArray(body.messages) ? body.messages : [];
 async function prepareOutgoing(ctx, incoming) {
   const { options, natives } = ctx;
   const { oauthBeta, agentNative } = natives;
-  const resolveAgent = agentResolver(agentNative);
+  const context = process.env.CCG_REQUEST_AGENT && agentNative ? readRequestAgent() : null;
+  const resolveAgent = agentResolver(agentNative, context);
   let outgoing = { body: incoming.body, rawBody: incoming.rawBody, headers: options.headers, timeoutMs: incoming.timeout };
   let agent, clientBetas, addedBetas = [];
   if (options.mode === 'count') {
@@ -186,6 +190,10 @@ async function prepareOutgoing(ctx, incoming) {
   const betas = requestBetas(outgoing.body?.model, clientBetas, [...added, ...(ctx.apiKey ? [] : [oauthBeta])]);
   if (betas.length && !betasAllowed(betas)) throw Error('Experimental betas are disabled by the active CC policy');
   outgoing.headerPolicy = { apiKey: ctx.apiKey, betas, oauthBeta, version: options.headers['anthropic-version'] ?? '2023-06-01' };
+  // The session's tools-used set, merged once over the messages as they are
+  // sent (build and direct alike), for the header the send point writes and
+  // the set the response reports. Counting sends no such header.
+  prepareToolsUsed(options.mode === 'count' ? null : context, outgoing.body?.messages);
   return { outgoing, agent };
 }
 
@@ -200,9 +208,8 @@ function requestBetas(model, client, additions) {
 
 // agentResolver resolves the client's kind of request from the Worker's agent
 // context; without one the request is CC's native main thread (undefined).
-function agentResolver(agentNative) {
-  if (!process.env.CCG_REQUEST_AGENT || !agentNative) return undefined;
-  const context = readRequestAgent();
+function agentResolver(agentNative, context) {
+  if (!context) return undefined;
   return facts => resolveAgentContext(context, { ...facts, querySourceFor: agentNative.querySourceFor, loopHeaders: agentNative.loopHeaders, builtInAgents: agentNative.builtInAgents?.() ?? [] });
 }
 

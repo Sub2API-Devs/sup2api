@@ -61,5 +61,8 @@ test('the native body literal matches the adapter\'s field ownership', { skip: n
       for (const inner of object.properties) if (inner.type === 'ObjectProperty') order.push(inner.key.name ?? inner.key.value);
     }
   }
-  assert.deepEqual(order, [...nativeBodyOrder]);
+  // nativeBodyOrder serves every version: a member a later version added
+  // (2.1.318 program_use_case_id) is absent here, the rest keep its order.
+  for (const field of order) assert(nativeBodyOrder.includes(field), `nativeBodyOrder places ${field}`);
+  assert.deepEqual(order, nativeBodyOrder.filter(field => order.includes(field)));
 });

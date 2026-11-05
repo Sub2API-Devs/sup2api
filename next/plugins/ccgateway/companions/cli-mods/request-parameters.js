@@ -114,9 +114,12 @@ export function mergeAdditionalParameters(built, parameters) {
 
 // The members of CC's request body in the order its builder writes them (the
 // body literal's keys, conditional ones included; the beta Messages call adds
-// stream after them). test/native/<version>/body-fields.test.mjs reconciles
-// it with each version's literal.
-export const nativeBodyOrder = Object.freeze(['model', 'messages', 'system', 'tools', 'tool_choice', 'metadata', 'max_tokens', 'thinking', 'temperature', 'context_management', 'safeguards', 'output_config', 'speed', 'thread', 'diagnostics']);
+// stream after them), across the supported versions: 2.1.318 writes
+// program_use_case_id (a spread, only with the program-use-case-ids beta and
+// an organization's use case) between context_management and safeguards.
+// test/native/<version>/body-fields.test.mjs reconciles each version's literal
+// with the members it has.
+export const nativeBodyOrder = Object.freeze(['model', 'messages', 'system', 'tools', 'tool_choice', 'metadata', 'max_tokens', 'thinking', 'temperature', 'context_management', 'program_use_case_id', 'safeguards', 'output_config', 'speed', 'thread', 'diagnostics']);
 
 // nativeOrder puts the members CC writes where CC writes them, whoever
 // supplied the value (2026-11-03: a client's safeguards went after

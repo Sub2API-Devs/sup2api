@@ -250,7 +250,12 @@ test('container resource reporting does not read host CPU, RAM, load or disk', a
   // no longer depends on where the client put its cache marker (request-session.js).
   // 2026-11-04: ccgateway-v47-count-tokens (was ccgateway-v46-shape-prompt-text); claude request --count
   // (request_count_tokens_v1) added the token counting mode.
-  assert.equal(patchManifest.extension, 'ccgateway-v47-count-tokens');
+  // 2026-11-05: ccgateway-v57-tools-used (was ccgateway-v47-count-tokens); the
+  // 2.1.318 tools-used header changed the shared request-agent.js and
+  // request-command.js. Patched only, not compiled or released: old accounts
+  // keep the v47 ELF, and this CLI does not declare request_tools_used_v1.
+  assert.equal(patchManifest.extension, 'ccgateway-v57-tools-used');
+  assert(!patchManifest.capabilities.includes('request_tools_used_v1'));
   assert(patchManifest.capabilities.includes('build_first_party_shape_v1'));
   assert(patchManifest.capabilities.includes('build_injection_tools_v2'));
   assert(patchManifest.capabilities.includes('client_user_agent_v1'));

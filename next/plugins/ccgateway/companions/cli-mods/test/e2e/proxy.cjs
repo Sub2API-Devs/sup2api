@@ -18,6 +18,11 @@ const inboundDir = () => { try { return fs.readFileSync(inboundFile, 'utf8').tri
 const respLog = process.env.WORKER_RESP_LOG || '';
 const creditSim = process.env.CREDIT_SIM === '1';
 const workerKey = process.env.WORKER_API_KEY || '';
+// DROP_HEADERS_FILE: a file naming client headers (comma-separated) the proxy
+// does not forward, as a proxy between the client and the gateway may drop
+// them; read per request, empty or absent drops none.
+const dropFile = process.env.DROP_HEADERS_FILE || '';
+const dropped = () => { try { return new Set(fs.readFileSync(dropFile, 'utf8').split(',').map(s => s.trim().toLowerCase()).filter(Boolean)); } catch { return new Set(); } };
 // The betas that register the credit protocol (contracts/credits/prompt.go).
 const CREDIT_BETAS = ['fallback-credit-2026-06-01', 'fallback-credit-2026-07-01', 'server-side-fallback-2026-07-01'];
 let identity;
@@ -54,7 +59,8 @@ http.createServer((req, res) => {
   try { policy = JSON.parse(fs.readFileSync(policyFile, 'utf8')); } catch {}
   const mode = req.method, url = req.url;
   const headers = {};
-  for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k.toLowerCase())) headers[k] = v;
+  const drop = dropped();
+  for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k.toLowerCase()) && !drop.has(k.toLowerCase())) headers[k] = v;
   if (policy && Object.keys(policy).length) headers['x-ccgateway-request-policy'] = JSON.stringify(policy);
   headers.host = '127.0.0.1:' + worker;
   const creditTracked = creditSim && mode === 'POST' && enabled(headerValues(req.headers, 'anthropic-beta'));

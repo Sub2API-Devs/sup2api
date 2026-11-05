@@ -140,7 +140,9 @@ test('the login and cache betas go where Claude Code writes them', () => {
   // tp-main-low, tp-main-stream, tp-sonnet-low): the betas the conversion adds
   // land where the same client writes them in its first-party shape, which
   // has only mid-conversation-system-clear-at besides (not converted).
-  const builder = ['context-1m-2025-08-07', 'dangerous-tool-use-2026-09-03', 'thinking-binding-controls-2026-08-01', 'thinking-display-updates-2026-08-18', 'thinking-resumption-2026-07-17', 'fast-mode-2026-02-01', 'afk-mode-2026-01-31', 'extended-cache-ttl-2025-04-11', 'prompt-caching-evict-2026-05-12', 'cache-diagnosis-2026-04-07', 'cache-keepalive-2026-09-03', 'message-threads-2026-08-12'];
+  // 2.1.318 pushes claude-code-side-query-2026-09-29 second, before all of
+  // these (a side query also keeps context-1m first).
+  const builder = ['context-1m-2025-08-07', 'claude-code-side-query-2026-09-29', 'dangerous-tool-use-2026-09-03', 'thinking-binding-controls-2026-08-01', 'thinking-display-updates-2026-08-18', 'thinking-resumption-2026-07-17', 'fast-mode-2026-02-01', 'afk-mode-2026-01-31', 'extended-cache-ttl-2025-04-11', 'prompt-caching-evict-2026-05-12', 'cache-diagnosis-2026-04-07', 'cache-keepalive-2026-09-03', 'message-threads-2026-08-12'];
   const cc = (...models) => Object.assign([...models, ...builder], { builderAt: models.length });
   const opus48 = cc('claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05', 'mid-conversation-tool-changes-2026-07-01');
   const sonnet46 = cc('claude-code-20250219', 'oauth-2025-04-20', 'interleaved-thinking-2025-05-14', 'context-management-2025-06-27', 'prompt-caching-scope-2026-01-05');

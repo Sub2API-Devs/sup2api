@@ -1,7 +1,7 @@
 {
-  "provenance": "Tools the patched CLI injects on a first turn (test/injection-tools-probe.cjs against the compiled release in a disposable offline ccgateway-app:0.1.124 container, Worker-like environment; v46 re-recording, tools identical to the v43–v45 ones)",
-  "cli_sha256": "2125d0b0953f3ee789f82fc39d4b6d7ec9ebb252f5ed88aac5189f46fd0b0b41",
-  "patch": "ccgateway-v47-count-tokens",
+  "provenance": "Tools the patched CLI injects on a first turn (test/injection-tools-probe.cjs, run on the v57 patched restored tree under Bun 1.4.4, Worker-like environment, no skills or agent files). v57 is patched only, never compiled (cli_sha256 null); the v46/v47 recording of the compiled release (ELF 2125d0b0…0b41, ccgateway-app:0.1.124) had the same tools.",
+  "cli_sha256": null,
+  "patch": "ccgateway-v57-tools-used",
   "model": "claude-sonnet-4-6",
   "runtime_version": "v26.12.1",
   "cases": [

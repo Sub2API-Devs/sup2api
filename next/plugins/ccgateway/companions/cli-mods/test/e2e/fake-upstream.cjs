@@ -3,6 +3,12 @@
 // answers per SCENARIO:
 //   text        -> "OK"
 //   tool        -> first round: Bash tool_use; after a tool_result: "DONE"
+//   tool1       -> Bash once while the prompt says "Run the command", else "OK"
+//   multi       -> Bash, Read, mcp__probe__echo, WebSearch (each when offered,
+//                  a deferred one after ToolSearch select:<name>,
+//                  one per round, while the prompt says "Use each tool"), then
+//                  "DONE"; the WebSearch side query gets
+//                  a web_search server tool call and its result
 //   subagent    -> main: Agent("LEVEL1: ..."), LEVEL1: Agent("LEVEL2: ..."), else "OK"
 //   sub1/2/3    -> main -> LEVEL1 -> ... -> "OK" (1/2/3 subagent levels)
 //   bg          -> a background Agent, then the notification turn
@@ -36,8 +42,10 @@ function sse(res, model, blocks, stop, stopDetails, delay = 0, logDir = '', logI
       if (b.type === 'text') {
         ev('content_block_start', { index: i, content_block: { type: 'text', text: '' } });
         ev('content_block_delta', { index: i, delta: { type: 'text_delta', text: b.text } });
+      } else if (b.type === 'web_search_tool_result') {
+        ev('content_block_start', { index: i, content_block: b });
       } else {
-        ev('content_block_start', { index: i, content_block: { type: 'tool_use', id: b.id, name: b.name, input: {} } });
+        ev('content_block_start', { index: i, content_block: { type: b.type, id: b.id, name: b.name, input: {} } });
         ev('content_block_delta', { index: i, delta: { type: 'input_json_delta', partial_json: JSON.stringify(b.input) } });
       }
       ev('content_block_stop', { index: i });
@@ -99,6 +107,42 @@ const server = https.createServer({ key: fs.readFileSync(path.join(certDir, 'key
     if (scenario === 'tool') {
       if (!text.includes('tool_result')) blocks = [{ type: 'tool_use', id: 'toolu_ccgaudit_' + id, name: 'Bash', input: { command: 'echo CCG_TOOL_OK', description: 'echo marker' } }];
       else blocks = [{ type: 'text', text: 'DONE' }];
+    } else if (scenario === 'tool1' || scenario === 'multi') {
+      // tool1: Bash once. multi: one tool per round, in order, each only when
+      // the request offers it: Bash, Read, the probe MCP server's echo,
+      // WebSearch. Both only while the conversation still has the prompt that
+      // asks for them (a compaction drops it), then "DONE". The client's
+      // WebSearch side query (it offers the web_search server tool) gets a
+      // server tool call with one result and a text answer.
+      const search = (b.tools ?? []).find(t => /^web_search/.test(String(t.type || '')));
+      const asked = text.includes(scenario === 'tool1' ? 'Run the command' : 'Use each tool');
+      if (search) {
+        blocks = [
+          { type: 'server_tool_use', id: 'srvtoolu_ccgaudit_' + id, name: 'web_search', input: { query: 'ccg probe' } },
+          { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_ccgaudit_' + id, content: [{ type: 'web_search_result', url: 'https://example.invalid/ccg', title: 'CCG probe', encrypted_content: 'ccgaudit', page_age: null }] },
+          { type: 'text', text: 'Found one result.' },
+        ];
+      } else if (asked) {
+        // A tool the client defers (MCP tools, WebSearch: named in a
+        // reminder, not in tools) is loaded first with ToolSearch.
+        const names = new Set((b.tools ?? []).map(t => t.name));
+        const used = [];
+        for (const m of b.messages ?? []) if (m.role === 'assistant' && Array.isArray(m.content)) for (const c of m.content) if (c.type === 'tool_use') used.push(c);
+        const plan = [
+          ['Bash', { command: 'echo CCG_TOOL_OK', description: 'echo marker' }],
+          ['Read', { file_path: process.env.MULTI_READ_FILE || '/t/run/probe.txt' }],
+          ['mcp__probe__echo', { text: 'ccg' }],
+          ['WebSearch', { query: 'ccg probe' }],
+        ].slice(0, scenario === 'tool1' ? 1 : 4);
+        let next;
+        for (const [name, input] of plan) {
+          if (used.some(u => u.name === name)) continue;
+          if (names.has(name)) { next = [name, input]; break; }
+          const searched = used.some(u => u.name === 'ToolSearch' && JSON.stringify(u.input).includes(name));
+          if (names.has('ToolSearch') && text.includes(name) && !searched) { next = ['ToolSearch', { query: 'select:' + name, max_results: 5 }]; break; }
+        }
+        blocks = next ? [{ type: 'tool_use', id: 'toolu_ccgaudit_' + id, name: next[0], input: next[1] }] : [{ type: 'text', text: 'DONE' }];
+      }
     } else if (agent && ['sub1', 'sub2', 'sub3', 'bg', 'fork'].includes(scenario)) {
       const classHeader = String(req.headers['x-claude-code-request-class'] || '');
       const toolTurn = text.includes('tool_result');
