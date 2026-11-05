@@ -177,6 +177,10 @@ func (m *Manager) block(ctx context.Context, aid string) (pyjson.Valuer, error) 
 		if err := m.save(aid, st); err != nil {
 			return nil, err
 		}
+		// ACL SETUSER acct-<key> ... off (the full rules: idempotent, and
+		// the next apply's "on" is the same call). Connections already
+		// authenticated stay until they close: the container is stopped.
+		m.setStateUser(ctx, aid, st)
 		if err := m.shared.remove(ctx, aid, false); err != nil {
 			return nil, err
 		}
@@ -192,6 +196,9 @@ func (m *Manager) sharedApply(ctx context.Context, aid string, st *store.Account
 	if err := m.save(aid, st); err != nil {
 		return nil, err
 	}
+	// Cheap and idempotent: the user is there (and on) before the first
+	// request even when Valkey restarted since the last background pass.
+	m.setStateUser(ctx, aid, st)
 	if err := m.sharedActivate(ctx, aid, st, desired); err != nil {
 		st.Status = store.StatusEgressError
 		if serr := m.save(aid, st); serr != nil {

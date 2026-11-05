@@ -31,6 +31,10 @@ type plan struct {
 	cliEnv    map[string]string
 	diskBytes int64
 	legacy    bool
+	// stateEnv: the guard mounts the session Valkey socket into the new
+	// container, so it gets a password, a user and the Worker settings
+	// (session_state.go).
+	stateEnv bool
 }
 
 // addresses are the account network and its two addresses.
@@ -142,10 +146,14 @@ func (m *Manager) provisionLocked(ctx context.Context, aid string, authRaw any, 
 	if err != nil {
 		return nil, err
 	}
+	p.stateEnv = m.sessionGuard(ctx)
 	st, err = m.recordRuntime(aid, st, salt, policy, addr, p)
 	if err != nil {
 		return nil, err
 	}
+	// The user exists before the Worker starts (best effort: a Valkey that
+	// is down gets it from the background pass).
+	m.setStateUser(ctx, aid, st)
 	if err := m.createApp(ctx, aid, st, a, fingerprint, p, addr); err != nil {
 		return nil, err
 	}
@@ -636,11 +644,15 @@ func (m *Manager) recordRuntime(aid string, st *store.AccountState, salt string,
 	}
 	st.DiskQuota = store.Some(store.DiskQuota{LimitBytes: p.diskBytes, Status: status})
 	st.Mark("disk_quota")
+	if p.stateEnv {
+		m.ensureStatePassword(st) // an existing one is kept
+	}
 	return st, m.save(aid, st)
 }
 
-// appEnvironment is app_environment (PV16).
-func (m *Manager) appEnvironment(st *store.AccountState, a auth.Auth, p *plan) map[string]string {
+// appEnvironment is app_environment (PV16), plus the session Valkey
+// settings when the guard mounts its socket.
+func (m *Manager) appEnvironment(aid string, st *store.AccountState, a auth.Auth, p *plan) map[string]string {
 	env := map[string]string{}
 	for k, v := range p.cliEnv {
 		env[k] = v
@@ -668,6 +680,9 @@ func (m *Manager) appEnvironment(st *store.AccountState, a auth.Auth, p *plan) m
 	if a.Timezone != "" {
 		env["TZ"] = a.Timezone
 	}
+	if p.stateEnv && st.StatePassword != "" {
+		stateEnvironment(env, aid, st)
+	}
 	return env
 }
 
@@ -689,7 +704,7 @@ func (m *Manager) createApp(ctx context.Context, aid string, st *store.AccountSt
 		return err
 	}
 	return m.createContainer(ctx, aid, guardapi.AppRequest{Image: p.imageRef, IPv4: addr.appIP,
-		Env: m.appEnvironment(st, a, p), AuthLabel: fingerprint, ImageLabel: p.image.ID})
+		Env: m.appEnvironment(aid, st, a, p), AuthLabel: fingerprint, ImageLabel: p.image.ID})
 }
 
 // createContainer is PUT app. A lost answer of an earlier attempt makes the

@@ -56,12 +56,16 @@ func (m *Manager) sharedPass(ctx context.Context) {
 	// Stale paired-activation leftovers first (IT-X02): an expired Worker
 	// pause is released even when the recover pass below fails.
 	m.releaseMaintenance(ctx)
+	// The session Valkey first: a restart since the last pass makes
+	// recoverKey put every account's user back.
+	m.observeState(ctx)
 	if err := m.recover(ctx); err != nil {
 		if ctx.Err() == nil {
 			m.log.Warn("shared egress pass failed: %s", failureText(err))
 		}
 		return
 	}
+	m.dropOrphanStateUsers(ctx)
 	if err := m.shared.collect(ctx); err != nil && ctx.Err() == nil {
 		m.log.Warn("shared egress pass failed: %s", failureText(err))
 	}

@@ -11,16 +11,20 @@ import (
 	"ccgateway/controller/internal/guardapi"
 	"ccgateway/controller/internal/names"
 	"ccgateway/controller/internal/pyjson"
+	"ccgateway/controller/internal/sessionstate"
 )
 
 // Features are /health's features: Python 0.1.118's eleven in their order,
 // then guard-api-v1 (the controller runs under the guard, 04 §2.9) and
 // egress-recreate-v1 (POST /runtime/egress/recreate, 02 §7.4), then
 // cli-from-image-v1 (a runtime the configuration names no CLI for runs the
-// one its image packages; a paired update may omit cli_version).
+// one its image packages; a paired update may omit cli_version), then
+// session-state-v1 (account session Valkey users, /health session_state;
+// SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.5).
 var Features = []string{"tunnel", "uploads", "runtime-images", "self-upgrade", "worker-update",
 	"runtime-pair-update-v1", "shared-egress-v1", "cli-profile-v1", "runtime-cleanup-v1",
-	"account-disk-quota-v1", "runtime-purge-v2", "guard-api-v1", "egress-recreate-v1", "cli-from-image-v1"}
+	"account-disk-quota-v1", "runtime-purge-v2", "guard-api-v1", "egress-recreate-v1", "cli-from-image-v1",
+	sessionstate.Feature}
 
 const (
 	// GatewayCacheTTL is how long /health reuses the gateway fields (02 §7.4).
@@ -48,6 +52,10 @@ type admin struct {
 	cached   pyjson.Ordered
 	cachedAt time.Time
 	cacheFor string // the target the cache was made for
+
+	ssMu       sync.Mutex // serialises refreshes of session_state
+	ssCached   pyjson.Ordered
+	ssCachedAt time.Time
 }
 
 // New is health, target images, the controller upgrade and the gateway
@@ -85,7 +93,33 @@ func (a *admin) Health(ctx context.Context) pyjson.Ordered {
 		{Key: "disk_quota", Value: pyjson.Ordered{{Key: "default_bytes", Value: a.o.Config.AccountDiskBytes},
 			{Key: "support", Value: a.o.DiskQuota.Get()}}},
 		{Key: "egress_gateway", Value: a.gateway(ctx)},
+		{Key: "session_state", Value: a.sessionState(ctx)},
 	}
+}
+
+// sessionState is session_state: whether the controller reaches the
+// session Valkey, its memory, evictions (another account filling the shared
+// memory shows here) and the number of account users, at most every 30 s
+// and within 3 s.
+func (a *admin) sessionState(ctx context.Context) pyjson.Ordered {
+	a.ssMu.Lock()
+	defer a.ssMu.Unlock()
+	if a.ssCached != nil && a.o.Clock.Now().Sub(a.ssCachedAt) < GatewayCacheTTL {
+		return a.ssCached
+	}
+	v := pyjson.Ordered{{Key: "reachable", Value: false}, {Key: "used_memory", Value: nil},
+		{Key: "evicted_keys", Value: nil}, {Key: "users", Value: nil}}
+	if a.o.SessionState != nil {
+		cctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), healthGuardWait)
+		info, err := a.o.SessionState.Observe(cctx)
+		cancel()
+		if err == nil {
+			v = pyjson.Ordered{{Key: "reachable", Value: true}, {Key: "used_memory", Value: info.UsedMemory},
+				{Key: "evicted_keys", Value: info.EvictedKeys}, {Key: "users", Value: int64(len(info.Users))}}
+		}
+	}
+	a.ssCached, a.ssCachedAt = v, a.o.Clock.Now()
+	return v
 }
 
 func (a *admin) fromCache(target string) pyjson.Ordered {

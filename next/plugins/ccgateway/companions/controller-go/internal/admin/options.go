@@ -15,6 +15,7 @@ import (
 	"ccgateway/controller/internal/guardapi"
 	"ccgateway/controller/internal/hoststate"
 	"ccgateway/controller/internal/logx"
+	"ccgateway/controller/internal/sessionstate"
 	"ccgateway/controller/internal/store"
 )
 
@@ -29,6 +30,9 @@ type Options struct {
 	DiskQuota *hoststate.DiskQuota
 	Clock     clock.Clock // the 30 s cache of the gateway health fields
 	Log       *logx.Logger
+	// SessionState is the session Valkey behind /health's session_state;
+	// nil reports it unreachable.
+	SessionState sessionstate.Admin
 }
 
 // Defaults fills the nil fields and checks the required ones.

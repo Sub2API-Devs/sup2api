@@ -927,6 +927,11 @@ func (g *Guard) createApp(w http.ResponseWriter, r *http.Request, aid string, bo
 		}
 		return conflict("exists", "account container already exists", name)
 	}
+	if g.sessionState {
+		if why, bad := g.rejected["state"]; bad {
+			return forbidden("mount_source_rejected", "mount source rejected: state: "+why)
+		}
+	}
 	env := make([]string, 0, len(req.Env))
 	for _, k := range sortedKeys(req.Env) {
 		env = append(env, k+"="+req.Env[k])
@@ -941,6 +946,9 @@ func (g *Guard) createApp(w http.ResponseWriter, r *http.Request, aid string, bo
 			{typ: "bind", source: RuntimeHostRoot + "/" + aid + "/resolv.conf", destination: "/etc/resolv.conf", mode: "ro", propagation: "rprivate"},
 		},
 		files: map[string]*file{}, dirs: defaultDirs()}
+	if g.sessionState {
+		c.mounts = append(c.mounts, stateMount())
+	}
 	for p, data := range img.files {
 		c.files[p] = &file{data: append([]byte(nil), data...), mode: 0o755}
 		c.dirs[parentDir(p)] = true
@@ -950,22 +958,31 @@ func (g *Guard) createApp(w http.ResponseWriter, r *http.Request, aid string, bo
 	return nil
 }
 
+// stateMount is the session state socket directory, read-only.
+func stateMount() mount {
+	return mount{typ: "bind", source: RuntimeHostRoot + "/state", destination: "/run/ccg-state", mode: "ro", propagation: "rprivate"}
+}
+
 // appMountsOK: exactly the resolv.conf bind (read-only) and the account
-// volume at /work (03 §3.5.7).
+// volume at /work (03 §3.5.7), optionally plus the read-only, rprivate
+// session state bind (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4).
 func (g *Guard) appMountsOK(aid string, c *container) bool {
-	if len(c.mounts) != 2 {
+	if len(c.mounts) != 2 && len(c.mounts) != 3 {
 		return false
 	}
-	var bind, vol bool
+	var bind, vol, state bool
 	for _, m := range c.mounts {
 		switch {
 		case m.typ == "bind" && m.source == RuntimeHostRoot+"/"+aid+"/resolv.conf" && m.destination == "/etc/resolv.conf" && !m.rw:
 			bind = true
 		case m.typ == "volume" && m.name == names.Name(g.prefix, aid, "data") && m.destination == "/work":
 			vol = true
+		case m.typ == "bind" && m.source == RuntimeHostRoot+"/state" && m.destination == "/run/ccg-state" && !m.rw &&
+			m.propagation == "rprivate":
+			state = true
 		}
 	}
-	return bind && vol
+	return bind && vol && (len(c.mounts) == 3) == state
 }
 
 func (g *Guard) appAction(w http.ResponseWriter, r *http.Request, aid, action string, body []byte) *apiError {
@@ -990,6 +1007,9 @@ func (g *Guard) appAction(w http.ResponseWriter, r *http.Request, aid, action st
 	if action != "stop" {
 		if !g.appMountsOK(aid, c) {
 			return forbidden("mount_source_rejected", "unexpected container mounts")
+		}
+		if why, bad := g.rejected["state"]; bad && len(c.mounts) == 3 {
+			return forbidden("mount_source_rejected", "mount source rejected: state: "+why)
 		}
 		if e := g.resolvLocked(aid); e != nil {
 			return e

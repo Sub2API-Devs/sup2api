@@ -68,6 +68,11 @@ func (m *Manager) DeleteLocked(ctx context.Context, h *keylock.Held, account, pu
 	if err != nil {
 		return nil, err
 	}
+	// The containers are gone: nothing uses the user any more. Its keys
+	// expire on their own (TTL).
+	if st, err := m.State(aid); err == nil {
+		m.delStateUser(ctx, aid, st)
+	}
 	if err := m.st.RemoveAccountDir(aid); err != nil {
 		return nil, err
 	}

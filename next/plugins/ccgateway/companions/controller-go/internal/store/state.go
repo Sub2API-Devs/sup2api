@@ -132,6 +132,10 @@ type AccountState struct {
 	// the one it was created from, or the one its last in-place update took
 	// them from. A recreation starts from it, so it keeps what runs.
 	RuntimeImage Opt[string]
+	// StatePassword is the account's session Valkey password
+	// (state_password, written only once set; SESSION-MEMORY-TOOLS-USED-DESIGN.md
+	// §7.5). Not part of the auth fingerprint.
+	StatePassword string
 
 	object
 }
@@ -170,6 +174,7 @@ func (s *AccountState) specs() []spec {
 		optField("egress_backend", &s.EgressBackend, asString, nil),
 		optField("migration_failed", &s.MigrationFailed, anyConv, nil),
 		optField("runtime_image", &s.RuntimeImage, asString, nil),
+		strField(o, "state_password", &s.StatePassword),
 	}
 }
 

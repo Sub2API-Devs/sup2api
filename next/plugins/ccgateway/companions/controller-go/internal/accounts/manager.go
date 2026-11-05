@@ -30,6 +30,7 @@ import (
 	"ccgateway/controller/internal/names"
 	"ccgateway/controller/internal/netplan"
 	"ccgateway/controller/internal/rnd"
+	"ccgateway/controller/internal/sessionstate"
 	"ccgateway/controller/internal/store"
 	"ccgateway/controller/internal/workeradmin"
 )
@@ -73,6 +74,14 @@ type Manager struct {
 
 	shared *shared
 
+	// Session state (session_state.go). stateMu is a leaf.
+	state       sessionstate.Admin
+	stateMu     sync.Mutex
+	stateInfo   *sessionstate.Info // last observation; nil = unknown (this pass skips the users)
+	stateSeen   string             // last run_id seen (restart log)
+	stateSynced map[string]string  // key -> run_id its user was last set at
+	stateDown   string             // "", "absent", "down": what was logged
+
 	// Background periods; tests shorten them.
 	recoverEvery time.Duration
 	recheckEvery time.Duration
@@ -114,6 +123,7 @@ func New(opts Options) (*Manager, error) {
 		rules: opts.BusinessRules, log: opts.Log,
 		online: map[string]string{}, boots: map[string][2]string{}, dropped: map[string]bool{},
 		snaps: map[string]stateSnapshot{}, snapWarn: map[string]time.Time{},
+		state: opts.SessionState, stateSynced: map[string]string{},
 		recoverEvery: RecoverEvery, recheckEvery: RecheckEvery, reqWait: keylock.RequestWait,
 	}
 	data, _, err := m.st.LoadShared(func() string { return rnd.TokenHex(m.rand, 32) })

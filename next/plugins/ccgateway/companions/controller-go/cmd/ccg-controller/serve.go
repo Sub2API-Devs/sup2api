@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"ccgateway/controller/internal/guardapi"
 	"ccgateway/controller/internal/hoststate"
 	"ccgateway/controller/internal/logx"
+	"ccgateway/controller/internal/sessionstate"
 	"ccgateway/controller/internal/store"
 	"ccgateway/controller/internal/workeradmin"
 )
@@ -38,6 +40,8 @@ type deps struct {
 	DiskQuota *hoststate.DiskQuota
 	Worker    *workeradmin.Client
 	Log       *logx.Logger
+	// SessionState is the session Valkey's management client.
+	SessionState sessionstate.Admin
 }
 
 // services are the business packages behind the HTTP API.
@@ -89,9 +93,12 @@ func serve(ctx context.Context, lookup func(string) (string, bool), stderr io.Wr
 		return exitConfig
 	}
 	checkGuard(ctx, guard, log)
+	state := &sessionstate.Client{Socket: sessionstate.SocketPath,
+		Secret: func() ([]byte, error) { return st.ReadFile(sessionstate.SecretFile) }}
+	checkSessionState(ctx, state, log)
 	worker := workeradmin.New()
 	svc, err := build(deps{Config: cfg, Store: st, Guard: guard, Images: images, DiskQuota: &hoststate.DiskQuota{},
-		Worker: worker, Log: log})
+		Worker: worker, Log: log, SessionState: state})
 	if err != nil {
 		log.Error("cannot start: %v", err)
 		return exitStartup
@@ -135,5 +142,20 @@ func checkGuard(ctx context.Context, g guardapi.Client, log *logx.Logger) {
 	}
 	if missing := h.Missing(guardapi.RequiredFeatures); len(missing) > 0 {
 		log.Warn("guard %s lacks required features: %s", h.Version, strings.Join(missing, ", "))
+	}
+}
+
+// checkSessionState is the start-up look at the session Valkey: only a log
+// line, never a reason not to start (accounts then keep their memory in
+// the Worker process; the background pass sets the users once it answers).
+func checkSessionState(ctx context.Context, s sessionstate.Admin, log *logx.Logger) {
+	info, err := s.Observe(ctx)
+	switch {
+	case err == nil:
+		log.Info("session state Valkey reachable (%d account users)", len(info.Users))
+	case errors.Is(err, sessionstate.ErrNotConfigured):
+		log.Info("session state Valkey not configured on this host: %v", err)
+	default:
+		log.Warn("session state Valkey not reachable at start: %v", err)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"ccgateway/controller/internal/logx"
 	"ccgateway/controller/internal/netplan"
 	"ccgateway/controller/internal/rnd"
+	"ccgateway/controller/internal/sessionstate"
 	"ccgateway/controller/internal/store"
 	"ccgateway/controller/internal/workeradmin"
 )
@@ -50,6 +51,10 @@ type Options struct {
 	BusinessRules func(gatewayIP string) (string, error)
 	// Log is the controller log. nil: logx.Discard().
 	Log *logx.Logger
+	// SessionState manages the accounts' session Valkey users
+	// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.5). nil: no session state
+	// (no password, no ACL user, no Worker settings).
+	SessionState sessionstate.Admin
 }
 
 // Defaults fills the nil fields and checks the required ones.

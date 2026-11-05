@@ -13,7 +13,7 @@ import (
 // shared gateway state (an unknown schema fails the start).
 func build(d deps) (*services, error) {
 	m, err := accounts.New(accounts.Options{Config: d.Config, Store: d.Store, Guard: d.Guard, Images: d.Images,
-		DiskQuota: d.DiskQuota, Worker: d.Worker, Log: d.Log})
+		DiskQuota: d.DiskQuota, Worker: d.Worker, Log: d.Log, SessionState: d.SessionState})
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func build(d deps) (*services, error) {
 		return nil, err
 	}
 	ad, err := admin.New(admin.Options{Config: d.Config, Host: m, Guard: d.Guard, Store: d.Store, Images: d.Images,
-		DiskQuota: d.DiskQuota, Log: d.Log})
+		DiskQuota: d.DiskQuota, Log: d.Log, SessionState: d.SessionState})
 	if err != nil {
 		return nil, err
 	}

@@ -716,6 +716,7 @@ func (m *Manager) recoverKey(ctx context.Context, key string) error {
 	if err != nil {
 		return err
 	}
+	m.stateUserOnce(ctx, key, st) // blocked runtimes too (their user is off)
 	if st == nil || st.Status == store.StatusBlocked {
 		return nil
 	}

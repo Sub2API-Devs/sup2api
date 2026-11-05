@@ -158,9 +158,10 @@ func TestHealthShape(t *testing.T) {
 		`"controller_image": "ccgateway-controller:0.1.119", "network_policy_version": 1, ` +
 		`"features": ["tunnel", "uploads", "runtime-images", "self-upgrade", "worker-update", "runtime-pair-update-v1", ` +
 		`"shared-egress-v1", "cli-profile-v1", "runtime-cleanup-v1", "account-disk-quota-v1", "runtime-purge-v2", ` +
-		`"guard-api-v1", "egress-recreate-v1", "cli-from-image-v1"], "disk_quota": {"default_bytes": 10737418240, "support": "unknown"}, ` +
+		`"guard-api-v1", "egress-recreate-v1", "cli-from-image-v1", "session-state-v1"], "disk_quota": {"default_bytes": 10737418240, "support": "unknown"}, ` +
 		`"egress_gateway": {"status": "absent", "image_id": "", "target_image": "egress:test", "target_id": "` +
-		e.g.ImageID("egress:test") + `", "update_available": false}}`
+		e.g.ImageID("egress:test") + `", "update_available": false}, ` +
+		`"session_state": {"reachable": false, "used_memory": null, "evicted_keys": null, "users": null}}`
 	if got != want {
 		t.Fatalf("got  %s\nwant %s", got, want)
 	}

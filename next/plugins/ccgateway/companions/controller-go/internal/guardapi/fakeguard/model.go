@@ -166,7 +166,8 @@ type Guard struct {
 	lifecycleBusy  bool              // an upgrade, ensure or recreate holds the lifecycle
 	diskFull       bool              // image load: 503 busy
 	composeFails   map[string]bool   // compose up of the gateway with this image fails
-	rejected       map[string]string // mount sources the guard rejects: "<aid>/resolv.conf", "shared-egress"
+	rejected       map[string]string // mount sources the guard rejects: "<aid>/resolv.conf", "shared-egress", "state"
+	sessionState   bool              // CCG_GUARD_SESSION_STATE=1: new app containers get the state mount
 
 	seq int
 
@@ -353,6 +354,30 @@ func (g *Guard) SetHealth(h guardapi.Health) {
 	g.health = h
 }
 
+// SessionStateFeature is the guard feature of the session state mount
+// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4).
+const SessionStateFeature = "session-state-v1"
+
+// SetSessionState is the guard's CCG_GUARD_SESSION_STATE switch: on, new
+// account containers get <runtime>/state read-only at /run/ccg-state and
+// health reports session-state-v1. Start and restart accept both mount
+// shapes either way.
+func (g *Guard) SetSessionState(on bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.sessionState = on
+	feats := []string{}
+	for _, f := range g.health.Features {
+		if f != SessionStateFeature {
+			feats = append(feats, f)
+		}
+	}
+	if on {
+		feats = append(feats, SessionStateFeature)
+	}
+	g.health.Features = feats
+}
+
 // SetToken replaces the guard token (64 lowercase hex characters).
 func (g *Guard) SetToken(token string) {
 	if !validToken(token) {
@@ -424,7 +449,9 @@ func (g *Guard) SetComposeFails(images ...string) {
 // name, ...); why "" clears it. A rejected resolv.conf makes PUT app and
 // app start/restart answer 403 mount_source_rejected, and PUT resolv
 // replace it and answer 409 mount_source_replaced; a rejected shared-egress
-// makes gateway ensure and recreate answer 403 mount_source_rejected.
+// makes gateway ensure and recreate answer 403 mount_source_rejected; a
+// rejected "state" makes PUT app (session state on) and start/restart of a
+// container with the state mount answer 403 mount_source_rejected.
 func (g *Guard) RejectMountSource(rel, why string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
