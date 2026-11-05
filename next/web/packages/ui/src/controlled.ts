@@ -35,7 +35,9 @@ export function useCheckboxModel(
   function onClick() {
     if (props.disabled) return
     clicked = true
-    Promise.resolve().then(() => (clicked = false))
+    // Not a microtask: on a real click those run between the click and change
+    // listeners, which would make the change emit a second time.
+    setTimeout(() => (clicked = false))
     emit('update:modelValue', !props.modelValue)
     nextTick(sync)
   }
