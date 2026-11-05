@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-05 核心 **0.1.246**（`03f641100`，北京时间 18:25–18:26；计划 `dd68c4cec96e18f7bcd6397dec031376` completed/13，约 60 秒，没有暂停；**迁移 0088**（只新增 `user_access_keys`），schema `1d892be5…34a5` → `dc1a1d43…b9cc`；Host API 仍 9；内置插件与 0.1.245 相同，插件和外壳不变）：
+- 内容：访问密钥（CONTRACTS §80）；修复权限勾选框真实点击触发两次（`b2383df43`）。
+- 核验：两节点 0.1.246，api.prophey.ai `/readyz` 200，发布后 5 分钟错误日志 0；`/me/access-keys` 未登录回 401，伪造的 `sak_` 密钥回 401；线上前端资源含访问密钥页面。没有在线上创建过真实密钥，也没有查库。
+- 回滚：迁移只新增表。回到 0.1.245 没有验证过，回滚前确认旧核心接受新 schema；回滚后访问密钥全部不可用。
+- 脚本 `stage/0.1.246/`；备份 `backups/core-0.1.246`（`7efb1b33…`）。
+
 2026-11-05 核心 **0.1.245**（`4364f3abf`，北京时间 17:05–17:06；核心 manifest `ccf0d8f3…`，计划 `2a52db3281eb6628f62afb123bc92fd7` completed/13，约 52 秒，没有暂停；**迁移 0087**（只新增 `auth_flows`、`user_totp`、`user_totp_backup_codes`、`user_passkeys`、`login_sessions`），schema `d522e9a7…14d3` → `1d892be5…34a5`；Host API 仍 9；内置插件与 0.1.244 相同，插件和外壳不变）：
 - 内容：通行密钥登录、二次验证、登录会话、个人中心、钱包、模型与价格（CONTRACTS §79）。
 - 核验：两节点 0.1.245，api.prophey.ai `/readyz` 200，发布后约 9 分钟错误日志 0；`POST /auth/passkey/begin` 带线上 Origin 回 RP `api.prophey.ai`、UV required，说明 Host 经 Caddy 保留、新表可用；`/me/two-factor`、`/me/prices` 未登录回 401；线上前端资源含新登录页。滚动时主节点本机探测 503 约 10 秒，和上次一样。没有用真实账号在线上走过二次验证和通行密钥，也没有查库。
