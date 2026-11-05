@@ -1,6 +1,7 @@
 package iam
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -10,13 +11,19 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/protocol/webauthncbor"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/hotp"
+
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
 
 func setupAdmin(t *testing.T) *env {
@@ -594,5 +601,299 @@ func TestPasskeyBeginIsRateLimited(t *testing.T) {
 	}
 	if _, err := s.BeginPasskeyLogin(ctx, r, "192.0.2.77"); err != nil {
 		t.Fatalf("another address: %v", err)
+	}
+}
+
+// ------------------------------------------------------------ access keys
+
+// keyEnv routes requests through the real router and permission checks, as a
+// console client sees them.
+type keyEnv struct {
+	*env
+	s      *Service
+	h      *gin.Engine
+	userID int64
+}
+
+func newKeyEnv(t *testing.T) *keyEnv {
+	t.Helper()
+	e := setupAdmin(t)
+	gin.SetMode(gin.TestMode)
+	engine := gin.New()
+	r := httpapi.NewRouter(engine, e.svc, e.authz)
+	e.svc.RegisterRoutes(r)
+	e.authz.RegisterRoutes(r)
+	u, err := e.svc.CreateUser(context.Background(), 0, CreateUserInput{Email: "key-user@example.com", DisplayName: "Key", Password: adminPassword})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &keyEnv{env: e, s: e.svc, h: engine, userID: u.ID}
+}
+
+func (k *keyEnv) call(token, method, path string, body any) (int, map[string]any) {
+	raw, _ := json.Marshal(body)
+	req := httptest.NewRequest(method, "/api/v1"+path, bytes.NewReader(raw))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	k.h.ServeHTTP(w, req)
+	var out map[string]any
+	_ = json.Unmarshal(w.Body.Bytes(), &out)
+	return w.Code, out
+}
+
+func (k *keyEnv) createKey(t *testing.T, userID int64, password string, perms ...string) *AccessKey {
+	t.Helper()
+	key, err := k.s.CreateAccessKey(context.Background(), userID, CreateAccessKeyInput{Name: "ci", Password: password, Permissions: perms}, testIP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return key
+}
+
+func (k *keyEnv) grantRole(t *testing.T, userID int64, key string, perms ...string) int64 {
+	t.Helper()
+	ctx := context.Background()
+	var id int64
+	if err := k.s.db.Pool.QueryRow(ctx, `INSERT INTO roles (key, name) VALUES ($1, '{"en":"x"}') RETURNING id`, key).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range perms {
+		if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO role_permissions (role_id, permission_id) SELECT $1, id FROM permissions WHERE key = $2`, id, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)`, userID, id); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	return id
+}
+
+// bump drops the cached permissions, as a change through the role API does.
+func (k *keyEnv) bump(t *testing.T) {
+	t.Helper()
+	ctx := context.Background()
+	var v int64
+	if err := k.s.db.Pool.QueryRow(ctx, `UPDATE authz_meta SET version = version + 1 WHERE id = 1 RETURNING version`).Scan(&v); err != nil {
+		t.Fatal(err)
+	}
+	k.authz.Committed(ctx, v)
+}
+
+func TestAccessKeyIsASubsetOfItsUser(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	k.grantRole(t, k.userID, "reader", "user:read", "role:read")
+
+	// Permissions the user does not hold cannot be chosen, nor unknown ones.
+	for _, perms := range [][]string{{"user:delete"}, {"user:read", "user:delete"}, {"nonsense:key"}} {
+		_, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: perms}, testIP)
+		if !isCode(err, "permission_denied") {
+			t.Fatalf("%v: %v", perms, err)
+		}
+	}
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: adminPassword}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("no permissions: %v", err)
+	}
+	if _, err := k.s.CreateAccessKey(ctx, k.userID, CreateAccessKeyInput{Name: "x", Password: "wrong", Permissions: []string{"user:read"}}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("wrong password: %v", err)
+	}
+
+	key := k.createKey(t, k.userID, adminPassword, "user:read")
+	if !strings.HasPrefix(key.Key, core.AccessKeyPrefix) {
+		t.Fatalf("key = %q", key.Key)
+	}
+	var stored string
+	if err := k.s.db.Pool.QueryRow(ctx, `SELECT token_hash FROM user_access_keys WHERE id = $1`, key.ID).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored == key.Key || strings.Contains(stored, key.Key) {
+		t.Fatal("the key is stored in the clear")
+	}
+	list, err := k.s.AccessKeys(ctx, k.userID)
+	if err != nil || len(list) != 1 || list[0].Key != "" {
+		t.Fatalf("list repeats the secret: %+v, %v", list, err)
+	}
+
+	// The key has what it was given; the user's other permission is not in it.
+	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 200 {
+		t.Fatalf("a granted permission: %d", code)
+	}
+	if code, _ := k.call(key.Key, "GET", "/permissions", nil); code != 403 {
+		t.Fatalf("a permission of the user, not of the key: %d", code)
+	}
+
+	// When the user loses a permission, so does the key, at once, and it says so.
+	if _, err := k.s.db.Pool.Exec(ctx, `DELETE FROM role_permissions WHERE permission_id = (SELECT id FROM permissions WHERE key = 'user:read')`); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 403 {
+		t.Fatalf("a permission the user lost: %d", code)
+	}
+	if list, _ = k.s.AccessKeys(ctx, k.userID); len(list[0].Lost) != 1 || list[0].Lost[0] != "user:read" {
+		t.Fatalf("lost = %v", list[0].Lost)
+	}
+}
+
+func TestSuperuserKeyIsNotASuperuser(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
+	key := k.createKey(t, root, adminPassword, "user:read")
+	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 200 {
+		t.Fatalf("granted: %d", code)
+	}
+	for _, p := range []struct{ method, path string }{{"GET", "/permissions"}, {"DELETE", "/users/" + strconv.FormatInt(k.userID, 10)}} {
+		if code, _ := k.call(key.Key, p.method, p.path, nil); code != 403 {
+			t.Fatalf("%s %s: %d", p.method, p.path, code)
+		}
+	}
+	code, me := k.call(key.Key, "GET", "/me", nil)
+	data := me["data"].(map[string]any)
+	if code != 200 || data["superuser"] != false || len(data["permissions"].([]any)) != 1 {
+		t.Fatalf("/me: %d %v", code, me)
+	}
+	// Grant checks see the key, not the superuser behind it.
+	authed := core.WithAccessKey(core.WithUserID(ctx, root), core.AccessKeyIdentity{UserID: root, Permissions: []string{"user:read"}})
+	if err := k.authz.CanGrant(authed, root, []string{"user:delete"}); err == nil {
+		t.Fatal("a limited key granted a permission it does not have")
+	}
+	if err := k.authz.CanGrant(ctx, root, []string{"user:delete"}); err != nil {
+		t.Fatalf("the superuser itself: %v", err)
+	}
+	// Questions about another user are not limited by the caller's key.
+	other, err := k.authz.PermissionSet(authed, k.userID)
+	if err != nil || other.Superuser {
+		t.Fatalf("other: %+v, %v", other, err)
+	}
+}
+
+func TestAccessKeyCannotManageSignIn(t *testing.T) {
+	k := newKeyEnv(t)
+	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
+	key := k.createKey(t, root, adminPassword, "user:read")
+	// Plugin routes and anything else that only verifies JWTs refuse it.
+	if _, err := k.s.VerifyAccessToken(context.Background(), key.Key); err == nil {
+		t.Fatal("a key passed as a console token")
+	}
+	for _, p := range []struct{ method, path string }{
+		{"POST", "/me/access-keys"}, {"GET", "/me/access-keys"}, {"DELETE", "/me/access-keys/1"},
+		{"PUT", "/me/password"}, {"PUT", "/me"}, {"POST", "/auth/logout"},
+		{"POST", "/me/two-factor/setup"}, {"POST", "/me/two-factor/disable"},
+		{"POST", "/me/passkeys/begin"}, {"DELETE", "/me/passkeys/1"},
+		{"GET", "/me/sessions"}, {"POST", "/me/sessions/revoke-others"},
+	} {
+		if code, _ := k.call(key.Key, p.method, p.path, map[string]any{}); code != 403 {
+			t.Fatalf("%s %s: %d", p.method, p.path, code)
+		}
+	}
+}
+
+func TestAccessKeyLifecycle(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
+
+	// Expired, rejected, deleted, disabled: 401.
+	soon := time.Now().Add(30 * time.Minute)
+	if _, err := k.s.CreateAccessKey(ctx, root, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"user:read"}, ExpiresAt: &soon}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("too soon: %v", err)
+	}
+	expiring := k.createKey(t, root, adminPassword, "user:read")
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE user_access_keys SET expires_at = now() - interval '1 second' WHERE id = $1`, expiring.ID); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := k.call(expiring.Key, "GET", "/users", nil); code != 401 {
+		t.Fatalf("expired: %d", code)
+	}
+	if code, _ := k.call(core.AccessKeyPrefix+"unknown", "GET", "/users", nil); code != 401 {
+		t.Fatalf("unknown: %d", code)
+	}
+
+	key := k.createKey(t, root, adminPassword, "user:read")
+	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 200 {
+		t.Fatalf("live: %d", code)
+	}
+	list, _ := k.s.AccessKeys(ctx, root)
+	if list[0].LastUsedAt == nil {
+		t.Fatal("last use not recorded")
+	}
+
+	// Editing checks the same rule, and only the owner can.
+	if _, err := k.s.UpdateAccessKey(ctx, k.userID, key.ID, UpdateAccessKeyInput{Name: ptr("x")}, testIP); !isCode(err, "not_found") {
+		t.Fatalf("another user's: %v", err)
+	}
+	if _, err := k.s.UpdateAccessKey(ctx, root, key.ID, UpdateAccessKeyInput{Permissions: []string{"role:read"}, Password: "wrong"}, testIP); !isCode(err, "invalid_argument") {
+		t.Fatalf("wrong password: %v", err)
+	}
+	updated, err := k.s.UpdateAccessKey(ctx, root, key.ID, UpdateAccessKeyInput{Name: ptr("renamed"), Permissions: []string{"role:read"}, Password: adminPassword}, testIP)
+	if err != nil || updated.Name != "renamed" {
+		t.Fatalf("update: %+v, %v", updated, err)
+	}
+	if code, _ := k.call(key.Key, "GET", "/users", nil); code != 403 {
+		t.Fatalf("after narrowing: %d", code)
+	}
+
+	if err := k.s.DeleteAccessKey(ctx, k.userID, key.ID); !isCode(err, "not_found") {
+		t.Fatalf("another user's: %v", err)
+	}
+	limited := k.createKey(t, k.userID, adminPassword, "apikey:self:manage")
+	if _, err := k.s.db.Pool.Exec(ctx, `UPDATE users SET status = 'disabled' WHERE id = $1`, k.userID); err != nil {
+		t.Fatal(err)
+	}
+	k.s.forgetStatus(k.userID)
+	if code, _ := k.call(limited.Key, "GET", "/me", nil); code != 401 {
+		t.Fatalf("a disabled user's key: %d", code)
+	}
+	if err := k.s.DeleteAccessKey(ctx, root, key.ID); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := k.call(key.Key, "GET", "/permissions", nil); code != 401 {
+		t.Fatalf("deleted: %d", code)
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
+
+func TestAccessKeyCatalogHasOnlyWhatTheUserHolds(t *testing.T) {
+	k := newKeyEnv(t)
+	ctx := context.Background()
+	k.grantRole(t, k.userID, "reader", "user:read")
+	mods, err := k.s.AccessKeyPermissions(ctx, k.userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for _, m := range mods {
+		for _, p := range m.Permissions {
+			seen[p.Key] = true
+		}
+	}
+	if !seen["user:read"] || seen["user:delete"] || seen["role:manage"] {
+		t.Fatalf("catalog = %v", seen)
+	}
+	// A plugin permission cannot be chosen: plugin routes do not take keys.
+	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO plugins (key, name, status) VALUES ('demo', '{"en":"x"}', 'enabled')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := k.s.db.Pool.Exec(ctx, `INSERT INTO permissions (key, module, label, source, plugin_key, status) VALUES ('plugin.demo:read', 'plugin.demo', '{"en":"x"}', 'plugin', 'demo', 'active')`); err != nil {
+		t.Fatal(err)
+	}
+	k.bump(t)
+	root := mustLogin(t, k.s, adminEmail, adminPassword).User.ID
+	_, err = k.s.CreateAccessKey(ctx, root, CreateAccessKeyInput{Name: "x", Password: adminPassword, Permissions: []string{"plugin.demo:read"}}, testIP)
+	if !isCode(err, "permission_denied") {
+		t.Fatalf("a plugin permission: %v", err)
+	}
+	mods, err = k.s.AccessKeyPermissions(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range mods {
+		if m.Source == "plugin" {
+			t.Fatalf("catalog offers %s", m.Module)
+		}
 	}
 }

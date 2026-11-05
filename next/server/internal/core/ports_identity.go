@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -36,6 +37,55 @@ func (s PermissionSet) Has(key string) bool {
 	}
 	_, ok := s.Keys[key]
 	return ok
+}
+
+// AccessKeyPrefix starts every access key, so a bearer token can be told from
+// a console JWT without parsing it.
+const AccessKeyPrefix = "sak_"
+
+// AccessKeyIdentity is who an access key acts for and what it was given.
+type AccessKeyIdentity struct {
+	UserID      int64
+	KeyID       int64
+	Permissions []string
+}
+
+// AccessKeyVerifier validates access keys (CONTRACTS §80).
+type AccessKeyVerifier interface {
+	VerifyAccessKey(ctx context.Context, raw, ip string) (AccessKeyIdentity, error)
+}
+
+// AuthenticateBearer resolves a console bearer token to its user: a JWT, or an
+// access key, whose limits then travel in the returned context.
+func AuthenticateBearer(ctx context.Context, tokens TokenVerifier, token, ip string) (context.Context, int64, error) {
+	if !strings.HasPrefix(token, AccessKeyPrefix) {
+		uid, err := tokens.VerifyAccessToken(ctx, token)
+		if err != nil {
+			return ctx, 0, err
+		}
+		return WithUserID(ctx, uid), uid, nil
+	}
+	keys, ok := tokens.(AccessKeyVerifier)
+	if !ok {
+		return ctx, 0, ErrUnauthenticated
+	}
+	id, err := keys.VerifyAccessKey(ctx, token, ip)
+	if err != nil {
+		return ctx, 0, err
+	}
+	return WithAccessKey(WithUserID(ctx, id.UserID), id), id.UserID, nil
+}
+
+// Restrict returns the part of the set that keys allow: never more than the
+// set itself, and no longer a superuser, whose Has is true for anything.
+func (s PermissionSet) Restrict(keys []string) PermissionSet {
+	out := PermissionSet{Keys: make(map[string]struct{}, len(keys)), Version: s.Version}
+	for _, k := range keys {
+		if s.Has(k) {
+			out.Keys[k] = struct{}{}
+		}
+	}
+	return out
 }
 
 // Authorizer answers permission questions; results are cached per node and

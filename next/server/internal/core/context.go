@@ -28,6 +28,29 @@ func ClientIP(ctx context.Context) string {
 	return ip
 }
 
+type accessKeyCtxKey struct{}
+
+// WithAccessKey marks the request as made with an access key.
+func WithAccessKey(ctx context.Context, id AccessKeyIdentity) context.Context {
+	return context.WithValue(ctx, accessKeyCtxKey{}, id)
+}
+
+// AccessKey returns the access key of the request, if it was made with one.
+func AccessKey(ctx context.Context) (AccessKeyIdentity, bool) {
+	id, ok := ctx.Value(accessKeyCtxKey{}).(AccessKeyIdentity)
+	return id, ok
+}
+
+// RestrictToAccessKey applies the request's access key to the permissions of
+// userID. Only the key's own user is limited: questions about anyone else get
+// the true answer.
+func RestrictToAccessKey(ctx context.Context, userID int64, set PermissionSet) PermissionSet {
+	if id, ok := AccessKey(ctx); ok && id.UserID == userID {
+		return set.Restrict(id.Permissions)
+	}
+	return set
+}
+
 // WithUserID stores the authenticated console user id.
 func WithUserID(ctx context.Context, id int64) context.Context {
 	return context.WithValue(ctx, ctxUserID, id)

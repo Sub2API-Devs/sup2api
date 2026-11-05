@@ -10,6 +10,7 @@ import { currentLocale, setLocale, type Locale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import type { Me } from '@/api/types'
 import { notifyError } from '@/utils/errors'
+import AccessKeysCard from './AccessKeysCard.vue'
 import PasskeysCard from './PasskeysCard.vue'
 import SessionsCard from './SessionsCard.vue'
 import TwoFactorCard from './TwoFactorCard.vue'
@@ -63,6 +64,7 @@ const pwdOpen = ref(false)
     <TwoFactorCard />
     <PasskeysCard />
     <SessionsCard />
+    <AccessKeysCard />
     <ChangePasswordDialog v-model:open="pwdOpen" />
   </div>
 </template>

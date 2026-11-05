@@ -19,7 +19,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/login", s.handleLogin)
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
 	r.Authed(http.MethodPost, "/auth/logout", s.handleLogout)
-	r.Authed(http.MethodGet, "/me", s.handleMe)
+	r.AuthedRead("/me", s.handleMe)
 	r.Authed(http.MethodPut, "/me", s.handleUpdateMe)
 	r.Authed(http.MethodPut, "/me/password", s.handleChangePassword)
 

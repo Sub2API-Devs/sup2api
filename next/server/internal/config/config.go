@@ -33,15 +33,15 @@ var SensitiveEnv = []string{
 }
 
 type Config struct {
-	HTTPAddr    string // SUB2API_HTTP_ADDR, default ":8080"
-	PublicURL   string // SUB2API_PUBLIC_URL, e.g. "http://127.0.0.1:3120"
+	HTTPAddr  string // SUB2API_HTTP_ADDR, default ":8080"
+	PublicURL string // SUB2API_PUBLIC_URL, e.g. "http://127.0.0.1:3120"
 	// WebAuthnRPID is the passkey relying party (SUB2API_WEBAUTHN_RP_ID), a parent
 	// domain to share passkeys across hosts. Empty: the host the console is on.
 	WebAuthnRPID string
-	DatabaseURL string // DATABASE_URL (required)
-	RedisURL    string // REDIS_URL (required): any Redis-protocol server, Valkey by default; redis://, rediss://, valkey://, valkeys:// or unix:// (cluster.ParseRedisURL)
-	NodeID      string // NODE_ID, default hostname
-	LogLevel    string // SUB2API_LOG_LEVEL: debug | info | warn | error
+	DatabaseURL  string // DATABASE_URL (required)
+	RedisURL     string // REDIS_URL (required): any Redis-protocol server, Valkey by default; redis://, rediss://, valkey://, valkeys:// or unix:// (cluster.ParseRedisURL)
+	NodeID       string // NODE_ID, default hostname
+	LogLevel     string // SUB2API_LOG_LEVEL: debug | info | warn | error
 
 	MasterKey []byte // SUB2API_MASTER_KEY, base64 of 32 bytes (AES-256-GCM)
 	JWTSecret []byte // SUB2API_JWT_SECRET (required, >= 32 bytes)

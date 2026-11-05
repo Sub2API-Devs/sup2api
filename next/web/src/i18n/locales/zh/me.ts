@@ -66,6 +66,30 @@ export default {
       passkey: '通行密钥'
     }
   },
+  accessKeys: {
+    title: '访问密钥',
+    description: '让脚本和工具以你的身份调用控制台 API，权限由你选择，不能用来调用模型（那是 API 密钥）。',
+    add: '创建访问密钥',
+    edit: '编辑访问密钥',
+    remove: '删除访问密钥',
+    removeConfirm: '删除“{name}”后，用它的脚本会立刻失效。确定吗？',
+    empty: '还没有访问密钥',
+    name: '名称',
+    key: '密钥',
+    permissions: '权限',
+    count: '{n} 项权限',
+    lost: '{n} 项已失效',
+    lostHint: '你已经没有这些权限，密钥也不能使用：{list}。保存后会移除。',
+    expires: '有效期',
+    days: '{n} 天',
+    noExpiry: '永不过期',
+    expired: '已过期',
+    lastUsed: '最近使用',
+    subsetHint: '只能选择你自己拥有的权限。之后如果你失去某项权限，密钥也会同时失去。',
+    createdTitle: '保存访问密钥',
+    createdHint: '密钥只显示这一次，关闭后无法再次查看。',
+    usage: '调用时放在请求头：Authorization: Bearer <密钥>'
+  },
   wallet: {
     title: '钱包',
     description: '你的余额、消费和每一笔余额变动。',

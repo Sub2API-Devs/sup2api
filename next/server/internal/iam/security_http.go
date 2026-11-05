@@ -34,7 +34,73 @@ func (s *Service) registerSecurityRoutes(r *httpapi.Router) {
 	r.Authed(http.MethodPost, "/me/sessions/revoke-others", s.handleSessionsRevokeOthers)
 	r.Authed(http.MethodDelete, "/me/sessions/:id", s.handleSessionRevoke)
 
+	r.Authed(http.MethodGet, "/me/access-keys", s.handleAccessKeys)
+	r.Authed(http.MethodGet, "/me/access-keys/permissions", s.handleAccessKeyPermissions)
+	r.Authed(http.MethodPost, "/me/access-keys", s.handleAccessKeyCreate)
+	r.Authed(http.MethodPatch, "/me/access-keys/:id", s.handleAccessKeyUpdate)
+	r.Authed(http.MethodDelete, "/me/access-keys/:id", s.handleAccessKeyDelete)
+
 	r.Perm(http.MethodDelete, "/users/:id/security", "user:update", s.handleResetSecurity)
+}
+
+func (s *Service) handleAccessKeys(c *gin.Context) {
+	out, err := s.AccessKeys(c.Request.Context(), actor(c))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleAccessKeyPermissions(c *gin.Context) {
+	out, err := s.AccessKeyPermissions(c.Request.Context(), actor(c))
+	if err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleAccessKeyCreate(c *gin.Context) {
+	var in CreateAccessKeyInput
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.CreateAccessKey(audit.Context(c), actor(c), in, c.ClientIP())
+	if err != nil {
+		failLogin(c, err)
+		return
+	}
+	httpapi.Created(c, out)
+}
+
+func (s *Service) handleAccessKeyUpdate(c *gin.Context) {
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	var in UpdateAccessKeyInput
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	out, err := s.UpdateAccessKey(audit.Context(c), actor(c), id, in, c.ClientIP())
+	if err != nil {
+		failLogin(c, err)
+		return
+	}
+	httpapi.OK(c, out)
+}
+
+func (s *Service) handleAccessKeyDelete(c *gin.Context) {
+	id, ok := httpapi.PathID(c, "id")
+	if !ok {
+		return
+	}
+	if err := s.DeleteAccessKey(audit.Context(c), actor(c), id); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	httpapi.NoContent(c)
 }
 
 // failLogin answers a failed login step with Retry-After when rate limited.

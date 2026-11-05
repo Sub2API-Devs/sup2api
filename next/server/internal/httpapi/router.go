@@ -36,9 +36,24 @@ func (r *Router) Public(method, path string, h ...gin.HandlerFunc) {
 	r.api.Handle(method, path, h...)
 }
 
-// Authed registers a route for any logged-in user.
+// Authed registers a route for any logged-in user, not for an access key: a
+// route without a permission has nothing to limit a key by, and most of them
+// manage how the user signs in (CONTRACTS §80).
 func (r *Router) Authed(method, path string, h ...gin.HandlerFunc) {
-	r.api.Handle(method, path, append([]gin.HandlerFunc{r.authenticate()}, h...)...)
+	chain := []gin.HandlerFunc{r.authenticate(), rejectAccessKey}
+	r.api.Handle(method, path, append(chain, h...)...)
+}
+
+// AuthedRead registers a read-only route for any logged-in user or access key:
+// who the caller is and what they can see, under the key's own limits.
+func (r *Router) AuthedRead(path string, h ...gin.HandlerFunc) {
+	r.api.Handle(http.MethodGet, path, append([]gin.HandlerFunc{r.authenticate()}, h...)...)
+}
+
+func rejectAccessKey(c *gin.Context) {
+	if _, ok := core.AccessKey(c.Request.Context()); ok {
+		Fail(c, core.ErrPermissionDenied.WithMessage("access keys cannot use this endpoint"))
+	}
 }
 
 // Perm registers a route requiring permission.
@@ -77,12 +92,12 @@ func (r *Router) authenticate() gin.HandlerFunc {
 			Fail(c, core.ErrUnauthenticated)
 			return
 		}
-		uid, err := r.tokens.VerifyAccessToken(c.Request.Context(), token)
+		ctx, _, err := core.AuthenticateBearer(c.Request.Context(), r.tokens, token, c.ClientIP())
 		if err != nil {
 			Fail(c, core.ErrUnauthenticated.WithCause(err))
 			return
 		}
-		c.Request = c.Request.WithContext(core.WithUserID(c.Request.Context(), uid))
+		c.Request = c.Request.WithContext(ctx)
 		c.Next()
 	}
 }

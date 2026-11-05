@@ -251,6 +251,38 @@ on('GET', '/me/sessions', () => [
 on('DELETE', '/me/sessions/:id', () => ({}))
 on('POST', '/me/sessions/revoke-others', () => ({}))
 on('DELETE', '/users/:id/security', () => ({}))
+// Access keys (CONTRACTS §80): what the mock user holds is what can be chosen.
+const accessKeys: any[] = []
+on('GET', '/me/access-keys', () => accessKeys)
+on('GET', '/me/access-keys/permissions', () => [
+  {
+    module: 'usage',
+    label: { en: 'Usage', zh: '用量' },
+    source: 'core',
+    status: 'active',
+    permissions: [
+      { key: 'usage:self:read', label: { en: 'View own usage', zh: '查看自己的用量' }, description: {}, sensitive: false, status: 'active' },
+      { key: 'balance:self:read', label: { en: 'View own balance', zh: '查看自己的余额' }, description: {}, sensitive: false, status: 'active' }
+    ]
+  }
+])
+on('POST', '/me/access-keys', (req) => {
+  if (req.body?.password !== 'admin') return fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+  const key = { id: accessKeys.length + 1, name: req.body.name, hint: 'mock', permissions: req.body.permissions, lost: [], expires_at: req.body.expires_at, last_used_at: null, last_used_ip: '', created_at: now() }
+  accessKeys.unshift(key)
+  return { ...key, key: 'sak_mockmockmockmockmockmockmockmockmockmockmock' }
+})
+on('PATCH', '/me/access-keys/:id', (req) => {
+  const key = accessKeys.find((k) => String(k.id) === req.params.id)
+  if (!key) return fail(404, 'not_found', 'not found')
+  Object.assign(key, { name: req.body?.name ?? key.name, permissions: req.body?.permissions ?? key.permissions, lost: [] })
+  return key
+})
+on('DELETE', '/me/access-keys/:id', (req) => {
+  const i = accessKeys.findIndex((k) => String(k.id) === req.params.id)
+  if (i >= 0) accessKeys.splice(i, 1)
+  return {}
+})
 on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
 
 // Permission of each core menu path (CONTRACTS §21.2 for accounts / platforms / proxies); plugin items need their plugin permission.

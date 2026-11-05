@@ -70,7 +70,8 @@ type statusEntry struct {
 }
 
 var (
-	_ core.TokenVerifier = (*Service)(nil)
+	_ core.TokenVerifier     = (*Service)(nil)
+	_ core.AccessKeyVerifier = (*Service)(nil)
 )
 
 // New creates the service. The authz service must be started before

@@ -11,7 +11,7 @@ import (
 
 // RegisterRoutes mounts /roles, /permissions and /me/menus.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.Authed(http.MethodGet, "/me/menus", s.handleMenus)
+	r.AuthedRead("/me/menus", s.handleMenus)
 	r.Perm(http.MethodGet, "/roles", "role:read", s.handleListRoles)
 	r.Perm(http.MethodGet, "/roles/:id", "role:read", s.handleGetRole)
 	r.Perm(http.MethodPost, "/roles", "role:manage", s.handleCreateRole)

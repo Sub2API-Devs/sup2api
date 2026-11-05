@@ -66,6 +66,30 @@ export default {
       passkey: 'Passkey'
     }
   },
+  accessKeys: {
+    title: 'Access keys',
+    description: 'Let scripts and tools call the console API as you, with the permissions you choose. They do not call models: that is what API keys are for.',
+    add: 'Create access key',
+    edit: 'Edit access key',
+    remove: 'Delete access key',
+    removeConfirm: 'Scripts using "{name}" stop working at once. Continue?',
+    empty: 'No access keys yet',
+    name: 'Name',
+    key: 'Key',
+    permissions: 'Permissions',
+    count: '{n} permissions',
+    lost: '{n} no longer held',
+    lostHint: 'You no longer hold these, so the key cannot use them: {list}. Saving removes them.',
+    expires: 'Expires',
+    days: '{n} days',
+    noExpiry: 'Never',
+    expired: 'Expired',
+    lastUsed: 'Last used',
+    subsetHint: 'You can only choose permissions you hold. If you lose one later, the key loses it too.',
+    createdTitle: 'Save your access key',
+    createdHint: 'This is shown only once. It cannot be viewed again after closing.',
+    usage: 'Send it in the header: Authorization: Bearer <key>'
+  },
   wallet: {
     title: 'Wallet',
     description: 'Your balance, spending and every balance change.',

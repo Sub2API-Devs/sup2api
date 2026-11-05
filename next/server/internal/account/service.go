@@ -155,7 +155,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.PermAny("POST", "/system/ccgateway/accounts/:id/reauthorize/:key/commit", s.commitCCGatewayReauth, reauth...)
 	browse := []string{"account:read", "account:own:read", "account:own:create"}
 	r.PermAny("GET", "/platforms", s.listPlatforms, browse...)
-	r.Authed("GET", "/me/platforms", s.listMyPlatforms)
+	r.AuthedRead("/me/platforms", s.listMyPlatforms)
 	r.PermAny("GET", "/account-types", s.listTypes, browse...)
 	r.PermAny("GET", "/account-types/:plugin_key/:type/form", s.typeForm, browse...)
 	r.PermAny("GET", "/accounts", s.list, "account:read", "account:own:read")

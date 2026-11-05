@@ -228,7 +228,17 @@ func (s *Service) Can(ctx context.Context, userID int64, permission string) (boo
 	return set.Has(permission), nil
 }
 
+// PermissionSet returns what userID may do in this request: under an access key
+// the key's permissions, and never more than the user's.
 func (s *Service) PermissionSet(ctx context.Context, userID int64) (core.PermissionSet, error) {
+	set, err := s.userPermissionSet(ctx, userID)
+	if err != nil {
+		return core.PermissionSet{}, err
+	}
+	return core.RestrictToAccessKey(ctx, userID, set), nil
+}
+
+func (s *Service) userPermissionSet(ctx context.Context, userID int64) (core.PermissionSet, error) {
 	if err := s.ensureCatalog(ctx); err != nil {
 		return core.PermissionSet{}, err
 	}

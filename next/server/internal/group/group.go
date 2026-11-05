@@ -39,7 +39,7 @@ func New(db *store.DB, rdb redis.UniversalClient, bus core.Bus, reg core.PluginR
 
 // RegisterRoutes mounts the group endpoints.
 func (s *Service) RegisterRoutes(r *httpapi.Router) {
-	r.Authed("GET", "/me/groups", s.myGroups)
+	r.AuthedRead("/me/groups", s.myGroups)
 	r.Perm("GET", "/groups", "group:read", s.list)
 	r.Perm("POST", "/groups", "group:manage", s.create)
 	r.Perm("GET", "/groups/:id", "group:read", s.get)

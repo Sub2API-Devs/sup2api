@@ -102,7 +102,7 @@ func (s *Service) permissionSetCached(ctx context.Context, userID int64) (core.P
 	min := s.minVersion
 	s.mu.RUnlock()
 	if ok && set.Version >= min {
-		return set, nil
+		return core.RestrictToAccessKey(ctx, userID, set), nil
 	}
 	return s.PermissionSet(ctx, userID)
 }
