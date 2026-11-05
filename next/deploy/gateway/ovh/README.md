@@ -11,6 +11,7 @@
 - 发布时 ccgateway 只剩 4 个未删除的账号（85、104、116、123），之前 3 小时内有 70 个被删除，不是本次发布造成的。
 - 回滚：`stage/ccgateway-0.1.131/rollout.py rollback`（回 0.1.130），再 `bundled-roles controller,app` 用 0.1.130 的镜像。
 - 02:21–02:24 按用户要求用同样做法重建 123、104 接上 Valkey（`state.json` 备份在 `backups/rebuild-20261106b/`；两者 `cli.version` 已是 2.1.318，`runtime_image` 仍是 0.1.130 镜像），重建 42/52 秒。两个账号都做了两轮 → 重启容器 → 第三轮：工具调用后的上游请求都带 `[{"name":"Bash"}]`，Valkey 中该会话的 tools 为 `["Bash"]`、TTL 约 86400，读别的前缀回 NOPERM。至此 104、116、123 用 Valkey，85 仍是原版本、进程内记忆。
+- 02:28–02:30 按用户要求把 85 原地升到 0.1.131 的 Worker + CLI 2.1.318 并重建接上 Valkey。**线上验证了 0.1.131 的修复**：原地升级后控制器自己把 `cli.version` 从 2.1.316 改成 2.1.318、`runtime_image` 改为 0.1.131 镜像；随后只备份 `state.json`（`backups/rebuild-20261106c/`）、不改它，删容器后 51 秒按 0.1.131 镜像重建成功，带 Valkey 设置和 ACL 用户。85 的令牌此时已被吊销（升级前探测即 401 revoked），所以没有做真实上游测试。现在 4 个账号（85、104、116、123）都用 CLI 2.1.318 和 Valkey。
 
 2026-11-05～06 ccgateway **0.1.130** + 核心 **0.1.247** + 控制器宿主启用会话记忆 Valkey（都是 `45297934c`；北京时间 11-05 22:56 起至 11-06 00:22）：
 - 内容：新账号的 CLI 换成 Claude Code 2.1.318（v56b），带工具清单头 `x-claude-code-sandy-plover`；Worker 会话记忆改存控制器宿主上的 Valkey，按账号 ACL 隔离、TTL 24 小时（[迁移文档](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.318-MIGRATION.md)、[设计文档](../../../plugins/ccgateway/docs/SESSION-MEMORY-TOOLS-USED-DESIGN.md)）；核心加会话记忆设置。老账号保持原 CLI 与 Worker。
