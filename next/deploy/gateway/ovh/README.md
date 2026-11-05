@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-05 核心 **0.1.244**（`43060bee5`，北京时间 14:40–14:45；核心 manifest `6d582ed4…ebfc`，计划 `ed0ade8eb9f0bd5f7b8a2e92210b1431` completed/13，约 62 秒，没有暂停；**无迁移**，schema 仍 `d522e9a7…14d3`；Host API 仍 9；内置插件与 0.1.243 相同，插件和外壳不变）：
+- 内容：使用记录页的标签页改成“日志类型”筛选（CONTRACTS §66.7），第一行新增“请求类型”筛选，`summary` 支持 `group_by=protocol`（`c282bf8fb`）。
+- 核验：两节点 0.1.244，api.prophey.ai `/readyz` 200，发布后 5 分钟错误日志 0，线上前端资源含新筛选。发布前在 mock 控制台里用浏览器看过，线上页面没有登录看过，也没有查库。
+- 回滚：没有迁移，可以回到 0.1.243。
+- 脚本 `stage/0.1.244/`；备份 `backups/core-0.1.244`。
+
 2026-11-05 核心 **0.1.243**（`cb31afd22`，北京时间 12:39–12:42；核心 manifest `464f97d9…dad3`，计划 `15fcd23e54cb75ee42308d987a49c014` completed/13，约 59 秒，没有暂停；**无迁移**，schema 仍 `d522e9a7…14d3`；Host API 仍 9；内置插件与 0.1.242 相同，插件和外壳不变）：
 - 内容：创建角色和给用户分配角色时，操作者必须持有被授予的全部权限（CONTRACTS §43.6）。之前只看 `role:manage`，内置“运维”角色可以借此给自己提权。
 - 核验：两节点 0.1.243，api.prophey.ai `/readyz` 200，发布后 5 分钟错误日志 0。发布前授权模块测试通过；线上没有用真实账号试过提权请求，也没有查库。
