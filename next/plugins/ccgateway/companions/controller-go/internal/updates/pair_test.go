@@ -11,6 +11,7 @@ import (
 	"ccgateway/controller/internal/guardapi/fakeguard"
 	"ccgateway/controller/internal/pyjson"
 	"ccgateway/controller/internal/scripts"
+	"ccgateway/controller/internal/store"
 )
 
 const (
@@ -114,6 +115,9 @@ func TestPairSwitchRetainsContainerAndOldCLI(t *testing.T) {
 	eq(t, ar, pyjson.Ordered{{Key: "version", Value: cliVersion}, {Key: "patch", Value: cliPatch},
 		{Key: "sha256", Value: sha(cliBinary)}, {Key: "worker_sha256", Value: sha(nw)}, {Key: "container_id", Value: id},
 		{Key: "container_identity", Value: identity}})
+	cli, _ := e.state().CLI.Get()
+	eq(t, cli, pyjson.Ordered{{Key: "version", Value: cliVersion}, {Key: "request_mode", Value: "build"},
+		{Key: "disable_auto_update", Value: true}})
 	eq(t, e.mvTargets(), []any{ActivePointer, worker, ActivePointer})
 	if len(e.backups()) != 1 {
 		t.Fatal(e.backups())
@@ -133,9 +137,29 @@ func TestUnhealthyPairRollsBackBothFilesAndState(t *testing.T) {
 	if !bytes.Equal(e.file(ActivePointer), prior) || !bytes.Equal(e.file(worker), old) {
 		t.Fatal(e.files())
 	}
-	if e.state().Has("active_runtime") || e.w.restartCount() != 2 {
+	if e.state().Has("active_runtime") || e.state().Has("cli") || e.w.restartCount() != 2 {
 		t.Fatal(e.state().Keys(), e.w.restartCount())
 	}
+}
+
+// covers: P7 (the saved CLI profile names the activated version, its other
+// fields kept: a recreation runs that version from the pair's image)
+func TestPairRecordsTheActivatedCLIVersion(t *testing.T) {
+	e := newPairEnv(t)
+	st := e.state()
+	st.CLI = store.Some[any](pyjson.Ordered{{Key: "version", Value: "2.1.302"}, {Key: "request_mode", Value: "direct"},
+		{Key: "disable_auto_update", Value: false}})
+	if err := e.st.SaveState(aid, st); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := e.pair(); err != nil {
+		t.Fatal(err)
+	} else if s, _ := res.Get("status"); s != "updated" {
+		t.Fatal(res)
+	}
+	cli, _ := e.state().CLI.Get()
+	eq(t, cli, pyjson.Ordered{{Key: "version", Value: cliVersion}, {Key: "request_mode", Value: "direct"},
+		{Key: "disable_auto_update", Value: false}})
 }
 
 // covers: P6 P9 (the Worker restarts but reports the wrong pair)

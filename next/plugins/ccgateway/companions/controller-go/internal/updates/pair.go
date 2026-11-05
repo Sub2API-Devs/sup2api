@@ -613,6 +613,7 @@ func (s *session) commit(p *pair, selected pyjson.Ordered) (pyjson.Ordered, erro
 		{Key: "sha256", Value: entryString(p.entry, "sha256")}, {Key: "worker_sha256", Value: p.digest},
 		{Key: "container_id", Value: app.ID()}, {Key: "container_identity", Value: p.identity},
 	})
+	p.state.CLI = store.Some[any](activatedCLI(p.state, p.version))
 	if s.image != "" {
 		p.state.RuntimeImage = store.Some(s.imageID())
 	}
@@ -622,6 +623,31 @@ func (s *session) commit(p *pair, selected pyjson.Ordered) (pyjson.Ordered, erro
 	p.safe = true
 	p.reopened = true
 	return s.updated(p, s.reopen(p, p.state)), nil
+}
+
+// activatedCLI is the state's CLI profile naming the activated version. A
+// recreated container (active_runtime then names the previous container)
+// runs the profile's version from RuntimeImage, the image the pair came
+// from: left at the old version, that image has no such CLI and the
+// recreation fails (2026-11-06, ovh). The other fields are kept; a runtime
+// without a profile gets the pointer's request mode.
+func activatedCLI(st *store.AccountState, version string) pyjson.Ordered {
+	out := pyjson.Ordered{{Key: "version", Value: version}}
+	saved, _ := st.CLI.Get()
+	if o, ok := saved.(pyjson.Ordered); ok {
+		for _, kv := range o {
+			if kv.Key != "version" {
+				out = append(out, kv)
+			}
+		}
+	}
+	if mode, _ := out.Get("request_mode"); mode != "direct" && mode != "build" {
+		out.Set("request_mode", "build")
+	}
+	if !out.Has("disable_auto_update") {
+		out.Set("disable_auto_update", true)
+	}
+	return out
 }
 
 func (s *session) swapPointer(app *guardapi.AppHandle, selection pyjson.Ordered, lease string) error {

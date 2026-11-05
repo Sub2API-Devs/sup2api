@@ -191,6 +191,34 @@ func TestRecreationUsesTheRuntimeImage(t *testing.T) {
 	}
 }
 
+// covers: PV8 S25 (2026-11-06: the container of a runtime updated in place
+// is removed; the next configuration recreates it from RuntimeImage with the
+// activated CLI the pair recorded in state.cli)
+func TestRecreationAfterAPairWithoutItsContainer(t *testing.T) {
+	e := newEnv(t)
+	p := e.probe("2.1.302")
+	e.mustApply("21", desired(rev))
+	first := e.app("21").Image
+	second := e.newImage()
+	p.image(first, "2.1.302")
+	p.image(second, "2.1.304")
+	p.image("app:test", "2.1.304")
+	// What a paired in-place update leaves (updates.activatedCLI).
+	st := e.state("21")
+	st.ActiveRuntime = store.Some[any](pyjson.Ordered{kv("version", "2.1.304"), kv("container_identity", identityOf(e.app("21")))})
+	st.RuntimeImage = store.Some(second)
+	st.CLI = store.Some[any](profile("2.1.304", "build"))
+	e.save("21", st)
+	e.g.RejectMountSource("21/resolv.conf", "hardlink")
+	if _, err := e.apply("21", desired(revB)); err == nil || e.g.Exists("ccg-21-app") {
+		t.Fatal("the replaced resolv.conf removes the container", err)
+	}
+	e.mustApply("21", desired(revB))
+	if e.app("21").Image != second || e.appEnv("21")["WORKER_CLI_VERSION"] != "2.1.304" || e.status("21") != "ready" {
+		t.Fatal("recreated from the pair's image with its CLI", e.app("21").Image)
+	}
+}
+
 // covers: PV16 PV19 PV5 PV8 (test_creation_passes_version_and_disables_updaters)
 func TestCreationPassesVersionAndDisablesUpdaters(t *testing.T) {
 	e := newEnv(t)
