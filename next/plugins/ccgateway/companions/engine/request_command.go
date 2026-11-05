@@ -72,6 +72,14 @@ type requestPlan struct {
 	shape bool
 	// shapeWanted is the policy's own answer, before the mode and the CLI.
 	shapeWanted bool
+	// memory is how long the session memory keeps what this request leaves
+	// (the core's policy; nil: the defaults).
+	memory *features.SessionMemoryPolicy
+	// tools: the request's part in its session's tools-used set
+	// (tools_used.go), nil when it has none.
+	tools *requestTools
+	// diagnostic is the request's log, which the session memory reports to.
+	diagnostic *requestDiagnostic
 }
 
 // firstPartyShapeEnv tells the CLI to convert (request-build.js).
@@ -135,6 +143,7 @@ func (g *Gateway) admitRequest(w http.ResponseWriter, r *http.Request, d *reques
 	}
 	// Every request the Worker can name a mode for is logged with it.
 	d.admitted(plan.mode, plan.probe)
+	plan.diagnostic = d
 	if plan.probe {
 		w.Header().Set("X-CCGateway-Test-Mode", "native_build")
 	}
@@ -185,7 +194,7 @@ func (g *Gateway) prepareRequest(w http.ResponseWriter, r *http.Request, d *requ
 func (g *Gateway) parseRequestPolicy(r *http.Request) (*requestPlan, *requestRefusal) {
 	plan := &requestPlan{mode: g.RequestMode}
 	var policy features.WorkerPolicy
-	defer func() { plan.shapeWanted = policy.FirstPartyShapeEnabled() }()
+	defer func() { plan.shapeWanted, plan.memory = policy.FirstPartyShapeEnabled(), policy.SessionMemory }()
 	if value := r.Header.Get(features.PolicyHeader); value != "" {
 		parsed, err := features.ParseWorkerPolicy([]byte(value))
 		if err != nil {
@@ -442,10 +451,16 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	if building(p) {
 		cmd.Dir = runner.WorkingDirectory
 	}
-	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit, observe: p.session != nil && p.session.usable}
+	// The answer is read for the thread's memory (its message ID and Agent
+	// calls) and for the session's tools-used set (its tool names).
+	threadMemory := p.session != nil && p.session.usable
+	run.output = &requestCommandOutput{writer: w, meta: run.meta, diagnostic: d, credit: p.credit, observe: threadMemory || p.tools != nil, observeCalls: threadMemory}
 	// The memory takes the answer as soon as it has ended, before its last
 	// bytes reach the client (session_state.go rememberSessionState).
-	run.output.ended = func() { g.rememberSessionState(p, run.output) }
+	run.output.ended = func() {
+		g.rememberSessionState(p, run.output)
+		g.rememberToolsUsed(p, run.output)
+	}
 	run.stderr = &requestErrorReader{diagnostic: d}
 	cmd.Stdout, cmd.Stderr = run.output, run.stderr
 	d.trace("request_command", Object{"mode": p.mode, "configured_mode": g.RequestMode, "probe": p.probe, "cli_version": runner.Version})
@@ -464,6 +479,10 @@ func (g *Gateway) runCLI(w http.ResponseWriter, r *http.Request, d *requestDiagn
 	// The request the CLI sent goes into the log after the answer, and before
 	// the temporary directory is removed, even when the answer aborts.
 	defer d.keepUpstreamRequest(p.capture, p.captureBody, run.reachedUpstream)
+	// What the CLI reports it used is the session's whatever the answer: a
+	// failed request keeps it too (tools_used.go). Before writeOutcome, which
+	// may end the handler.
+	g.rememberToolsUsed(p, run.output)
 	if run.writeOutcome(w, d, p.env) {
 		g.rememberSessionState(p, run.output)
 	}
@@ -618,6 +637,13 @@ type requestCommandOutput struct {
 	ended       func()
 	diagnostic  *requestDiagnostic
 	contentType string
+	// observeCalls: the thread's memory reads the answer's Agent calls too
+	// (observe alone reads only its tool names).
+	observeCalls bool
+	// toolsReported is the tools_used the CLI reported in its response
+	// metadata (tools_used.go); toolsRead: the metadata was read for it.
+	toolsReported []string
+	toolsRead     bool
 	// A tracked response keeps a copy for its credit claim (request_credit.go).
 	credit         *requestCredit
 	creditCopy     bytes.Buffer
@@ -626,19 +652,22 @@ type requestCommandOutput struct {
 
 // response is the upstream answer the CLI recorded: its status and headers,
 // and the turn the CLI's own billing header used (session, absent otherwise).
+// The tools the CLI reports it used (tools_used) are kept on o.
 func (o *requestCommandOutput) response() (int, http.Header, *sessionState, error) {
 	raw, err := os.ReadFile(o.meta)
 	if err != nil {
 		return 0, nil, nil, err
 	}
 	var meta struct {
-		Status  int               `json:"status"`
-		Headers map[string]string `json:"headers"`
-		Session *sessionState     `json:"session"`
+		Status    int               `json:"status"`
+		Headers   map[string]string `json:"headers"`
+		Session   *sessionState     `json:"session"`
+		ToolsUsed []string          `json:"tools_used"`
 	}
 	if err = json.Unmarshal(raw, &meta); err != nil {
 		return 0, nil, nil, err
 	}
+	o.toolsReported, o.toolsRead = reportedTools(meta.ToolsUsed), true
 	if meta.Status < 200 || meta.Status > 599 {
 		return 0, nil, nil, errors.New("invalid upstream status")
 	}
@@ -680,6 +709,9 @@ func (o *requestCommandOutput) commit(status int, h http.Header) {
 	o.started = true
 	if o.observe && status >= 200 && status <= 299 {
 		o.observer = newAnswerObserver(h.Get("Content-Type"))
+		if o.observer != nil {
+			o.observer.noCalls = !o.observeCalls
+		}
 	}
 }
 

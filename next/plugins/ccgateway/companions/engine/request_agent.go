@@ -31,6 +31,19 @@ type requestAgent struct {
 	Map     bool              `json:"map"`
 	Key     string            `json:"key,omitempty"`
 	Client  map[string]string `json:"client,omitempty"`
+	// ToolsUsed is given only to a CLI with features.ToolsUsedCapability (an
+	// older one refuses the field): present, it lets the CLI send Claude
+	// Code's tools-used header, absent it does not (tools_used.go).
+	ToolsUsed *requestToolsUsed `json:"tools_used,omitempty"`
+}
+
+// requestToolsUsed is what the CLI writes the tools-used header from
+// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.6): the client's own value as it
+// came, and the Worker's memory of the session's set in first-use order.
+// Either may be absent.
+type requestToolsUsed struct {
+	Client string   `json:"client,omitempty"`
+	Memory []string `json:"memory,omitempty"`
 }
 
 // readClientAgentHeaders reads the CC context headers the plugin forwards

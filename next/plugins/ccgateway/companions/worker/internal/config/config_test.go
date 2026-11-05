@@ -287,3 +287,18 @@ func TestGetEnvDuration(t *testing.T) {
 		t.Errorf("getEnvDuration() = %v, want 10s", got)
 	}
 }
+
+// The shared session memory's settings are read as given; whether they are
+// used (all three, the socket there) is the engine's to decide.
+func TestLoadReadsTheSessionStateStore(t *testing.T) {
+	t.Setenv("CCG_STATE_SOCKET", "/run/ccg-state/valkey.sock")
+	t.Setenv("CCG_STATE_USER", "acct-abc")
+	t.Setenv("CCG_STATE_PASSWORD", "secret")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.StateSocket != "/run/ccg-state/valkey.sock" || cfg.StateUser != "acct-abc" || cfg.StatePassword != "secret" {
+		t.Fatalf("state store settings: %q %q %q", cfg.StateSocket, cfg.StateUser, cfg.StatePassword)
+	}
+}

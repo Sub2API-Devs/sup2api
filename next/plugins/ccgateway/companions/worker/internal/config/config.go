@@ -46,6 +46,12 @@ type Config struct {
 	// RequestSlots is how many requests the account runs at once
 	// (CCG_REQUEST_SLOTS, default engine.DefaultRequestSlots).
 	RequestSlots int
+
+	// The shared session memory (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.6):
+	// the controller host's Valkey socket, the account's ACL user
+	// (acct-<key>) and its password. The Worker uses it only when all three
+	// are given and the socket is there; otherwise its memory is its own.
+	StateSocket, StateUser, StatePassword string
 }
 
 // Load 从环境变量加载配置
@@ -91,6 +97,9 @@ func Load() (*Config, error) {
 		RequestTimeout:   requestTimeout,
 		CLITimeout:       getEnvDuration("CLI_TIMEOUT", requestTimeout),
 		RequestSlots:     slots,
+		StateSocket:      os.Getenv("CCG_STATE_SOCKET"),
+		StateUser:        os.Getenv("CCG_STATE_USER"),
+		StatePassword:    os.Getenv("CCG_STATE_PASSWORD"),
 	}
 
 	if cfg.RequestMode == "native" {

@@ -92,9 +92,17 @@ func (g *Gateway) requestCapabilities() []string {
 	if g.CLIInfo.supports(features.RequestCountTokensCapability) {
 		out = append(out, features.RequestCountTokensCapability)
 	}
+	// The CLI writes Claude Code's tools-used header from the client's value
+	// and the session's set the Worker keeps (tools_used.go).
+	if g.CLIInfo.supports(features.ToolsUsedCapability) {
+		out = append(out, features.ToolsUsedCapability)
+	}
 	// The Worker logs each request at the level its policy names
 	// (request_log_diagnostic.go capture); the CLI takes no part.
 	out = append(out, features.RequestLogPolicyCapability)
+	// The Worker keeps its session memory for as long as the policy says
+	// (session_store.go); the CLI takes no part.
+	out = append(out, features.SessionMemoryCapability)
 	return out
 }
 

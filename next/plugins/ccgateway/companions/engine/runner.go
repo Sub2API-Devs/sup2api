@@ -67,11 +67,12 @@ func checkCLIVersion(parent context.Context, cli string) (string, error) {
 	return v, nil
 }
 
-// workerSecrets are the Worker's own keys: the gateway key callers present
-// and the management key. No CLI process gets them, whoever runs the Worker
+// workerSecrets are the Worker's own keys: the gateway key callers present,
+// the management key and the password of its session memory store
+// (statePasswordEnv). No CLI process gets them, whoever runs the Worker
 // (audit C16); everything else the CLI may read is inherited, as Claude Code
 // reads far more variables than a list here could keep up with.
-var workerSecrets = []string{"CCG_API_KEY", "CCG_ADMIN_KEY"}
+var workerSecrets = []string{"CCG_API_KEY", "CCG_ADMIN_KEY", statePasswordEnv}
 
 // withoutWorkerSecrets is env without the Worker's keys, in any spelling.
 func withoutWorkerSecrets(env []string) []string {

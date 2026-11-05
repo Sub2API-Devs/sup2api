@@ -62,11 +62,14 @@ func requestCancellationPeer() {
 		if encoding := peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_ENCODING"); encoding != "" {
 			headers["content-encoding"] = encoding
 		}
+		// CCG_TEST_REQUEST_ANSWER_TOOLS is the tools_used a CLI with
+		// request_tools_used_v1 reports (tools_used.go).
 		meta, _ := json.Marshal(struct {
-			Status  int               `json:"status"`
-			Headers map[string]string `json:"headers"`
-			Session json.RawMessage   `json:"session,omitempty"`
-		}{200, headers, json.RawMessage(peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_SESSION"))})
+			Status    int               `json:"status"`
+			Headers   map[string]string `json:"headers"`
+			Session   json.RawMessage   `json:"session,omitempty"`
+			ToolsUsed json.RawMessage   `json:"tools_used,omitempty"`
+		}{200, headers, json.RawMessage(peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_SESSION")), json.RawMessage(peerSetting(raw, "CCG_TEST_REQUEST_ANSWER_TOOLS"))})
 		for i, arg := range os.Args {
 			if arg == "--response-meta" && i+1 < len(os.Args) {
 				_ = os.WriteFile(os.Args[i+1], meta, 0600)

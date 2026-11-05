@@ -60,8 +60,8 @@ func TestSessionStatesKeepTheLastAnswerOfEachThread(t *testing.T) {
 	// An answer the memory cannot keep creates no entry.
 	s.answered(sessionKey("s2", mainThread), "req_x", historyDigest{}, sessionState{Thread: mainThread})
 	s.answered(sessionKey("s2", "agent-2"), "", historyDigest{}, sessionState{Thread: "agent-2"})
-	require.Equal(t, 2, s.order.Len())
-	require.Len(t, s.entries, 2)
+	require.Equal(t, 2, s.memory().order.Len())
+	require.Len(t, s.memory().entries, 2)
 }
 
 func TestSessionStatesForgetIdleAndOldestSessions(t *testing.T) {
@@ -78,7 +78,7 @@ func TestSessionStatesForgetIdleAndOldestSessions(t *testing.T) {
 	require.Nil(t, state, "the least recently answered goes first")
 	state, _ = s.latest(sessionKey("1", mainThread))
 	require.NotNil(t, state)
-	require.Equal(t, sessionStatesMax, s.order.Len())
+	require.Equal(t, sessionStatesMax, s.memory().order.Len())
 }
 
 // One request of a thread at a time uses the memory; while another is in

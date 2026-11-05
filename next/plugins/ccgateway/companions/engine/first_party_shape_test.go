@@ -264,3 +264,60 @@ func TestSessionMemoryIgnoresCacheMarkersAndStringContent(t *testing.T) {
 	// The first user message's texts are a subagent's prompts.
 	require.Equal(t, [][32]byte{sha256.Sum256([]byte("hi"))}, readMessages(first).prompts)
 }
+
+// keyStream is an answer whose blocks are texts ("text", its text) and tool
+// calls ("tool", the call's ID), the text in two deltas.
+func keyStream(id string, blocks ...[2]string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":%q,\"type\":\"message\"}}\n\n", id)
+	for i, block := range blocks {
+		if block[0] == "text" {
+			fmt.Fprintf(&b, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n", i)
+			half := len(block[1]) / 2
+			for _, part := range []string{block[1][:half], block[1][half:]} {
+				piece, _ := json.Marshal(part)
+				fmt.Fprintf(&b, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":%d,\"delta\":{\"type\":\"text_delta\",\"text\":%s}}\n\n", i, piece)
+			}
+		} else {
+			fmt.Fprintf(&b, "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":%d,\"content_block\":{\"type\":\"tool_use\",\"id\":%q,\"name\":\"Bash\",\"input\":{}}}\n\n", i, block[1])
+			fmt.Fprintf(&b, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":%d,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{}\"}}\n\n", i)
+		}
+		fmt.Fprintf(&b, "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":%d}\n\n", i)
+	}
+	b.WriteString("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+	return b.String()
+}
+
+// 2026-11-05 e2e (state.sh st-compact-tp): Claude Code's compaction request
+// leaves the thread's last answer out (its messages end at the tool result
+// before it) and the request after it has the summary in place of the
+// history; both write the request-id and message ID of the answer their
+// last assistant message is. The Worker finds that answer among the
+// thread's recent ones by what the client sends of it again (its texts and
+// tool call IDs), and gives only those two facts.
+func TestFirstPartyShapeFindsTheAnswerAfterACompaction(t *testing.T) {
+	send := shapeGateway(t, true)
+	prompt := `{"role":"user","content":"Run the command."}`
+	call := `{"role":"assistant","content":[{"type":"thinking","thinking":"t","signature":"s"},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"echo"},"cache_control":{"type":"ephemeral"}}]}`
+	result := `{"type":"tool_result","tool_use_id":"toolu_1","content":"OK"}`
+	_, first, _ := send("req_one", shapeReport(1), thirdPartyHeader+namedSession+`"messages":[`+prompt+`]`, keyStream("msg_one", [2]string{"tool", "toolu_1"}), "", nil)
+	require.Nil(t, first.Previous)
+	_, second, _ := send("req_two", shapeReport(1), thirdPartyHeader+namedSession+`"messages":[`+prompt+`,`+call+`,{"role":"user","content":[`+result+`]}]`, keyStream("msg_two", [2]string{"text", "DONE"}), "", nil)
+	require.Equal(t, "req_one", second.Previous.RequestID, "a continuation, as before")
+	// The compaction request: no turn reported, so not kept as the latest.
+	compaction := `"messages":[` + prompt + `,` + call + `,{"role":"user","content":[` + result + `,{"type":"text","text":"CRITICAL: Respond with TEXT ONLY."}]}]`
+	_, compact, _ := send("req_compact", `{"thread":"main"}`, thirdPartyHeader+namedSession+compaction, keyStream("msg_summary", [2]string{"text", "SUMMARY"}), "", nil)
+	require.Equal(t, &sessionState{Thread: mainThread, RequestID: "req_one", MessageID: "msg_one"}, compact.Previous)
+	// After it: the summary, the last answer (a string now), the next prompt.
+	after := `"messages":[{"role":"user","content":"This session is being continued."},{"role":"assistant","content":"DONE"},{"role":"user","content":"Reply OK."}]`
+	_, next, _ := send("req_three", shapeReport(2), thirdPartyHeader+namedSession+after, keyStream("msg_three", [2]string{"text", "OK"}), "", nil)
+	require.Equal(t, &sessionState{Thread: mainThread, RequestID: "req_two", MessageID: "msg_two"}, next.Previous)
+	// An assistant message that is none of the thread's answers: nothing.
+	stranger := `"messages":[{"role":"user","content":"a"},{"role":"assistant","content":"never answered"},{"role":"user","content":"b"}]`
+	_, none, _ := send("req_four", shapeReport(3), thirdPartyHeader+namedSession+stranger, "", "", nil)
+	require.Nil(t, none.Previous)
+	// A request that does not convert is given the request-id only.
+	off := `{"schema_version":1,"relay_mode":"build","cli_version":"2.1.316","first_party_shape":false}`
+	_, plain, _ := send("req_five", turnReport(3), namedSession+after, "", off, nil)
+	require.Equal(t, &sessionState{Thread: mainThread, RequestID: "req_two"}, plain.Previous)
+}

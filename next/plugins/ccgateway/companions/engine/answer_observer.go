@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/json"
+	"hash"
 	"mime"
 	"regexp"
+
+	"github.com/Sub2API-Devs/sup2api/next/plugins/ccgateway/companions/contracts/features"
 )
 
 // answerObserver reads, from the bytes a converted request's answer streams
@@ -16,6 +19,11 @@ import (
 // the subagents they spawn). The client's bytes are never changed; reading
 // them is bounded, and an answer it cannot read leaves the facts out
 // (session_state.go keeps a thread's memory without them).
+//
+// It also reads the names of the tools the answer calls (tool_use,
+// server_tool_use, mcp_tool_use blocks, in their order), which the session's
+// tools-used set keeps (tools_used.go): only a block's type and name, never
+// its input.
 type answerObserver struct {
 	kind string // "sse" or "json", by the answer's content type
 	// line is a partial event-stream line carried between writes.
@@ -27,10 +35,41 @@ type answerObserver struct {
 	messageID string
 	spawns    []agentSpawn
 	failed    bool // the answer could not be read whole: no spawns
+	// broken: the answer cannot be read on (a line or a JSON answer too
+	// large): no tool names either.
+	broken bool
+	// noCalls: the Agent calls are not wanted (only the tool names are).
+	noCalls bool
+	// tools are the answer's tool blocks in order; a streamed one counts once
+	// its block has ended.
+	tools []toolBlock
+	// keyBlocks are the text and tool blocks of a stream being read, for its
+	// key (answerKey), by content index in the order they started.
+	keyBlocks []*keyBlock
 	// complete: the answer has ended (a stream's message_stop, a JSON answer
 	// whole), as the client will see it once these bytes reach it.
 	complete bool
 }
+
+// toolBlock is one tool block of an answer: its index in a stream, the name
+// the session's set keeps, and whether it ended.
+type toolBlock struct {
+	index int
+	name  string
+	done  bool
+}
+
+// keyBlock is one text or tool block of a streamed answer: a text's running
+// SHA-256 (empty: no text yet) or a tool block's ID.
+type keyBlock struct {
+	index int
+	text  hash.Hash
+	size  int
+	id    string
+}
+
+// answerToolsMax bounds the tool blocks one answer is read for.
+const answerToolsMax = 256
 
 // agentCall is one tool_use block of a streamed answer that calls Claude
 // Code's Agent tool, its input as the stream sent it.
@@ -94,12 +133,12 @@ func newAnswerObserver(contentType string) *answerObserver {
 
 // write takes the next bytes of the answer.
 func (o *answerObserver) write(p []byte) {
-	if o == nil || o.failed {
+	if o == nil || o.broken {
 		return
 	}
 	if o.kind == "json" {
 		if o.body.Len()+len(p) > answerJSONMax {
-			o.failed = true
+			o.failed, o.broken = true, true
 			return
 		}
 		o.body.Write(p)
@@ -114,14 +153,14 @@ func (o *answerObserver) write(p []byte) {
 		at := bytes.IndexByte(p, '\n')
 		if at < 0 {
 			if o.line.Len()+len(p) > answerLineMax {
-				o.failed = true
+				o.failed, o.broken = true, true
 				return
 			}
 			o.line.Write(p)
 			return
 		}
 		if o.line.Len()+at > answerLineMax {
-			o.failed = true
+			o.failed, o.broken = true, true
 			return
 		}
 		o.line.Write(p[:at])
@@ -144,12 +183,16 @@ func (o *answerObserver) event(line []byte) {
 			ID string `json:"id"`
 		} `json:"message"`
 		ContentBlock struct {
-			Type string `json:"type"`
-			Name string `json:"name"`
+			Type       string `json:"type"`
+			Name       string `json:"name"`
+			ServerName string `json:"server_name"`
+			ID         string `json:"id"`
+			Text       string `json:"text"`
 		} `json:"content_block"`
 		Delta struct {
 			Type        string `json:"type"`
 			PartialJSON string `json:"partial_json"`
+			Text        string `json:"text"`
 		} `json:"delta"`
 	}
 	if json.Unmarshal(bytes.TrimSpace(data), &event) != nil {
@@ -161,12 +204,19 @@ func (o *answerObserver) event(line []byte) {
 			o.messageID = event.Message.ID
 		}
 	case "content_block_start":
-		if event.ContentBlock.Type == "tool_use" && agentToolNames[event.ContentBlock.Name] {
+		o.keyStart(event.Index, event.ContentBlock.Type, event.ContentBlock.ID, event.ContentBlock.Text)
+		if name, ok := answerToolName(event.ContentBlock.Type, event.ContentBlock.Name, event.ContentBlock.ServerName); ok && len(o.tools) < answerToolsMax {
+			o.tools = append(o.tools, toolBlock{index: event.Index, name: name})
+		}
+		if !o.noCalls && !o.failed && event.ContentBlock.Type == "tool_use" && agentToolNames[event.ContentBlock.Name] {
 			o.blocks[event.Index] = &agentCall{}
 		}
 	case "content_block_delta":
+		if event.Delta.Type == "text_delta" {
+			o.keyText(event.Index, event.Delta.Text)
+		}
 		call := o.blocks[event.Index]
-		if call == nil || event.Delta.Type != "input_json_delta" {
+		if call == nil || o.failed || event.Delta.Type != "input_json_delta" {
 			return
 		}
 		if call.input.Len()+len(event.Delta.PartialJSON) > agentInputMax {
@@ -175,13 +225,150 @@ func (o *answerObserver) event(line []byte) {
 		}
 		call.input.WriteString(event.Delta.PartialJSON)
 	case "content_block_stop":
+		for i := range o.tools {
+			if o.tools[i].index == event.Index {
+				o.tools[i].done = true
+			}
+		}
 		if call := o.blocks[event.Index]; call != nil {
 			delete(o.blocks, event.Index)
-			o.spawn(call.input.Bytes())
+			if !o.failed {
+				o.spawn(call.input.Bytes())
+			}
 		}
 	case "message_stop":
 		o.complete = true
 	}
+}
+
+// answerToolName is the name the session's set keeps of a content block that
+// calls a tool (ok false for another block): a client or server tool's name,
+// an MCP connector tool's server:name (Claude Code's own form), the stand-in
+// for a name Claude Code would not keep.
+func answerToolName(kind, name, server string) (string, bool) {
+	switch kind {
+	case "tool_use", "server_tool_use":
+	case "mcp_tool_use":
+		if name == "" || server == "" {
+			return features.ToolsUsedUnreadable, true
+		}
+		name = server + ":" + name
+	default:
+		return "", false
+	}
+	if !features.ToolNamePattern.MatchString(name) {
+		return features.ToolsUsedUnreadable, true
+	}
+	return name, true
+}
+
+// toolNames are the names of the tool blocks the answer made in full, in
+// their order.
+func (o *answerObserver) toolNames() []string {
+	if o == nil || o.broken {
+		return nil
+	}
+	if o.kind == "json" {
+		o.readJSONTools()
+	}
+	out := []string{}
+	for _, block := range o.tools {
+		if block.done {
+			out = append(out, block.name)
+		}
+	}
+	return out
+}
+
+// readJSONTools reads a whole JSON answer's tool blocks, once.
+func (o *answerObserver) readJSONTools() {
+	if o.tools != nil || !o.complete {
+		return
+	}
+	var answer struct {
+		Content []struct {
+			Type       string `json:"type"`
+			Name       string `json:"name"`
+			ServerName string `json:"server_name"`
+		} `json:"content"`
+	}
+	o.tools = []toolBlock{}
+	if json.Unmarshal(o.body.Bytes(), &answer) != nil {
+		return
+	}
+	for i, block := range answer.Content {
+		if name, ok := answerToolName(block.Type, block.Name, block.ServerName); ok && len(o.tools) < answerToolsMax {
+			o.tools = append(o.tools, toolBlock{index: i, name: name, done: true})
+		}
+	}
+}
+
+// keyStart begins a streamed block of the answer's key.
+func (o *answerObserver) keyStart(index int, kind, id, text string) {
+	if len(o.keyBlocks) >= answerToolsMax {
+		return
+	}
+	switch kind {
+	case "text":
+		block := &keyBlock{index: index, text: sha256.New()}
+		o.keyBlocks = append(o.keyBlocks, block)
+		o.keyText(index, text)
+	case "tool_use", "server_tool_use", "mcp_tool_use":
+		o.keyBlocks = append(o.keyBlocks, &keyBlock{index: index, id: id})
+	}
+}
+
+// keyText adds a text delta to its block.
+func (o *answerObserver) keyText(index int, text string) {
+	for i := len(o.keyBlocks) - 1; i >= 0; i-- {
+		if block := o.keyBlocks[i]; block.index == index && block.text != nil {
+			block.text.Write([]byte(text))
+			block.size += len(text)
+			return
+		}
+	}
+}
+
+// answerKey is the answer's key (answerKeyer: what the client sends of it
+// again), for an answer read in full; zero otherwise.
+func (o *answerObserver) answerKey() [32]byte {
+	if o == nil || o.broken || !o.complete {
+		return [32]byte{}
+	}
+	var k answerKeyer
+	if o.kind == "json" {
+		var answer struct {
+			Content []struct {
+				Type string `json:"type"`
+				ID   string `json:"id"`
+				Text string `json:"text"`
+			} `json:"content"`
+		}
+		if json.Unmarshal(o.body.Bytes(), &answer) != nil {
+			return [32]byte{}
+		}
+		for _, block := range answer.Content {
+			switch block.Type {
+			case "text":
+				k.text(block.Text)
+			case "tool_use", "server_tool_use", "mcp_tool_use":
+				k.call(block.ID)
+			}
+		}
+		return k.key()
+	}
+	for _, block := range o.keyBlocks {
+		if block.text == nil {
+			k.call(block.id)
+			continue
+		}
+		if block.size > 0 {
+			var digest [32]byte
+			copy(digest[:], block.text.Sum(nil))
+			k.textDigest(digest)
+		}
+	}
+	return k.key()
 }
 
 // spawn keeps one Agent call's prompt and agent type.
@@ -236,7 +423,7 @@ func (o *answerObserver) facts() (messageID string, spawns []agentSpawn) {
 			o.messageID = answer.ID
 		}
 		for _, block := range answer.Content {
-			if block.Type == "tool_use" && agentToolNames[block.Name] {
+			if !o.noCalls && block.Type == "tool_use" && agentToolNames[block.Name] {
 				o.spawn(block.Input)
 			}
 		}

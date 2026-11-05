@@ -33,6 +33,10 @@ type Options struct {
 	// requests take no slot since 2026-11-04: only the core limits them.
 	Slots int
 	Env   []string
+	// StateStore is the shared session memory (the controller host's Valkey):
+	// used when all its settings are given and its socket is there; otherwise
+	// the memory is the process's own (session_store.go).
+	StateStore StateStore
 }
 
 // DefaultRequestSlots bounds the account's concurrent resource operations by default.
@@ -150,7 +154,18 @@ func newGateway(o Options, runner *Runner, cliInfo cliRequestInfo, root string) 
 	if err := g.configureRequestIdentity(root); err != nil {
 		return nil, err
 	}
+	g.sessionStates.store = newSessionStore(o.StateStore)
 	return g, nil
+}
+
+// newSessionStore is the memory's store: the shared one with a local copy
+// when it is configured, else process memory.
+func newSessionStore(c StateStore) sessionStore {
+	key, ok := c.configured()
+	if !ok {
+		return &memoryStore{}
+	}
+	return newFallbackStore(newValkeyStore("unix", c.Socket, c.User, c.Password, key), &memoryStore{})
 }
 
 // routes is the Worker's HTTP surface: the gateway, the resource broker and
@@ -372,6 +387,8 @@ func (r *Runtime) Close() error {
 		// bounded time to write it (REQUEST-LOG-ASYNC-DESIGN.md §3).
 		if r.gateway != nil {
 			r.gateway.RequestLogs.close()
+			// The memory's queued writes get a bounded time too.
+			r.gateway.sessionStates.backing().close()
 		}
 		r.admin.mu.Lock()
 		r.admin.end()

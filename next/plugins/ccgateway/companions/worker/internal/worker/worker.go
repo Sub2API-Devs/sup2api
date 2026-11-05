@@ -50,6 +50,7 @@ func New(cfg *config.Config) (Worker, error) {
 		CLI:                       cfg.CLIPath, DataDir: cfg.HistoryDir,
 		Key: cfg.APIKey, AdminKey: cfg.AdminKey,
 		Timeout: timeout, Env: env, Slots: cfg.RequestSlots,
+		StateStore: engine.StateStore{Socket: cfg.StateSocket, User: cfg.StateUser, Password: cfg.StatePassword},
 	})
 	if err != nil {
 		return nil, err
