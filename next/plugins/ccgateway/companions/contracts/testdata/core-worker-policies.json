@@ -107,6 +107,30 @@
     {
       "name": "account/account-first-party-shape-off/worker-without-capability",
       "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}}}"
+    },
+    {
+      "name": "global/global-session-memory",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}},\"first_party_shape\":true,\"session_memory\":{\"thread_ttl_seconds\":3600,\"tools_ttl_seconds\":120}}"
+    },
+    {
+      "name": "global/global-session-memory/worker-without-capability",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}},\"first_party_shape\":true}"
+    },
+    {
+      "name": "group/group-session-memory",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}},\"first_party_shape\":true,\"session_memory\":{\"thread_ttl_seconds\":3600,\"tools_ttl_seconds\":604800}}"
+    },
+    {
+      "name": "group/group-session-memory/worker-without-capability",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}},\"first_party_shape\":true}"
+    },
+    {
+      "name": "account/account-session-memory",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}},\"first_party_shape\":true,\"session_memory\":{\"thread_ttl_seconds\":604800}}"
+    },
+    {
+      "name": "account/account-session-memory/worker-without-capability",
+      "wire": "{\"schema_version\":1,\"relay_mode\":\"build\",\"build_injection\":{\"attachments\":{\"date\":true,\"environment\":true,\"model\":true,\"total_tokens\":true}},\"first_party_shape\":true}"
     }
   ]
 }

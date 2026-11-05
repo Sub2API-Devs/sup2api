@@ -60,6 +60,59 @@ type WorkerPolicy struct {
 	// core from the account's setting or the CCGateway default
 	// (REQUEST-LOG-POLICY-DESIGN.md); "" leaves the Worker's own level.
 	RequestLog string `json:"request_log,omitempty"`
+	// SessionMemory is how long the Worker keeps what it remembers of an
+	// upstream session (SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.7); nil keeps
+	// the defaults. The core sends it only to a Worker declaring
+	// SessionMemoryCapability.
+	SessionMemory *SessionMemoryPolicy `json:"session_memory,omitempty"`
+}
+
+// SessionMemoryCapability: the Worker keeps its session memory for as long
+// as WorkerPolicy.SessionMemory says (2026-11-05).
+const SessionMemoryCapability = "session_memory_ttl_v1"
+
+// SessionMemoryPolicy is the lifetime, in seconds, of the Worker's memory of
+// a session thread (cc_prev_req, turn, prompt and message IDs) and of a
+// session's tools-used set. Zero is the default (DefaultSessionMemoryTTL).
+type SessionMemoryPolicy struct {
+	ThreadTTLSeconds int `json:"thread_ttl_seconds,omitempty"`
+	ToolsTTLSeconds  int `json:"tools_ttl_seconds,omitempty"`
+}
+
+// Session memory lifetimes: the default (user decision 2026-11-05) and the
+// range a policy may name.
+const (
+	DefaultSessionMemoryTTL = 86400
+	MinSessionMemoryTTL     = 60
+	MaxSessionMemoryTTL     = 30 * 86400
+)
+
+// Validate checks each lifetime is unset or in range.
+func (p *SessionMemoryPolicy) Validate() error {
+	if p == nil {
+		return nil
+	}
+	for _, v := range []int{p.ThreadTTLSeconds, p.ToolsTTLSeconds} {
+		if v != 0 && (v < MinSessionMemoryTTL || v > MaxSessionMemoryTTL) {
+			return fmt.Errorf("invalid session_memory ttl: must be %d..%d seconds", MinSessionMemoryTTL, MaxSessionMemoryTTL)
+		}
+	}
+	return nil
+}
+
+// ThreadTTL and ToolsTTL are the lifetimes in seconds with the default.
+func (p *SessionMemoryPolicy) ThreadTTL() int {
+	return ttlOrDefault(p, func(p *SessionMemoryPolicy) int { return p.ThreadTTLSeconds })
+}
+func (p *SessionMemoryPolicy) ToolsTTL() int {
+	return ttlOrDefault(p, func(p *SessionMemoryPolicy) int { return p.ToolsTTLSeconds })
+}
+
+func ttlOrDefault(p *SessionMemoryPolicy, field func(*SessionMemoryPolicy) int) int {
+	if p == nil || field(p) == 0 {
+		return DefaultSessionMemoryTTL
+	}
+	return field(p)
 }
 
 // Request log levels a policy may name (RequestLog).
@@ -109,6 +162,9 @@ func (p WorkerPolicy) Validate() error {
 	}
 	if p.RequestLog != "" && p.RequestLog != RequestLogOff && p.RequestLog != RequestLogSummary && p.RequestLog != RequestLogFull {
 		return errors.New("invalid request_log: must be off, summary or full")
+	}
+	if err := p.SessionMemory.Validate(); err != nil {
+		return err
 	}
 	return p.BuildInjection.Validate()
 }
