@@ -32,6 +32,7 @@ export default {
   nonStream: 'Non-streaming',
   search: {
     advanced: 'More filters',
+    logType: 'Log type',
     model_contains: 'Model contains',
     api_key_name: 'API key name contains',
     client_ip: 'Client IP (exact)',

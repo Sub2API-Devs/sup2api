@@ -32,6 +32,7 @@ export default {
   nonStream: '非流式',
   search: {
     advanced: '更多筛选',
+    logType: '日志类型',
     model_contains: '模型包含',
     api_key_name: 'API Key 名称包含',
     client_ip: '调用 IP（精确）',

@@ -2,18 +2,18 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '@sub2api/host'
-import { SAlert, SField, SGrid, SPagination, SSelect, SStatCard, STimeRange, rangeBounds, type RangeKey } from '@sub2api/ui'
+import { SAlert, SGrid, SPagination, SStatCard } from '@sub2api/ui'
 import type { LedgerEntry } from '@/api/types'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { formatMoney } from '@/utils/format'
 import LedgerTable from './LedgerTable.vue'
-import { LEDGER_RANGES, useKindOptions } from './kinds'
 
-// "Balance changes" tab of Mine > Usage records: the caller's balance and
-// their own ledger (GET /me/balance, GET /me/ledger). `revision` (bumped by the
-// page's refresh button) reloads both; `loading` tells the button when to spin.
-const props = withDefaults(defineProps<{ revision?: number }>(), { revision: 0 })
+// "Balance changes" log type of Mine > Usage records: the caller's balance and
+// their own ledger (GET /me/balance, GET /me/ledger) under `filters` (time range
+// and kind, in the page's search bar). `revision` (bumped by the page's refresh
+// button) reloads both; `loading` tells the button when to spin.
+const props = withDefaults(defineProps<{ filters: { from: string; to: string; kind: string }; revision?: number }>(), { revision: 0 })
 const emit = defineEmits<{ (e: 'update:loading', value: boolean): void }>()
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -38,9 +38,8 @@ onMounted(() => {
   auth.refreshBalance()
 })
 
-const range = ref<RangeKey>('month')
-const { items, loading, error, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { ...rangeBounds('month'), kind: '' })
-const kindOptions = useKindOptions()
+const { items, loading, error, page, pageSize, total, filters, reload } = useList<LedgerEntry>('/me/ledger', { ...props.filters })
+watch(() => props.filters, (v) => Object.assign(filters, v), { deep: true })
 
 const negative = computed(() => Number(balance.value) < 0)
 
@@ -56,13 +55,6 @@ watch(loading, (v) => emit('update:loading', v), { immediate: true })
 
 <template>
   <div>
-    <div class="mb-4 flex flex-wrap items-end gap-3">
-      <SField class="w-40" :label="t('ledger.cols.kind')">
-        <SSelect v-model="filters.kind" :options="kindOptions" />
-      </SField>
-      <STimeRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" :keys="LEDGER_RANGES" />
-    </div>
-
     <SGrid :cols="1" :md-cols="3" class="mb-5">
       <SStatCard
         :label="t('ledger.balance')"

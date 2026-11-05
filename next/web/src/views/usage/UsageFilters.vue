@@ -5,6 +5,9 @@
 // filters", then the totals (#stats) with extra toggles (#actions) beside
 // Reset / Search. Text filters
 // apply on Search (or Enter) only; the time range slot applies at once.
+// With `logTypes` the first filter picks what the page lists, as new-api's log
+// type does; it applies at once, with any filter typed so far. A type these
+// fields do not search (`searchable` = false) brings its own in #filters.
 import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SButton, SIcon, SInput, SSelect } from '@sub2api/ui'
@@ -17,8 +20,12 @@ const props = withDefaults(defineProps<{
   groupOptions?: Array<{ value: string | number; label: string }>
   /** The request types (protocol ids) under the current search, for the first-row select. */
   protocolOptions?: string[]
-}>(), { admin: false, accounts: false, groupOptions: () => [], protocolOptions: () => [] })
-const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>] }>()
+  /** What the page can list, for the log type select; none hides it. */
+  logTypes?: Array<{ value: string; label: string }>
+  logType?: string
+  searchable?: boolean
+}>(), { admin: false, accounts: false, groupOptions: () => [], protocolOptions: () => [], logTypes: () => [], logType: '', searchable: true })
+const emit = defineEmits<{ 'update:modelValue': [value: Record<string, string>]; 'update:logType': [value: string]; reset: [] }>()
 const { t } = useI18n()
 const expanded = ref(false)
 const draft = reactive<Record<string, string>>({})
@@ -63,6 +70,11 @@ function apply() {
 function reset() {
   for (const key of keys.value) draft[key] = ''
   apply()
+  emit('reset')
+}
+function pickLogType(value: unknown) {
+  emit('update:logType', String(value))
+  apply()
 }
 </script>
 
@@ -78,35 +90,60 @@ function reset() {
       >
         <slot name="range" />
       </div>
-      <div class="grid min-w-[16rem] flex-1 grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
-        <SInput
-          v-for="p in primary"
-          :key="p.key"
-          v-model="draft[p.key]"
-          size="sm"
-          :icon="p.icon"
-          :placeholder="t(`usage.search.${p.key}`)"
-          :title="t(`usage.search.${p.key}`)"
-          :aria-label="t(`usage.search.${p.key}`)"
-          :maxlength="256"
-          :mono="p.key === 'client_ip'"
-          :data-testid="`filter-${p.key}`"
-        />
+      <div
+        class="grid min-w-[16rem] flex-1 grid-cols-1 gap-2"
+        :class="searchable ? 'sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]' : 'sm:grid-cols-[repeat(auto-fill,minmax(10rem,1fr))]'"
+      >
         <SSelect
-          v-model="draft.protocol"
+          v-if="logTypes.length"
+          :model-value="logType"
           size="sm"
-          :aria-label="t('usage.search.protocol')"
-          :options="protocolChoices"
-          data-testid="filter-protocol"
+          :aria-label="t('usage.search.logType')"
+          :options="logTypes"
+          data-testid="filter-log-type"
+          @update:model-value="pickLogType"
         />
-        <SSelect
-          v-model="draft.success"
-          size="sm"
-          :aria-label="t('common.status')"
-          :options="successOptions"
-        />
+        <template v-if="searchable">
+          <SInput
+            v-for="p in primary"
+            :key="p.key"
+            v-model="draft[p.key]"
+            size="sm"
+            :icon="p.icon"
+            :placeholder="t(`usage.search.${p.key}`)"
+            :title="t(`usage.search.${p.key}`)"
+            :aria-label="t(`usage.search.${p.key}`)"
+            :maxlength="256"
+            :mono="p.key === 'client_ip'"
+            :data-testid="`filter-${p.key}`"
+          />
+          <SSelect
+            v-model="draft.protocol"
+            size="sm"
+            :aria-label="t('usage.search.protocol')"
+            :options="protocolChoices"
+            data-testid="filter-protocol"
+          />
+          <!-- The failed requests are a log type: the status is settled there. -->
+          <SSelect
+            v-if="logType !== 'errors'"
+            v-model="draft.success"
+            size="sm"
+            :aria-label="t('common.status')"
+            :options="successOptions"
+            data-testid="filter-success"
+          />
+        </template>
+        <slot name="filters" />
+      </div>
+      <div
+        v-if="!searchable"
+        class="ms-auto flex flex-wrap items-center justify-end gap-2"
+      >
+        <slot name="actions" />
       </div>
       <SButton
+        v-if="searchable"
         type="button"
         variant="ghost"
         size="sm"
@@ -128,7 +165,7 @@ function reset() {
       </SButton>
     </div>
     <div
-      v-if="expanded"
+      v-if="expanded && searchable"
       class="mt-2 grid grid-cols-1 gap-2 border-t border-dashed border-line pt-2 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]"
       data-testid="usage-advanced-filters"
     >
@@ -167,7 +204,10 @@ function reset() {
         :options="billingOptions"
       />
     </div>
-    <div class="mt-3 flex flex-wrap items-center gap-2">
+    <div
+      v-if="searchable"
+      class="mt-3 flex flex-wrap items-center gap-2"
+    >
       <slot name="stats" />
       <div class="ms-auto flex flex-wrap items-center justify-end gap-2">
         <slot name="actions" />

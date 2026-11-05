@@ -1,17 +1,19 @@
 <script setup lang="ts">
 // Usage records, for an operator (`admin`: all users) or for the caller: the
-// search bar with the live statistics, and the tabs - the request list, the
-// failed requests, the client IPs, the user ranking (operator only), plus any
-// tab the page adds (`extraTabs`, rendered from the #tab-<key> slot). Every
-// part follows the same filters, which a link may preset (?user_id=, ?from=,
-// …); Export downloads them as CSV. The open tab is ?tab= in the URL. The
+// search bar with the live statistics, and below it what the log type asks for
+// - the request list, the failed requests (that list with success=false), the
+// client IPs, the user ranking (operator only), plus any type the page adds
+// (`extraTabs`, rendered from the #tab-<key> slot, with its own filters in
+// #tab-<key>-range and #tab-<key>-filters). Every part but an added type follows
+// the same filters, which a link may preset (?user_id=, ?from=, …); Export
+// downloads the listed requests as CSV. The log type is ?tab= in the URL. The
 // page header (title) stays with the view; its refresh button is rendered
 // from the #actions slot beside Export and bumps `revision`. The totals and
 // charts are on the overview page (UsageOverview).
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { SButton, SDateRange, SPagination, STabs, type RangeKey, type TabItem } from '@sub2api/ui'
+import { SButton, SDateRange, SPagination, type RangeKey, type TabItem } from '@sub2api/ui'
 import { useList } from '@/composables/useList'
 import { useAuthStore } from '@/stores/auth'
 import { notifyError } from '@/utils/errors'
@@ -53,46 +55,33 @@ const baseFilters = baseUsageFilters(props.defaultRange)
 // A link from the dashboard opens the page already filtered.
 const fromQuery = queryUsageFilters(route.query, props.admin)
 if (fromQuery.from || fromQuery.to) range.value = 'custom'
-const { items, loading, page, pageSize, total, filters, reload: reloadList } = useList<UsageRow>(props.listPath, { ...baseFilters, ...fromQuery })
 
-// Tabs.
-const tabs = computed<TabItem[]>(() => [
-  { key: 'records', label: t('stats.tabs.records'), badge: total.value || undefined },
-  { key: 'errors', label: t('stats.tabs.errors') },
-  { key: 'ips', label: t('stats.tabs.ips') },
-  ...(props.admin ? [{ key: 'ranking', label: t('stats.tabs.ranking') }] : []),
-  ...props.extraTabs
-])
-const tabKeys = () => tabs.value.map((x) => x.key)
+// The log type.
+const logTypes = computed(() =>
+  [
+    { key: 'records', label: t('stats.tabs.records') },
+    { key: 'errors', label: t('stats.tabs.errors') },
+    { key: 'ips', label: t('stats.tabs.ips') },
+    ...(props.admin ? [{ key: 'ranking', label: t('stats.tabs.ranking') }] : []),
+    ...props.extraTabs
+  ].map((x) => ({ value: x.key, label: x.label }))
+)
 const initialTab = String(route.query.tab || '')
-const tab = ref(tabKeys().includes(initialTab) ? initialTab : 'records')
+const tab = ref(logTypes.value.some((x) => x.value === initialTab) ? initialTab : 'records')
+const { items, loading, page, pageSize, total, filters, reload: reloadList } = useList<UsageRow>(props.listPath, { ...baseFilters, ...fromQuery, ...(tab.value === 'errors' ? { success: 'false' } : {}) })
+// A type the page added has its own filters, in place of the search.
+const extraOpen = computed(() => props.extraTabs.some((x) => x.key === tab.value))
 watch(
   tab,
-  (v) => {
+  (v, old) => {
     emit('update:tab', v)
     if (route.query.tab !== v) router.replace({ query: { ...route.query, tab: v === 'records' ? undefined : v } })
+    // The failed requests are the list under the status filter.
+    if (v === 'errors') filters.success = 'false'
+    else if (old === 'errors') filters.success = ''
   },
   { immediate: true }
 )
-
-// Failed requests: the same list with success=false, loaded while its tab is open.
-const errors = useList<UsageRow>(props.listPath, { ...baseFilters, success: 'false' }, { immediate: false })
-function syncErrors() {
-  Object.assign(errors.filters, { ...filters, success: 'false' })
-}
-watch(
-  () => ({ ...filters }),
-  () => {
-    if (tab.value === 'errors') syncErrors()
-  },
-  { deep: true }
-)
-watch(tab, (v) => {
-  if (v === 'errors') {
-    syncErrors()
-    errors.reload()
-  }
-}, { immediate: true })
 const ips = useUsageSummary(props.summaryPath, filters, 'ip', () => tab.value === 'ips')
 // The request types under the search, for the type select: queried without
 // the type filter itself, so the other types stay on offer once one is picked.
@@ -102,12 +91,10 @@ const protocolOptions = computed(() => protocols.rows.value.map((r) => r.key).fi
 function reload() {
   reloadList()
   protocols.reload()
-  if (tab.value === 'errors') errors.reload()
   if (tab.value === 'ips') ips.reload()
 }
 watch(() => props.revision, reload)
-const busy = computed(() => loading.value || (tab.value === 'errors' && errors.loading.value))
-watch(busy, (v) => emit('update:loading', v), { immediate: true })
+watch(loading, (v) => emit('update:loading', v), { immediate: true })
 
 function selectUser(id: string) {
   filters.user_id = id
@@ -130,62 +117,60 @@ async function exportCsv() {
 
 <template>
   <div class="flex flex-col gap-4">
-    <UsageFilters class="!mb-0" :model-value="filters" :admin="admin" :accounts="showAccount" :group-options="groupOptions" :protocol-options="protocolOptions" @update:model-value="Object.assign(filters, $event)">
+    <UsageFilters
+      v-model:log-type="tab"
+      class="!mb-0"
+      :model-value="filters"
+      :admin="admin"
+      :accounts="showAccount"
+      :group-options="groupOptions"
+      :protocol-options="protocolOptions"
+      :log-types="logTypes"
+      :searchable="!extraOpen"
+      @update:model-value="Object.assign(filters, $event)"
+      @reset="tab = 'records'"
+    >
       <template #range>
-        <SDateRange v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
+        <slot v-if="extraOpen" :name="`tab-${tab}-range`" />
+        <SDateRange v-else v-model:range="range" v-model:from="filters.from" v-model:to="filters.to" size="sm" :label="false" />
       </template>
-      <template #stats>
+      <template #filters>
+        <slot v-if="extraOpen" :name="`tab-${tab}-filters`" />
+      </template>
+      <template v-if="!extraOpen" #stats>
         <UsageLiveStats :realtime-path="`${listPath}/realtime`" :summary-path="summaryPath" :filters="filters" :revision="revision" />
       </template>
       <template #actions>
         <slot name="actions" />
-        <SButton type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
+        <SButton v-if="tab === 'records' || tab === 'errors'" type="button" size="sm" icon="download" :loading="exporting" data-testid="export-usage" @click="exportCsv">{{ t('stats.exportCsv') }}</SButton>
       </template>
     </UsageFilters>
 
-    <STabs v-model="tab" :tabs="tabs">
-      <UsageTable
-        v-show="tab === 'records'"
-        :rows="items"
-        :loading="loading"
-        :show-user="admin"
-        :show-account="showAccount"
-        :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
-        show-client-request-id
-        :detail-path="(id: number) => `${listPath}/${id}`"
-        @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
-        @filter-client-ip="(ip: string) => (filters.client_ip = ip)"
-        @filter-account-id="(id: number) => (filters.account_id = String(id))"
-      >
-        <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
-      </UsageTable>
-      <UsageTable
-        v-if="tab === 'errors'"
-        :rows="errors.items.value"
-        :loading="errors.loading.value"
-        :show-user="admin"
-        :show-account="showAccount"
-        :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
-        show-client-request-id
-        :detail-path="(id: number) => `${listPath}/${id}`"
-        data-testid="usage-errors"
-        @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
-        @filter-client-ip="(ip: string) => (filters.client_ip = ip)"
-        @filter-account-id="(id: number) => (filters.account_id = String(id))"
-      >
-        <template #footer><SPagination v-model:page="errors.page.value" v-model:page-size="errors.pageSize.value" :total="errors.total.value" /></template>
-      </UsageTable>
-      <UsageIPPanel
-        v-if="tab === 'ips'"
-        :rows="ips.rows.value"
-        :loading="ips.loading.value"
-        :active="filters.client_ip"
-        @filter="(ip: string) => (filters.client_ip = ip)"
-      />
-      <UserRanking v-if="admin && tab === 'ranking'" :summary-path="summaryPath" :filters="filters" :revision="revision" @select="selectUser" />
-      <template v-for="x in extraTabs" :key="x.key">
-        <slot v-if="tab === x.key" :name="`tab-${x.key}`" />
-      </template>
-    </STabs>
+    <UsageTable
+      v-show="tab === 'records' || tab === 'errors'"
+      :rows="items"
+      :loading="loading"
+      :show-user="admin"
+      :show-account="showAccount"
+      :column-settings-key="admin ? 'usage-log' : 'my-usage-log'"
+      show-client-request-id
+      :detail-path="(id: number) => `${listPath}/${id}`"
+      @filter-client-request-id="(id: string) => (filters.client_request_id = id)"
+      @filter-client-ip="(ip: string) => (filters.client_ip = ip)"
+      @filter-account-id="(id: number) => (filters.account_id = String(id))"
+    >
+      <template #footer><SPagination v-model:page="page" v-model:page-size="pageSize" :total="total" /></template>
+    </UsageTable>
+    <UsageIPPanel
+      v-if="tab === 'ips'"
+      :rows="ips.rows.value"
+      :loading="ips.loading.value"
+      :active="filters.client_ip"
+      @filter="(ip: string) => (filters.client_ip = ip)"
+    />
+    <UserRanking v-if="admin && tab === 'ranking'" :summary-path="summaryPath" :filters="filters" :revision="revision" @select="selectUser" />
+    <template v-for="x in extraTabs" :key="x.key">
+      <slot v-if="tab === x.key" :name="`tab-${x.key}`" />
+    </template>
   </div>
 </template>
