@@ -4,6 +4,12 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-06 核心 **0.1.248**（`b15cd0f4b`，北京时间 03:06–03:07；计划 `87d287cc0449845ee54058d514c921df` completed/13，约 57 秒，没有暂停；没有迁移，schema 仍 `dc1a1d43…b9cc`；Host API 仍 9；内置插件与 0.1.247 相同，插件和外壳不变）：
+- 内容：账号页工具栏并成一行（`fec69fd04` 自动刷新改成按钮加菜单，`b15cd0f4b` 2xl 以下收窄搜索框和三个下拉框，中文 1366px 起一行）。只有前端改动。
+- 核验：两节点 0.1.248，api.prophey.ai `/readyz` 200，发布后 5 分钟两节点错误日志 0；线上首页引用的 `index-BFoESFsp.css` 与构建产物一致，含 `2xl:w-56`。
+- 回滚：回 0.1.247 不涉及 schema。
+- 脚本 `stage/0.1.248/`（由 0.1.247 改版本、提交和 ccgateway 树版本 0.1.131）；manifest `886b9084…fbe4`；备份 `backups/core-0.1.248`（`d0786f3a…449d`）；工作树 `~/sup2api/release-0.1.248`。
+
 2026-11-06 ccgateway **0.1.131**（`a4396d717`，北京时间 02:09–02:10；rollout 233，两节点 0.1.131，原有权限同意沿用）：
 - 内容：Worker + CLI 成对原地升级时，控制器把激活的 CLI 版本写进 `state.cli`（`1d9cd6761`）；此前只记 `runtime_image`，容器被删后重建会到新镜像里找旧 CLI 而失败。
 - 控制器换 `ccgateway-controller:0.1.131`（日志 "session state Valkey reachable (1 account users)"）；新账号镜像改为 `ccgateway-app:0.1.131`（不带 update_existing）。前后容器对比只有控制器变化；guard 仍 0.1.130（代码未变）。包 sha256 `2ce6cc9f…6530`，镜像见 `stage/ccgateway-0.1.131/images.txt`。
