@@ -66,7 +66,7 @@ onBeforeUnmount(() => {
     </div>
     <div
       v-if="!headed && $slots.actions"
-      class="ms-auto flex shrink-0 flex-wrap items-center gap-2"
+      class="ms-auto flex max-w-full shrink-0 flex-wrap items-center gap-2"
     >
       <slot name="actions" />
     </div>

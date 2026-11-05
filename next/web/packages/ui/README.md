@@ -219,7 +219,7 @@ const columns: TableColumn[] = [
 ```ts
 const seconds = ref(10)
 useAutoRefresh(list.reload, () => seconds.value * 1000, { enabled: () => !editorOpen.value })
-// <SAutoRefresh v-model="seconds" />   关闭 / 每 10、30、60 秒
+// <SAutoRefresh v-model="seconds" />   按钮加菜单：关闭 / 每 10、30、60 秒
 ```
 
 上一次加载结束后才排下一次，慢接口不会堆积；页面隐藏时暂停，回到页面时补一次；间隔为 0 或 `enabled` 为 false 时暂停。组件内挂载后才开始，首次加载仍由调用方负责。

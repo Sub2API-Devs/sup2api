@@ -64,9 +64,26 @@ describe('useAutoRefresh', () => {
 })
 
 describe('SAutoRefresh', () => {
-  it('offers off and the intervals, keeping an unlisted current value', () => {
-    const w = mount(SAutoRefresh, { props: { modelValue: 15 } })
-    const labels = w.findAll('option').map((o) => o.text())
-    expect(labels).toEqual(['Off', 'Every 10s', 'Every 15s', 'Every 30s', 'Every 60s'])
+  const items = () => Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="menu"] button'))
+  afterEach(() => { document.body.innerHTML = '' })
+
+  it('offers off and the intervals, keeping an unlisted current value', async () => {
+    const w = mount(SAutoRefresh, { props: { modelValue: 15 }, attachTo: document.body })
+    await w.get('[data-testid="auto-refresh"]').trigger('click')
+    expect(items().map((b) => b.textContent?.trim())).toEqual(['Off', 'Every 10s', 'Every 15s', 'Every 30s', 'Every 60s'])
+    expect(items().filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.textContent?.trim())).toEqual(['Every 15s'])
+    w.unmount()
+  })
+
+  it('shows the interval on the button and emits the picked one as a number', async () => {
+    const w = mount(SAutoRefresh, { props: { modelValue: 10 }, attachTo: document.body })
+    const trigger = w.get('[data-testid="auto-refresh"]')
+    expect(trigger.text()).toBe('Every 10s')
+    await trigger.trigger('click')
+    items()[0].click()
+    expect(w.emitted('update:modelValue')).toEqual([[0]])
+    await w.setProps({ modelValue: 0 })
+    expect(trigger.text()).toBe('Auto refresh')
+    w.unmount()
   })
 })
