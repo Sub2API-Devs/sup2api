@@ -115,6 +115,30 @@ func (l *loginLimiter) reset(ctx context.Context, email, ip string) {
 	}
 }
 
+// passkeyBeginLimit bounds how many anonymous passkey logins an address starts
+// per window: each one stores a flow until it expires.
+const (
+	passkeyBeginWindow = time.Minute
+	passkeyBeginMax    = 30
+)
+
+// allowPasskeyBegin counts a started passkey login. Redis errors let it through,
+// like the other login limits.
+func (l *loginLimiter) allowPasskeyBegin(ctx context.Context, ip string) time.Duration {
+	if l == nil || l.rdb == nil {
+		return 0
+	}
+	n, err := incrWindow.Run(ctx, l.rdb, []string{"login:passkey:ip:" + ip}, passkeyBeginWindow.Milliseconds()).Int64()
+	if err != nil {
+		slog.WarnContext(ctx, "iam: passkey login rate limit failed, allowing attempt", "err", err)
+		return 0
+	}
+	if n > passkeyBeginMax {
+		return passkeyBeginWindow
+	}
+	return 0
+}
+
 // rateLimitedError is the 429 returned while a client is locked out.
 func rateLimitedError(ctx context.Context, wait time.Duration) error {
 	secs := int64((wait + time.Second - 1) / time.Second)

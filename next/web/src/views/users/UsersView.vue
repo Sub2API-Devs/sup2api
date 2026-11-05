@@ -20,6 +20,7 @@ import {
   SPagination,
   SSelect,
   STable,
+  confirm,
   toast,
   type ChoiceOption,
   type MenuAction,
@@ -102,6 +103,7 @@ function rowActions(u: User): MenuAction[] {
     { key: 'roles', label: t('users.assignRoles'), hidden: !auth.has('role:manage') },
     { key: 'groups', label: t('users.assignGroups'), hidden: !auth.has('group:manage') },
     { key: 'ledger', label: t('users.ledger'), hidden: !auth.has('balance:all:read') },
+    { key: 'security', label: t('users.resetSecurity'), hidden: !auth.has('user:update') },
     { key: 'balance', label: t('users.adjustBalance'), hidden: !auth.has('balance:adjust') },
     { key: 'delete', label: t('common.delete'), danger: true, hidden: !auth.has('user:delete') || u.id === auth.me?.id }
   ]
@@ -111,12 +113,24 @@ function hasAnyAction(u: User) {
   return rowActions(u).some((a) => !a.hidden)
 }
 
+async function resetSecurity(u: User) {
+  const ok = await confirm({ title: t('users.resetSecurity'), message: t('users.resetSecurityConfirm', { name: u.email }), danger: true })
+  if (!ok) return
+  try {
+    await api.del(`/users/${u.id}/security`)
+    toast(t('users.resetSecurityDone'), 'success')
+  } catch (e) {
+    notifyError(e)
+  }
+}
+
 function onAction(u: User, key: string) {
   if (key === 'edit') openEdit(u)
   else if (key === 'roles') openRoles(u)
   else if (key === 'groups') openGroups(u)
   else if (key === 'ledger') router.push({ path: '/ledger', query: { user_id: String(u.id) } })
   else if (key === 'balance') openBalance(u)
+  else if (key === 'security') resetSecurity(u)
   else if (key === 'delete') remove(u)
 }
 

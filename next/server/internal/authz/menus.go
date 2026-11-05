@@ -84,8 +84,11 @@ var coreMenus = []coreMenuSection{
 	// The old usage statistics page (/me/stats) redirects to the overview.
 	{"me", lt("My account", "我的账户"), []coreMenuItem{
 		{"my-api-keys", lt("API keys", "API 密钥"), "key", "/me/api-keys", []string{"apikey:self:manage"}},
+		{"my-models", lt("Models & prices", "模型与价格"), "price", "/me/models", []string{"apikey:self:manage"}},
+		{"my-wallet", lt("Wallet", "钱包"), "balance", "/me/wallet", []string{"balance:self:read"}},
 		{"my-usage-overview", lt("Usage overview", "概览"), "chart", "/me/usage/overview", []string{"usage:self:read"}},
 		{"my-usage", lt("Usage records", "使用记录"), "usage", "/me/usage", []string{"usage:self:read"}},
+		{"my-profile", lt("Account", "个人中心"), "user", "/me/profile", nil},
 	}},
 }
 

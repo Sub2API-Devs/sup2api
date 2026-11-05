@@ -185,7 +185,7 @@ func (b *boot) buildCoreServices() (*pkg.TrustStore, error) {
 	}
 	b.az = az
 	b.settler.Authz = az
-	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az})
+	b.idm = iam.New(iam.Deps{DB: b.db, Redis: b.rdb, Config: cfg, Events: b.events, Authz: az, Cipher: b.cipher})
 	if b.managed == nil || b.managed.prepare.Bootstrap {
 		if err := b.idm.Bootstrap(b.ctx); err != nil {
 			return nil, fmt.Errorf("bootstrap admin: %w", err)

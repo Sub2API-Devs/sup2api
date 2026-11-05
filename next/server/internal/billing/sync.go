@@ -123,6 +123,7 @@ func (s *Service) registerSyncRoutes(r *httpapi.Router) {
 	r.Perm("POST", "/price-sources/:id/apply", "price:manage", s.applySync)
 	// Downstream sup2api instances read our prices with one of our API keys.
 	r.Public("GET", "/key/prices", s.keyPrices)
+	r.Perm("GET", "/me/prices", "apikey:self:manage", s.myPrices)
 }
 
 func (s *Service) listSources(c *gin.Context) {

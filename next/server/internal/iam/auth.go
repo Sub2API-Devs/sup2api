@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -17,12 +18,16 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
-// TokenPair is the response of login and refresh.
+// TokenPair is the response of login and refresh. When the account has
+// two-factor authentication, a correct password answers with only
+// TwoFactorRequired and FlowToken; POST /auth/login/2fa gives the tokens.
 type TokenPair struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresIn    int64  `json:"expires_in"` // access token lifetime, seconds
-	User         *User  `json:"user"`
+	AccessToken       string `json:"access_token,omitempty"`
+	RefreshToken      string `json:"refresh_token,omitempty"`
+	ExpiresIn         int64  `json:"expires_in,omitempty"` // access token lifetime, seconds
+	User              *User  `json:"user,omitempty"`
+	TwoFactorRequired bool   `json:"two_factor_required,omitempty"`
+	FlowToken         string `json:"flow_token,omitempty"`
 }
 
 var (
@@ -59,6 +64,17 @@ func (s *Service) Login(ctx context.Context, email, password, ip string) (*Token
 	if status != StatusActive {
 		return nil, errUserDisabled
 	}
+	var twoFactor bool
+	if err := s.db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM user_totp WHERE user_id = $1)`, id).Scan(&twoFactor); err != nil {
+		return nil, err
+	}
+	if twoFactor {
+		token, err := s.createFlow(ctx, flowLogin2FA, id, login2FAPayload{Email: limiterEmail(email), Password: hashToken(hash)})
+		if err != nil {
+			return nil, err
+		}
+		return &TokenPair{TwoFactorRequired: true, FlowToken: token, ExpiresIn: flowTTLSeconds}, nil
+	}
 	var pair *TokenPair
 	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
 		// The user row is the parent lock for every refresh-token family.
@@ -86,6 +102,76 @@ func (s *Service) Login(ctx context.Context, email, password, ip string) (*Token
 	return pair, err
 }
 
+// login2FAPayload is what a correct password leaves for the second step: the
+// password snapshot, so a password change in between ends the login.
+type login2FAPayload struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// LoginSecondFactor finishes a password login with a TOTP or backup code. The
+// flow survives a wrong code, under the per-user lockout and the login rate
+// limit, and ends with the first correct one.
+func (s *Service) LoginSecondFactor(ctx context.Context, flowToken, code, ip string) (*TokenPair, error) {
+	var payload login2FAPayload
+	var raw []byte
+	var userID int64
+	err := s.db.Pool.QueryRow(ctx, `SELECT payload, user_id FROM auth_flows WHERE token_hash = $1 AND purpose = $2 AND expires_at > now()`,
+		hashToken(flowToken), flowLogin2FA).Scan(&raw, &userID)
+	if store.IsNoRows(err) {
+		return nil, errFlowExpired
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	if wait := s.limiter.check(ctx, payload.Email, ip); wait > 0 {
+		return nil, rateLimitedError(ctx, wait)
+	}
+	var pair *TokenPair
+	err = s.db.Tx(ctx, func(tx pgx.Tx) error {
+		var hash, status string
+		if err := tx.QueryRow(ctx, `SELECT password_hash, status FROM users WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, userID).Scan(&hash, &status); err != nil {
+			if store.IsNoRows(err) {
+				return errBadCredentials
+			}
+			return err
+		}
+		if hashToken(hash) != payload.Password {
+			return errFlowExpired
+		}
+		if status != StatusActive {
+			return errUserDisabled
+		}
+		if err := s.checkSecondFactor(ctx, tx, userID, code); err != nil {
+			return err
+		}
+		var used login2FAPayload
+		if _, err := s.takeFlow(ctx, tx, flowToken, flowLogin2FA, userID, &used); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, userID); err != nil {
+			return err
+		}
+		var err error
+		pair, err = s.issueTokens(withLoginMethod(ctx, loginMethodTwoFactor), tx, userID, "")
+		return err
+	})
+	if isBadSecondFactor(err) {
+		s.limiter.fail(ctx, payload.Email, ip)
+		if ferr := s.recordSecondFactorFailure(ctx, userID); ferr != nil {
+			return nil, ferr
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	s.limiter.reset(ctx, payload.Email, ip)
+	return pair, nil
+}
+
 // newFamilyID returns a random refresh token family id.
 func newFamilyID() (string, error) {
 	var b [16]byte
@@ -102,18 +188,22 @@ func (s *Service) issueTokens(ctx context.Context, tx pgx.Tx, userID int64, fami
 	if err := tx.QueryRow(ctx, `SELECT token_version FROM users WHERE id = $1`, userID).Scan(&tokenVersion); err != nil {
 		return nil, err
 	}
-	access, err := s.issueAccessToken(userID, tokenVersion)
-	if err != nil {
-		return nil, err
-	}
 	refresh, err := randomToken()
 	if err != nil {
 		return nil, err
 	}
-	if familyID == "" {
+	newFamily := familyID == ""
+	if newFamily {
 		if familyID, err = newFamilyID(); err != nil {
 			return nil, err
 		}
+	}
+	access, err := s.issueAccessToken(userID, tokenVersion, familyID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.touchLoginSession(ctx, tx, userID, familyID, newFamily); err != nil {
+		return nil, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO refresh_tokens (user_id, token_hash, expires_at, family_id) VALUES ($1, $2, $3, $4)`,
 		userID, hashToken(refresh), time.Now().Add(s.cfg.RefreshTokenTTL), familyID); err != nil {

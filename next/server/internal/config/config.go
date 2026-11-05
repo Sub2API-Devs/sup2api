@@ -35,6 +35,9 @@ var SensitiveEnv = []string{
 type Config struct {
 	HTTPAddr    string // SUB2API_HTTP_ADDR, default ":8080"
 	PublicURL   string // SUB2API_PUBLIC_URL, e.g. "http://127.0.0.1:3120"
+	// WebAuthnRPID is the passkey relying party (SUB2API_WEBAUTHN_RP_ID), a parent
+	// domain to share passkeys across hosts. Empty: the host the console is on.
+	WebAuthnRPID string
 	DatabaseURL string // DATABASE_URL (required)
 	RedisURL    string // REDIS_URL (required): any Redis-protocol server, Valkey by default; redis://, rediss://, valkey://, valkeys:// or unix:// (cluster.ParseRedisURL)
 	NodeID      string // NODE_ID, default hostname
@@ -143,6 +146,7 @@ func Load(goos string) (*Config, error) {
 	c := &Config{
 		HTTPAddr:               env("SUB2API_HTTP_ADDR", ":8080"),
 		PublicURL:              env("SUB2API_PUBLIC_URL", ""),
+		WebAuthnRPID:           env("SUB2API_WEBAUTHN_RP_ID", ""),
 		DatabaseURL:            os.Getenv("DATABASE_URL"),
 		RedisURL:               os.Getenv("REDIS_URL"),
 		NodeID:                 os.Getenv("NODE_ID"),

@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/audit"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
 )
@@ -19,6 +20,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Public(http.MethodPost, "/auth/refresh", s.handleRefresh)
 	r.Authed(http.MethodPost, "/auth/logout", s.handleLogout)
 	r.Authed(http.MethodGet, "/me", s.handleMe)
+	r.Authed(http.MethodPut, "/me", s.handleUpdateMe)
 	r.Authed(http.MethodPut, "/me/password", s.handleChangePassword)
 
 	r.Perm(http.MethodGet, "/users", "user:read", s.handleListUsers)
@@ -27,6 +29,7 @@ func (s *Service) RegisterRoutes(r *httpapi.Router) {
 	r.Perm(http.MethodPatch, "/users/:id", "user:update", s.handleUpdateUser)
 	r.Perm(http.MethodDelete, "/users/:id", "user:delete", s.handleDeleteUser)
 	r.Perm(http.MethodPut, "/users/:id/roles", "role:manage", s.handleSetUserRoles)
+	s.registerSecurityRoutes(r)
 }
 
 func actor(c *gin.Context) int64 {
@@ -42,7 +45,7 @@ func (s *Service) handleLogin(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	pair, err := s.Login(c.Request.Context(), in.Email, in.Password, c.ClientIP())
+	pair, err := s.Login(sessionContext(c, loginMethodPassword), in.Email, in.Password, c.ClientIP())
 	if err != nil {
 		if e := core.AsError(err); e.Code == core.ErrRateLimited.Code {
 			if secs, ok := e.Details["retry_after_seconds"].(int64); ok {
@@ -62,7 +65,7 @@ func (s *Service) handleRefresh(c *gin.Context) {
 	if !httpapi.BindJSON(c, &in) {
 		return
 	}
-	pair, err := s.Refresh(c.Request.Context(), in.RefreshToken)
+	pair, err := s.Refresh(sessionContext(c, ""), in.RefreshToken)
 	if err != nil {
 		httpapi.Fail(c, err)
 		return
@@ -93,6 +96,20 @@ func (s *Service) handleMe(c *gin.Context) {
 		return
 	}
 	httpapi.OK(c, me)
+}
+
+func (s *Service) handleUpdateMe(c *gin.Context) {
+	var in struct {
+		DisplayName string `json:"display_name"`
+	}
+	if !httpapi.BindJSON(c, &in) {
+		return
+	}
+	if err := s.UpdateProfile(audit.Context(c), actor(c), in.DisplayName); err != nil {
+		httpapi.Fail(c, err)
+		return
+	}
+	s.handleMe(c)
 }
 
 func (s *Service) handleChangePassword(c *gin.Context) {

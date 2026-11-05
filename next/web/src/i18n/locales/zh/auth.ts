@@ -8,7 +8,13 @@ export default {
     failed: '登录失败',
     rateLimited: '尝试次数过多，请在 {n} 秒后重试',
     rateLimitedNoTime: '尝试次数过多，请稍后重试',
-    sessionExpired: '登录已失效，请重新登录'
+    sessionExpired: '登录已失效，请重新登录',
+    passkey: '使用通行密钥登录',
+    twoFactorHint: '请输入验证器应用里的 6 位验证码，或一个备用码。',
+    code: '验证码',
+    verify: '验证并登录',
+    back: '返回密码登录',
+    badCode: '验证码不正确'
   },
   errors: {
     invalid_argument: '输入有误',

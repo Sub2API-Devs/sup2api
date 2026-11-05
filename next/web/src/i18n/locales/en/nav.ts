@@ -29,7 +29,10 @@ export default {
     settings: 'Settings',
     myApiKeys: 'API keys',
     myUsageOverview: 'Usage overview',
-    myUsage: 'Usage records'
+    myUsage: 'Usage records',
+    myModels: 'Models & prices',
+    myWallet: 'Wallet',
+    myProfile: 'Account'
   },
   crumbs: {
     pluginDetail: 'Plugin details',

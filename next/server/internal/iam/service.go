@@ -23,6 +23,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/authz"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/store"
 )
 
@@ -37,6 +38,8 @@ type Deps struct {
 	Config *config.Config
 	Events core.EventPublisher
 	Authz  *authz.Service
+	// Cipher seals the two-factor secrets.
+	Cipher *secret.Cipher
 	// BcryptCost defaults to bcrypt.DefaultCost (tests lower it).
 	BcryptCost int
 }
@@ -48,6 +51,7 @@ type Service struct {
 	cfg    *config.Config
 	events core.EventPublisher
 	authz  *authz.Service
+	cipher *secret.Cipher
 	cost   int
 
 	limiter *loginLimiter
@@ -75,7 +79,7 @@ func New(d Deps) *Service {
 	if d.BcryptCost == 0 {
 		d.BcryptCost = bcrypt.DefaultCost
 	}
-	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cost: d.BcryptCost, status: map[int64]statusEntry{},
+	s := &Service{db: d.DB, rdb: d.Redis, cfg: d.Config, events: d.Events, authz: d.Authz, cipher: d.Cipher, cost: d.BcryptCost, status: map[int64]statusEntry{},
 		limiter: newLoginLimiter(d.Redis)}
 	s.dummyHash, _ = bcrypt.GenerateFromPassword([]byte("dummy-password-for-timing"), s.cost)
 	if d.Authz != nil {
@@ -104,9 +108,11 @@ func (s *Service) forgetStatus(userID int64) {
 type accessClaims struct {
 	jwt.RegisteredClaims
 	TokenVersion int `json:"tv,omitempty"` // token_version from users table (SEC-M1)
+	// Family is the login session, so the console can tell which one is its own.
+	Family string `json:"fam,omitempty"`
 }
 
-func (s *Service) issueAccessToken(userID int64, tokenVersion int) (string, error) {
+func (s *Service) issueAccessToken(userID int64, tokenVersion int, family string) (string, error) {
 	now := time.Now()
 	claims := accessClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -115,6 +121,7 @@ func (s *Service) issueAccessToken(userID int64, tokenVersion int) (string, erro
 			ExpiresAt: jwt.NewNumericDate(now.Add(s.cfg.AccessTokenTTL)),
 		},
 		TokenVersion: tokenVersion,
+		Family:       family,
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.cfg.JWTSecret)
 }

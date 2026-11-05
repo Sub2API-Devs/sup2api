@@ -8,7 +8,13 @@ export default {
     failed: 'Sign-in failed',
     rateLimited: 'Too many attempts. Please try again in {n} seconds.',
     rateLimitedNoTime: 'Too many attempts. Please try again later.',
-    sessionExpired: 'Your session has expired. Please sign in again.'
+    sessionExpired: 'Your session has expired. Please sign in again.',
+    passkey: 'Sign in with a passkey',
+    twoFactorHint: 'Enter the 6-digit code from your authenticator app, or a backup code.',
+    code: 'Verification code',
+    verify: 'Verify and sign in',
+    back: 'Back to password sign-in',
+    badCode: 'Incorrect verification code'
   },
   errors: {
     invalid_argument: 'Invalid input',

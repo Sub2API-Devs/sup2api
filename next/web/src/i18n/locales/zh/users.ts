@@ -21,5 +21,8 @@ export default {
   assignGroupsTitle: '{name} 的分组',
   groupsHint: '用户可以在这些分组中创建 API Key（指定用户可见的分组需要分配）。',
   ledger: '余额流水',
-  adjustBalance: '调整余额'
+  adjustBalance: '调整余额',
+  resetSecurity: '重置二次验证和通行密钥',
+  resetSecurityConfirm: '{name} 的二次验证和全部通行密钥都会被移除，之后只凭密码就能登录。确定吗？',
+  resetSecurityDone: '已重置'
 }

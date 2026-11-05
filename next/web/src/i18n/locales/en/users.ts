@@ -21,5 +21,8 @@ export default {
   assignGroupsTitle: 'Groups of {name}',
   groupsHint: 'The user can create API keys in these groups (restricted groups require assignment).',
   ledger: 'Balance ledger',
-  adjustBalance: 'Adjust balance'
+  adjustBalance: 'Adjust balance',
+  resetSecurity: 'Reset two-factor and passkeys',
+  resetSecurityConfirm: 'This removes two-factor and every passkey of {name}, who can then sign in with the password alone. Continue?',
+  resetSecurityDone: 'Reset'
 }

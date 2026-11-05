@@ -15,6 +15,9 @@ export interface TokenResponse {
   refresh_token: string
   expires_in: number
   user?: Me
+  /** A correct password on an account with two-factor: POST /auth/login/2fa finishes the login. */
+  two_factor_required?: boolean
+  flow_token?: string
 }
 
 export interface Me {

@@ -94,7 +94,8 @@ export default defineConfig(async ({ command, mode }): Promise<UserConfig> => {
         mode === 'mock'
           ? undefined
           : {
-              '/api': { target, changeOrigin: true },
+              // The Host the browser sent: passkeys compare it with the Origin.
+              '/api': { target, changeOrigin: false },
               '/plugin-ui': { target, changeOrigin: true }
             }
     },

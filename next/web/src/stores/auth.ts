@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, session } from '@sub2api/host'
 import type { Me, TokenResponse } from '@/api/types'
+import { getPasskey } from '@/utils/webauthn'
 
 export const useAuthStore = defineStore('auth', () => {
   const me = ref<Me | null>(null)
@@ -26,8 +27,24 @@ export const useAuthStore = defineStore('auth', () => {
     return list.some((p) => permSet.value.has(p))
   }
 
-  async function login(email: string, password: string) {
+  /** Returns the flow token when the account asks for a second factor; the login is not done yet. */
+  async function login(email: string, password: string): Promise<string | undefined> {
     const r = await api.post<TokenResponse>('/auth/login', { email, password }, { anonymous: true })
+    if (r.two_factor_required) return r.flow_token
+    await signedIn(r)
+  }
+
+  async function loginSecondFactor(flowToken: string, code: string) {
+    await signedIn(await api.post<TokenResponse>('/auth/login/2fa', { flow_token: flowToken, code }, { anonymous: true }))
+  }
+
+  async function loginWithPasskey() {
+    const begin = await api.post<{ flow_token: string; options: { publicKey: any } }>('/auth/passkey/begin', {}, { anonymous: true })
+    const credential = await getPasskey(begin.options)
+    await signedIn(await api.post<TokenResponse>('/auth/passkey/finish', { flow_token: begin.flow_token, credential }, { anonymous: true }))
+  }
+
+  async function signedIn(r: TokenResponse) {
     session.fromTokenResponse(r)
     sessionExpired.value = false
     if (r.user && Array.isArray(r.user.permissions)) me.value = r.user
@@ -60,5 +77,5 @@ export const useAuthStore = defineStore('auth', () => {
     sessionExpired.value = false
   }
 
-  return { me, balance, loggedIn, sessionExpired, has, login, loadMe, refreshBalance, logout }
+  return { me, balance, loggedIn, sessionExpired, has, login, loginSecondFactor, loginWithPasskey, loadMe, refreshBalance, logout }
 })

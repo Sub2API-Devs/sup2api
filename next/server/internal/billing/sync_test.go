@@ -282,3 +282,58 @@ func TestKeyPriceListBlacklist(t *testing.T) {
 		t.Fatal("allowed prices omitted")
 	}
 }
+
+// GET /me/prices: the groups the caller can see, each with its allowlist and rate.
+func TestMyPrices(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	uid := e.user("me@example.com")
+	var public, restricted, mine int64
+	for _, g := range []struct {
+		name, visibility, rate string
+		allow                  []string
+		id                     *int64
+	}{
+		{"public", "public", "2", []string{"claude-*"}, &public},
+		{"restricted", "restricted", "3", []string{}, &restricted},
+		{"mine", "restricted", "0.5", []string{}, &mine},
+	} {
+		if err := e.db.Pool.QueryRow(ctx, `INSERT INTO groups (name, visibility, rate_multiplier, model_allowlist, model_filter_mode) VALUES ($1, $2, $3, $4, 'whitelist') RETURNING id`,
+			g.name, g.visibility, g.rate, g.allow).Scan(g.id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	e.exec(`INSERT INTO user_groups (user_id, group_id) VALUES ($1, $2)`, uid, mine)
+	e.exec(`DELETE FROM model_prices`)
+	for _, m := range []string{"claude-opus-5-5", "gemini-3"} {
+		e.exec(`INSERT INTO model_prices (model, mode, config, expression, expr_hash, source, enabled) VALUES ($1, 'per_request', '{"price": 1}', 'tier("base", flat(1))', 'h', 'manual', true)`, m)
+	}
+	e.exec(`INSERT INTO model_prices (model, mode, config, expression, expr_hash, source, enabled) VALUES ('claude-off', 'per_request', '{"price": 1}', 'tier("base", flat(1))', 'h', 'manual', false)`)
+
+	models := func(d map[string]any) string {
+		var out []string
+		for _, p := range d["prices"].([]any) {
+			out = append(out, p.(map[string]any)["model"].(string))
+		}
+		return strings.Join(out, ",")
+	}
+	d := data(e.mustCall(uid, 200, "GET", "/me/prices?group_id="+itoa(public), nil))
+	if d["rate_multiplier"] != "2" || models(d) != "claude-opus-5-5" {
+		t.Fatalf("public group: %v", d)
+	}
+	d = data(e.mustCall(uid, 200, "GET", "/me/prices?group_id="+itoa(mine), nil))
+	if d["rate_multiplier"] != "0.5" || models(d) != "claude-opus-5-5,gemini-3" {
+		t.Fatalf("own group: %v", d)
+	}
+	if code, _ := e.call(uid, "GET", "/me/prices?group_id="+itoa(restricted), nil); code != 404 {
+		t.Fatalf("a restricted group of others: %d", code)
+	}
+	if code, _ := e.call(uid, "GET", "/me/prices?group_id=x", nil); code != 400 {
+		t.Fatalf("a bad id: %d", code)
+	}
+	// Without a group: the first the caller can see.
+	d = data(e.mustCall(uid, 200, "GET", "/me/prices", nil))
+	if d["group"].(map[string]any)["name"] != "public" {
+		t.Fatalf("default group: %v", d)
+	}
+}

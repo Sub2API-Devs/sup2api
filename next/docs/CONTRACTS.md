@@ -6249,3 +6249,44 @@ node 任务（可工作节点各跑，`RequireWork`）：
 - **排队计数**：`slot:account-wait:{账号 id}`，复用槽位，节点死亡后一样回收。账号视图新增 `waiting`。重试节奏 100ms 起，×1.5，上限 2 秒，±20% 抖动。
 - **设置**：`GET/PUT /settings/gateway` 新增 `queue_sticky_max_waiting`（0–10000，默认 3）、`queue_sticky_wait_seconds`（0–600，默认 120）、`queue_fallback_max_waiting`（0–10000，默认 100）、`queue_fallback_wait_seconds`（0–600，默认 30）。任一项为 0 关闭对应的排队。
 - **卡死兜底**：流式空闲超时未设置时默认 180 秒，WebSocket 进行中的一轮也受它约束（超时以 1013 关闭）。每次写客户端最长 60 秒，超时按客户端断开处理。
+
+## 79. 用户的账号安全、钱包和模型价格（2026-11-05，用户要求，参考 new-api；迁移 0087）
+
+普通用户的“我的账户”增加三个菜单：模型与价格（`/me/models`，`apikey:self:manage`）、钱包（`/me/wallet`，`balance:self:read`）、个人中心（`/me/profile`，任何登录用户）。右上角余额链接到钱包，`/me/ledger`、`/me/balance` 重定向到钱包。使用记录的“余额变动”日志类型保留（§66.7）。
+
+### 79.1 登录
+
+- `POST /auth/login`：账号开了二次验证时，密码正确只返回 `{two_factor_required: true, flow_token, expires_in}`，不发 token。
+- `POST /auth/login/2fa`（公开）：`{flow_token, code}` 返回 token。`code` 是验证器的 6 位码或备用码（大小写、连字符不限）。错码不作废流程；同一账号连错 5 次锁 5 分钟（429），也计入 §14.2 的登录限速。流程只保留 5 分钟，期间改了密码就失效。
+- `POST /auth/passkey/begin`、`/auth/passkey/finish`（公开）：可发现凭据登录，不问邮箱，要求用户验证（UV），成功后不再问二次验证，同 new-api。失败统一 401 并计入 IP 限速；`begin` 每个 IP 每分钟最多 30 次。挑战只能用一次。
+
+`auth_flows` 存这些跨请求的步骤（两个节点共用，只存 token 的哈希）。不用 Redis，这样挑战和设置中的密钥不依赖 Redis 的可用性；过期行在下次创建流程时清掉。
+
+### 79.2 二次验证（`/me/two-factor`）
+
+- `GET`：`{enabled, enabled_at, backup_codes_left}`。
+- `POST /setup {password}`：返回 `{flow_token, secret, otpauth_url, qr_code}`（`qr_code` 是 PNG data URL，CSP 的 `img-src` 允许）。`POST /enable {flow_token, code}`：验证后开启，返回 10 个备用码，只显示这一次。
+- `POST /disable {password, code}`、`POST /backup-codes {password, code}`：都要密码和验证码（或备用码）。
+- TOTP：SHA-1、6 位、30 秒，前后各容忍一个时间步；`last_step` 保证同一个码不能用两次。密钥用主密钥加密（AAD 绑定用户 id），备用码只存 bcrypt 哈希。
+- `DELETE /users/:id/security`（`user:update`）：管理员给丢失设备的用户清除二次验证和全部通行密钥；非超级管理员不能对超级管理员操作。
+
+### 79.3 通行密钥（`/me/passkeys`）
+
+- `GET` 列表；`POST /begin {password}`、`POST /finish {flow_token, name, credential}` 添加；`DELETE /:id` 删除（不要密码，删除不会给任何人访问权）。一个用户可以有多个。
+- 依赖 `go-webauthn`（`attestation` 为 none，要求可发现凭据和 UV）。依赖 `pquerna/otp` 生成密钥和二维码。
+- **RP ID**：`SUB2API_WEBAUTHN_RP_ID`，留空时取控制台所在主机。留空时要求浏览器的 `Origin` 主机与请求的 `Host` 一致，否则回“此地址不可用”；IP 地址不能作 RP ID。凭据记录 `rp_id`，只能在同一个 RP 下使用。浏览器签名的 origin 才是校验依据，伪造 `Origin` 请求头不能绕过。
+- **已知限制**：`api.prophey.ai` 故障切换到 ovh 时，跳板把 `Host` 改成 sslip 域名，没设 `SUB2API_WEBAUTHN_RP_ID` 的节点这时通行密钥登录不可用，密码和二次验证不受影响。两个节点都设 `SUB2API_WEBAUTHN_RP_ID=api.prophey.ai` 可以消除。
+
+### 79.4 登录会话和资料
+
+- `GET /me/sessions`：每个 refresh token 家族一行，`{id, method, ip, user_agent, created_at, last_used_at, current}`。access token 增加声明 `fam`，用来标出当前会话；升级前签发的 token 没有它，这时不标当前会话，`POST /me/sessions/revoke-others` 回 409，刷新后恢复。
+- `DELETE /me/sessions/:id`、`POST /me/sessions/revoke-others`：吊销 refresh token。已签发的 access token 不会立刻失效，最长等到过期（2 小时）。
+- `PUT /me {display_name}`：改自己的显示名称，回 `GET /me` 的内容。语言存在浏览器里。
+- 上面所有修改都写审计日志（`user.two_factor.*`、`user.passkey.*`、`user.session.*`、`user.profile.update`、`user.security.reset`）。
+
+### 79.5 模型与价格
+
+`GET /me/prices?group_id=`（`apikey:self:manage`）：调用者可见分组的 `{group, rate_multiplier, prices: [{model, mode, config, expression}]}`，内容与该分组的 API Key 读 `GET /key/prices` 相同，已按分组的模型规则过滤。不传 `group_id` 取第一个可见分组；不可见的分组回 404。页面显示模型价格 × 分组倍率；分档模型显示第一档并标明，自定义表达式显示“按规则计费”。
+
+钱包不提供在线充值（§46，用户决定暂缓），只提示联系管理员。兑换码没有做：`payment` 插件没安装，且 §46.9 的第 7、8 项（`recharge:use` 默认授权、防爆破）要先解决。
+

@@ -41,13 +41,16 @@ const children: RouteRecordRaw[] = [
   { path: 'prices/:id', component: () => import('@/views/prices/PriceEditView.vue'), meta: { perm: 'price:read', title: 'prices.editTitleShort', parent: '/prices' } },
   { path: 'usage/overview', component: () => import('@/views/usage/UsageOverviewView.vue'), props: { admin: true }, meta: { perm: 'usage:all:read', title: 'nav.items.usageOverview' } },
   { path: 'usage', component: () => import('@/views/usage/UsageView.vue'), meta: { perm: 'usage:all:read', title: 'nav.items.usage' } },
+  { path: 'me/models', component: () => import('@/views/me/MyModelsView.vue'), meta: { perm: 'apikey:self:manage', title: 'nav.items.myModels' } },
+  { path: 'me/wallet', component: () => import('@/views/me/WalletView.vue'), meta: { perm: 'balance:self:read', title: 'nav.items.myWallet' } },
+  { path: 'me/profile', component: () => import('@/views/me/ProfileView.vue'), meta: { title: 'nav.items.myProfile' } },
   { path: 'me/usage/overview', component: () => import('@/views/usage/UsageOverviewView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsageOverview' } },
   { path: 'me/usage', component: () => import('@/views/usage/MyUsageView.vue'), meta: { perm: 'usage:self:read', title: 'nav.items.myUsage' } },
   // The old usage statistics page.
   { path: 'me/stats', redirect: '/me/usage/overview' },
   { path: 'ledger', component: () => import('@/views/ledger/LedgerView.vue'), meta: { perm: 'balance:all:read', title: 'nav.items.ledger' } },
-  { path: 'me/ledger', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },
-  { path: 'me/balance', redirect: { path: '/me/usage', query: { tab: 'ledger' } } },
+  { path: 'me/ledger', redirect: '/me/wallet' },
+  { path: 'me/balance', redirect: '/me/wallet' },
   { path: 'sticky', redirect: { path: '/settings', query: { tab: 'sticky' } } },
   { path: 'settings', component: () => import('@/views/settings/SettingsView.vue'), meta: { perm: ['settings:read', 'sticky:read'], title: 'nav.items.settings' } },
 

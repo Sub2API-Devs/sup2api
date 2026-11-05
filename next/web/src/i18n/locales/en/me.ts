@@ -1,0 +1,93 @@
+export default {
+  confirmPassword: 'Current password',
+  profile: {
+    title: 'Account',
+    description: 'Your profile, and how you sign in.',
+    basics: 'Profile',
+    email: 'Email',
+    displayName: 'Display name',
+    roles: 'Roles',
+    language: 'Language'
+  },
+  password: {
+    title: 'Password',
+    description: 'Changing it signs out your other devices.'
+  },
+  twoFactor: {
+    title: 'Two-factor authentication',
+    description: 'A password sign-in also asks for a code from an authenticator app such as Google Authenticator or 1Password.',
+    on: 'On',
+    enable: 'Turn on two-factor',
+    enableSubmit: 'Verify and turn on',
+    disable: 'Turn off',
+    disabled: 'Two-factor is off',
+    regenerate: 'New backup codes',
+    codesLeft: '{n} backup codes left',
+    scanHint: 'Scan the QR code with your authenticator app, or enter the key below, then type the 6-digit code it shows.',
+    qrAlt: 'Two-factor QR code',
+    codeHint: 'The 6-digit code from your app, or a backup code.',
+    backupTitle: 'Save your backup codes',
+    backupHint: 'These are shown only once. If you lose your phone, each one signs you in once in place of a code.',
+    saved: 'I saved them'
+  },
+  passkeys: {
+    title: 'Passkeys',
+    description: 'Sign in with a fingerprint, face or security key, with no password or code. A passkey works only on the address it was added on.',
+    add: 'Add a passkey',
+    added: 'Passkey added',
+    remove: 'Delete passkey',
+    removeConfirm: 'After deleting "{name}" it can no longer sign in. Continue?',
+    name: 'Name',
+    nameHint: 'So you can recognize this device, such as "Work laptop".',
+    site: 'Address',
+    created: 'Added',
+    lastUsed: 'Last used',
+    never: 'Never',
+    empty: 'No passkeys yet',
+    unsupported: 'This browser or address does not support passkeys. They need an HTTPS domain.'
+  },
+  sessions: {
+    title: 'Sessions',
+    description: 'The devices signed in to your account. An ended session signs out within 2 hours.',
+    device: 'Device',
+    signedInWith: 'Signed in with',
+    since: 'Since',
+    lastActive: 'Last active',
+    current: 'This device',
+    revoke: 'End',
+    revokeOthers: 'End other sessions',
+    revokeConfirm: 'That device must sign in again to continue, within 2 hours at most. Continue?',
+    revoked: 'Ended',
+    empty: 'No sessions',
+    unknownDevice: 'Unknown device',
+    method: {
+      password: 'Password',
+      two_factor: 'Password + code',
+      passkey: 'Passkey'
+    }
+  },
+  wallet: {
+    title: 'Wallet',
+    description: 'Your balance, spending and every balance change.',
+    today: 'Spent today',
+    yesterday: 'Spent yesterday',
+    last30d: 'Spent in 30 days',
+    topupHint: 'Online top-up is not available yet. Contact your administrator to add funds.'
+  },
+  models: {
+    title: 'Models & prices',
+    description: 'The models your group can use and what they cost you: the model price times the group rate.',
+    group: 'Group',
+    search: 'Search models',
+    model: 'Model',
+    input: 'Input',
+    output: 'Output',
+    cacheRead: 'Cache read',
+    cacheWrite: 'Cache write',
+    unit: 'USD per million tokens, group rate ×{rate} included',
+    perRequest: '{price} per request',
+    tiered: '{n} tiers, first shown',
+    custom: 'Billed by rules',
+    empty: 'This group has no models'
+  }
+}

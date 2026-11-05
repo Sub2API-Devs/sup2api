@@ -105,7 +105,7 @@ const quick = computed(() => {
   const list: Array<{ to: string; icon: string; tone: keyof typeof TONE; title: string; sub: string }> = []
   if (canKeys.value) list.push({ to: '/me/api-keys', icon: 'key', tone: 'primary', title: t('dashboard.user.quickKeys'), sub: t('dashboard.user.quickKeysSub') })
   if (canUsage.value) list.push({ to: '/me/usage', icon: 'usage', tone: 'success', title: t('dashboard.user.quickUsage'), sub: t('dashboard.user.quickUsageSub') })
-  if (canLedger.value) list.push({ to: '/me/usage?tab=ledger', icon: 'ledger', tone: 'info', title: t('dashboard.user.quickLedger'), sub: t('dashboard.user.quickLedgerSub') })
+  if (canLedger.value) list.push({ to: '/me/wallet', icon: 'ledger', tone: 'info', title: t('dashboard.user.quickLedger'), sub: t('dashboard.user.quickLedgerSub') })
   // Plugin pages the user can open (top-up, redeem codes, ...).
   for (const s of app.menus) for (const i of s.items) if (i.pluginKey && list.length < 5) list.push({ to: i.path, icon: i.icon || 'puzzle', tone: 'warning', title: lt(i.label) || i.id, sub: '' })
   return list
@@ -137,7 +137,7 @@ watch(() => loadingOverview.value || loadingRecent.value, (v) => emit('update:lo
         :sub="canLedger ? t('dashboard.user.balanceSub') : undefined"
         icon="balance"
         :tone="Number(auth.balance) < 0 ? 'danger' : 'success'"
-        :to="canLedger ? '/me/usage?tab=ledger' : undefined"
+        :to="canLedger ? '/me/wallet' : undefined"
       />
       <template v-if="canUsage">
         <SStatCard

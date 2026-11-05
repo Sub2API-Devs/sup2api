@@ -1293,6 +1293,16 @@ on('GET', '/me/usage/summary', (req) =>
     ? fail(400, 'invalid_argument', 'group_by must be day, hour, none, model, api_key, group, endpoint, platform, protocol or ip')
     : usageSummary(usageRows.filter((u) => u.user_id === 1), req.query)
 )
+// GET /me/prices (CONTRACTS §79.4).
+on('GET', '/me/prices', (req) => ({
+  group: { id: Number(req.query.group_id) || 1, name: 'default' },
+  rate_multiplier: req.query.group_id === '2' ? '1.5' : '1',
+  prices: [
+    { model: 'claude-sonnet-4-5', mode: 'per_token', config: { p: 3, c: 15, cr: 0.3, cc: 3.75 }, expression: '' },
+    { model: 'gemini-2.5-flash', mode: 'per_token', config: { p: 0.3, c: 2.5, cr: 0.075 }, expression: '' },
+    { model: 'seedance-pro', mode: 'per_request', config: { price: 0.2 }, expression: '' }
+  ]
+}))
 // GET /me/usage/overview (CONTRACTS §66): the windows from the same rows.
 on('GET', '/me/usage/overview', (req) => ({ ...overviewOf(usageRows.filter((u) => u.user_id === 1), req.query.tz || 'UTC'), api_keys: { total: 2, active: 2 } }))
 // GET /usage/overview (CONTRACTS §66.6): all users, plus users and accounts.

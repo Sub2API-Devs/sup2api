@@ -21,6 +21,7 @@ import (
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/config"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/core"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/httpapi"
+	"github.com/Sub2API-Devs/sup2api/next/server/internal/secret"
 	"github.com/Sub2API-Devs/sup2api/next/server/internal/testutil"
 )
 
@@ -107,7 +108,11 @@ func setup(t *testing.T) *env {
 		BootstrapAdminPassword: adminPassword,
 	}
 	ev := &fakeEvents{}
-	svc := New(Deps{DB: db, Redis: redis.NewClient(&redis.Options{Addr: mr.Addr()}), Config: cfg, Events: ev, Authz: az, BcryptCost: bcrypt.MinCost})
+	cipher, err := secret.New(bytes.Repeat([]byte{7}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(Deps{DB: db, Redis: redis.NewClient(&redis.Options{Addr: mr.Addr()}), Config: cfg, Events: ev, Authz: az, Cipher: cipher, BcryptCost: bcrypt.MinCost})
 	return &env{svc: svc, authz: az, redis: mr, events: ev, cfg: cfg}
 }
 

@@ -1,0 +1,93 @@
+export default {
+  confirmPassword: '当前密码',
+  profile: {
+    title: '个人中心',
+    description: '你的资料，以及登录账号的方式。',
+    basics: '基本资料',
+    email: '邮箱',
+    displayName: '显示名称',
+    roles: '角色',
+    language: '语言'
+  },
+  password: {
+    title: '登录密码',
+    description: '改密码后，其他设备需要重新登录。'
+  },
+  twoFactor: {
+    title: '二次验证',
+    description: '用密码登录时，还要输入验证器应用（如 Google Authenticator、1Password）里的动态验证码。',
+    on: '已开启',
+    enable: '开启二次验证',
+    enableSubmit: '验证并开启',
+    disable: '关闭',
+    disabled: '二次验证已关闭',
+    regenerate: '重新生成备用码',
+    codesLeft: '还剩 {n} 个备用码',
+    scanHint: '用验证器应用扫描二维码，或手动输入下面的密钥，然后填入它显示的 6 位验证码。',
+    qrAlt: '二次验证二维码',
+    codeHint: '验证器里的 6 位验证码，或一个备用码。',
+    backupTitle: '保存备用码',
+    backupHint: '这些备用码只显示这一次。手机丢失时，每个备用码可以代替验证码登录一次。',
+    saved: '我已保存'
+  },
+  passkeys: {
+    title: '通行密钥',
+    description: '用指纹、面容或安全密钥登录，不用输入密码和验证码。通行密钥只能在添加它的网址上使用。',
+    add: '添加通行密钥',
+    added: '通行密钥已添加',
+    remove: '删除通行密钥',
+    removeConfirm: '删除“{name}”后，它不能再用来登录。确定吗？',
+    name: '名称',
+    nameHint: '方便你认出这个设备，比如“工作电脑”。',
+    site: '网址',
+    created: '添加时间',
+    lastUsed: '最近使用',
+    never: '未使用',
+    empty: '还没有通行密钥',
+    unsupported: '当前浏览器或网址不支持通行密钥，需要 HTTPS 域名。'
+  },
+  sessions: {
+    title: '登录会话',
+    description: '正在登录你账号的设备。结束会话后，该设备最长 2 小时内退出登录。',
+    device: '设备',
+    signedInWith: '登录方式',
+    since: '登录时间',
+    lastActive: '最近活动',
+    current: '当前设备',
+    revoke: '结束',
+    revokeOthers: '结束其他会话',
+    revokeConfirm: '该设备要重新登录才能继续使用，最长 2 小时内生效。确定吗？',
+    revoked: '已结束',
+    empty: '没有登录会话',
+    unknownDevice: '未知设备',
+    method: {
+      password: '密码',
+      two_factor: '密码 + 验证码',
+      passkey: '通行密钥'
+    }
+  },
+  wallet: {
+    title: '钱包',
+    description: '你的余额、消费和每一笔余额变动。',
+    today: '今日消费',
+    yesterday: '昨日消费',
+    last30d: '近 30 天消费',
+    topupHint: '暂不支持在线充值。需要充值请联系管理员。'
+  },
+  models: {
+    title: '模型与价格',
+    description: '你的分组能用哪些模型，以及实际价格（模型价格 × 分组倍率）。',
+    group: '分组',
+    search: '搜索模型',
+    model: '模型',
+    input: '输入',
+    output: '输出',
+    cacheRead: '缓存读',
+    cacheWrite: '缓存写',
+    unit: 'USD / 百万 Token，已乘分组倍率 ×{rate}',
+    perRequest: '{price} / 次',
+    tiered: '{n} 档，显示第一档',
+    custom: '按规则计费',
+    empty: '这个分组没有可用模型'
+  }
+}

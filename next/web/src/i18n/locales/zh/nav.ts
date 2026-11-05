@@ -29,7 +29,10 @@ export default {
     settings: '设置',
     myApiKeys: 'API 密钥',
     myUsageOverview: '概览',
-    myUsage: '使用记录'
+    myUsage: '使用记录',
+    myModels: '模型与价格',
+    myWallet: '钱包',
+    myProfile: '个人中心'
   },
   crumbs: {
     pluginDetail: '插件详情',

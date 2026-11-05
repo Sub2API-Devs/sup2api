@@ -218,6 +218,39 @@ on('POST', '/auth/logout', (req) => {
   return {}
 })
 on('GET', '/me', (req) => whoAmI(req.headers.authorization))
+on('PUT', '/me', (req) => ({ ...whoAmI(req.headers.authorization), display_name: String(req.body?.display_name || '') }))
+// Account security (CONTRACTS §79). Mock code for every step: 123456.
+const twoFactor = { enabled: false, left: 0 }
+const backupCodes = () => Array.from({ length: 10 }, (_, i) => `MOCK${i}-CODE${i}`)
+on('GET', '/me/two-factor', () => ({ enabled: twoFactor.enabled, enabled_at: twoFactor.enabled ? now() : undefined, backup_codes_left: twoFactor.left }))
+on('POST', '/me/two-factor/setup', (req) =>
+  req.body?.password === 'admin'
+    ? { flow_token: 'mock-totp', expires_in: 300, secret: 'MOCKSECRETMOCKSECRET', otpauth_url: 'otpauth://totp/mock', qr_code: 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==' }
+    : fail(400, 'invalid_argument', 'incorrect password', { fields: [{ field: 'password', code: 'incorrect', message: 'incorrect password' }] })
+)
+const codeError = () => fail(400, 'invalid_argument', 'incorrect code', { fields: [{ field: 'code', code: 'incorrect', message: 'incorrect verification code' }] })
+on('POST', '/me/two-factor/enable', (req) => {
+  if (req.body?.code !== '123456') return codeError()
+  twoFactor.enabled = true
+  twoFactor.left = 10
+  return { backup_codes: backupCodes() }
+})
+on('POST', '/me/two-factor/disable', (req) => {
+  if (req.body?.code !== '123456') return codeError()
+  twoFactor.enabled = false
+  twoFactor.left = 0
+  return {}
+})
+on('POST', '/me/two-factor/backup-codes', (req) => (req.body?.code === '123456' ? { backup_codes: backupCodes() } : codeError()))
+on('GET', '/me/passkeys', () => [{ id: 1, name: 'MacBook', rp_id: 'localhost', created_at: now(), last_used_at: null }])
+on('DELETE', '/me/passkeys/:id', () => ({}))
+on('GET', '/me/sessions', () => [
+  { id: 'a', method: 'passkey', ip: '203.0.113.10', user_agent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/131.0 Safari/537.36', created_at: now(), last_used_at: now(), current: true },
+  { id: 'b', method: 'two_factor', ip: '203.0.113.11', user_agent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1', created_at: now(), last_used_at: now(), current: false }
+])
+on('DELETE', '/me/sessions/:id', () => ({}))
+on('POST', '/me/sessions/revoke-others', () => ({}))
+on('DELETE', '/users/:id/security', () => ({}))
 on('PUT', '/me/password', (req) => (req.body?.old_password === 'admin' ? {} : fail(400, 'invalid_argument', 'wrong password', { fields: [{ field: 'old_password', code: 'mismatch', message: 'Current password is wrong' }] })))
 
 // Permission of each core menu path (CONTRACTS §21.2 for accounts / platforms / proxies); plugin items need their plugin permission.
@@ -305,8 +338,11 @@ const MENUS = [
     section: 'me',
     items: [
       { id: 'my-api-keys', label: { en: 'API keys', zh: 'API 密钥' }, icon: 'key', path: '/me/api-keys' },
+      { id: 'my-models', label: { en: 'Models & prices', zh: '模型与价格' }, icon: 'price', path: '/me/models' },
+      { id: 'my-wallet', label: { en: 'Wallet', zh: '钱包' }, icon: 'balance', path: '/me/wallet' },
       { id: 'my-usage-overview', label: { en: 'Usage overview', zh: '概览' }, icon: 'chart', path: '/me/usage/overview' },
-      { id: 'my-usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/me/usage' }
+      { id: 'my-usage', label: { en: 'Usage records', zh: '使用记录' }, icon: 'usage', path: '/me/usage' },
+      { id: 'my-profile', label: { en: 'Account', zh: '个人中心' }, icon: 'user', path: '/me/profile' }
     ]
   }
 ]

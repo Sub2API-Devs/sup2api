@@ -42,11 +42,13 @@ const crumbs = computed(() => {
 const initial = computed(() => (auth.me?.display_name || auth.me?.email || '?').slice(0, 1).toUpperCase())
 
 const userActions = computed<MenuAction[]>(() => [
+  { key: 'profile', label: t('nav.items.myProfile'), icon: 'user' },
   { key: 'password', label: t('nav.changePassword'), icon: 'lock' },
   { key: 'logout', label: t('nav.logout'), icon: 'logout', danger: true }
 ])
 function onUserAction(key: string) {
-  if (key === 'password') pwdOpen.value = true
+  if (key === 'profile') router.push('/me/profile')
+  else if (key === 'password') pwdOpen.value = true
   else if (key === 'logout') void logout()
 }
 
@@ -80,7 +82,7 @@ async function logout() {
 
     <RouterLink
       v-if="auth.balance !== null"
-      :to="{ path: '/me/usage', query: { tab: 'ledger' } }"
+      to="/me/wallet"
       class="hidden items-center gap-1.5 rounded-md bg-primary-50 px-2.5 py-1 text-sm font-medium text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 sm:flex"
     >
       <SIcon name="balance" class="h-4 w-4" />
