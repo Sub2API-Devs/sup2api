@@ -1,0 +1,55 @@
+{
+  "Image": "ccgateway-app:0.1.118",
+  "User": "1000:1000",
+  "Env": [
+    "A_FIRST=x=y",
+    "TZ=UTC",
+    "Z_LAST=1"
+  ],
+  "Labels": {
+    "io.sup2api.ccgateway.account": "21",
+    "io.sup2api.ccgateway.auth": "fp-abc",
+    "io.sup2api.ccgateway.image": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "Volumes": {
+    "/etc/resolv.conf": {},
+    "/run/ccg-state": {},
+    "/work": {}
+  },
+  "HostConfig": {
+    "Binds": [
+      "ccg-21-data:/work:rw",
+      "/opt/ccgateway-runtime/21/resolv.conf:/etc/resolv.conf:ro",
+      "/opt/ccgateway-runtime/state:/run/ccg-state:ro"
+    ],
+    "NetworkMode": "ccg-21-net",
+    "Memory": 1073741824,
+    "MemorySwap": -1,
+    "NanoCpus": 2000000000,
+    "PidsLimit": 256,
+    "Init": true,
+    "CapDrop": [
+      "ALL"
+    ],
+    "SecurityOpt": [
+      "no-new-privileges:true"
+    ],
+    "LogConfig": {
+      "Type": "json-file",
+      "Config": {
+        "max-file": "3",
+        "max-size": "20m"
+      }
+    },
+    "Privileged": false
+  },
+  "NetworkingConfig": {
+    "EndpointsConfig": {
+      "ccg-21-net": {
+        "IPAMConfig": {
+          "IPv4Address": "10.52.74.5"
+        }
+      }
+    }
+  }
+}

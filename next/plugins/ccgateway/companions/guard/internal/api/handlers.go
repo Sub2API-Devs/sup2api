@@ -23,9 +23,17 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request, _ params) error 
 	if s.Control.ControllerOK() {
 		ctl = "ok"
 	}
-	writeJSON(w, 200, Health{Version: s.Version, Prefix: s.Cfg.Prefix, Features: Features, Docker: s.DockerVersion,
+	writeJSON(w, 200, Health{Version: s.Version, Prefix: s.Cfg.Prefix, Features: s.features(), Docker: s.DockerVersion,
 		Firewall: s.FW.Status(), Controller: ctl, Starting: s.isStarting()})
 	return nil
+}
+
+func (s *Server) features() []string {
+	out := append([]string(nil), Features...)
+	if s.Cfg.SessionState {
+		out = append(out, FeatureSessionState)
+	}
+	return out
 }
 
 func (s *Server) subnets(w http.ResponseWriter, r *http.Request, _ params) error {
@@ -561,7 +569,7 @@ func (s *Server) putApp(w http.ResponseWriter, r *http.Request, p params) error 
 		return err
 	}
 	in := policy.AppInput{Image: req.Image, IPv4: ip, Env: req.Env, AuthLabel: req.AuthLabel, ImageLabel: req.ImageLabel,
-		MemoryBytes: req.MemoryBytes, NanoCPUs: req.NanoCPUs}
+		MemoryBytes: req.MemoryBytes, NanoCPUs: req.NanoCPUs, SessionState: s.Cfg.SessionState}
 	spec, err := policy.App(s.n, s.Cfg.RuntimeRoot, aid, in)
 	if err != nil {
 		return apierr.Invalid(err.Error())
@@ -592,6 +600,11 @@ func (s *Server) putApp(w http.ResponseWriter, r *http.Request, p params) error 
 	if err := s.Files.VerifyResolv(aid); err != nil {
 		return mountRejected(err)
 	}
+	if s.Cfg.SessionState {
+		if err := s.Files.VerifySocketDir(); err != nil {
+			return mountRejected(err)
+		}
+	}
 	if _, _, err := s.D.ImageInspect(ctx, req.Image); err != nil {
 		if dockerapi.IsNotFound(err) {
 			return apierr.NotFound("image", "image not found")
@@ -618,24 +631,31 @@ func (s *Server) putApp(w http.ResponseWriter, r *http.Request, p params) error 
 	return nil
 }
 
-// appMounts: exactly the resolv.conf bind and the account volume (03 §3.5.7).
-func (s *Server) appMounts(aid string, c *dockerapi.ContainerInfo) error {
-	if len(c.Mounts) != 2 {
-		return apierr.Forbidden("mount_source_rejected", "unexpected container mounts")
+// appMounts: exactly the resolv.conf bind and the account volume (03 §3.5.7),
+// or those two plus the read-only, rprivate session state bind
+// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4). Both shapes are accepted
+// whatever CCG_GUARD_SESSION_STATE says, so turning the switch off never
+// strands a container created with it. withState reports the second shape.
+func (s *Server) appMounts(aid string, c *dockerapi.ContainerInfo) (withState bool, err error) {
+	if len(c.Mounts) != 2 && len(c.Mounts) != 3 {
+		return false, apierr.Forbidden("mount_source_rejected", "unexpected container mounts")
 	}
-	var bind, vol bool
+	var bind, vol, state bool
 	for _, m := range c.Mounts {
 		switch {
 		case m.Type == "bind" && m.Source == s.Cfg.RuntimeRoot+"/"+aid+"/resolv.conf" && m.Destination == "/etc/resolv.conf" && !m.RW:
 			bind = true
 		case m.Type == "volume" && m.Name == s.n.Volume(aid) && m.Destination == "/work":
 			vol = true
+		case m.Type == "bind" && m.Source == s.Cfg.RuntimeRoot+"/"+policy.StateDir && m.Destination == policy.StateMount &&
+			!m.RW && m.Propagation == "rprivate":
+			state = true
 		}
 	}
-	if !bind || !vol {
-		return apierr.Forbidden("mount_source_rejected", "unexpected container mounts")
+	if !bind || !vol || (len(c.Mounts) == 3) != state {
+		return false, apierr.Forbidden("mount_source_rejected", "unexpected container mounts")
 	}
-	return nil
+	return state, nil
 }
 
 func (s *Server) appAction(w http.ResponseWriter, r *http.Request, p params) error {
@@ -665,11 +685,20 @@ func (s *Server) appAction(w http.ResponseWriter, r *http.Request, p params) err
 		return err
 	}
 	if action != "stop" {
-		if err := s.appMounts(aid, c); err != nil {
+		withState, err := s.appMounts(aid, c)
+		if err != nil {
 			return err
 		}
 		if err := s.Files.VerifyResolv(aid); err != nil {
 			return mountRejected(err)
+		}
+		// A container that has the state bind gets its source checked on
+		// every start, switch or no switch: Docker would otherwise create a
+		// missing source directory itself.
+		if withState {
+			if err := s.Files.VerifySocketDir(); err != nil {
+				return mountRejected(err)
+			}
 		}
 	}
 	dctx, cancel := context.WithTimeout(ctx, actionTimeout(timeout))

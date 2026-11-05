@@ -3,7 +3,7 @@
 # linux:    go test -json -count=1 -race ./...                 (Linux, adds //go:build linux)
 # netns:    go test -tags netns -json -count=1 ./internal/firewall/       (root, --privileged throwaway container)
 # dockerit: go test -tags dockerit -json -count=1 -run Dockerit ./internal/api/  (real dockerd, prefix ccg-gtu)
-unit 329
-linux 336
+unit 334
+linux 344
 netns 37
 dockerit 20

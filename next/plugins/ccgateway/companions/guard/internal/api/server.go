@@ -33,6 +33,7 @@ import (
 type RuntimeFiles interface {
 	WriteResolv(aid string, data []byte) (replaced bool, err error)
 	VerifyResolv(aid string) error
+	VerifySocketDir() error
 	WriteAppNFT(aid string, data []byte) error
 	WriteGatewayFile(name string, data []byte) error
 	EnsureGatewayDir() error

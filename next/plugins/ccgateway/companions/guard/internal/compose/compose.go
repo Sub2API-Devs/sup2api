@@ -17,8 +17,9 @@ import (
 	"ccgateway/guard/internal/policy"
 )
 
-// Services are the only services the guard ever touches.
-var Services = map[string]bool{"controller": true, "egress": true}
+// Services are the only services the guard ever touches. state is the
+// per-host session Valkey (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.3).
+var Services = map[string]bool{"controller": true, "egress": true, "state": true}
 
 // ErrService is a service outside the whitelist (a guard bug).
 var ErrService = errors.New("compose service not allowed")

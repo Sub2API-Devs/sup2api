@@ -39,7 +39,12 @@ type Config struct {
 	DNSServers        []netip.Addr
 	ResolvConf        string // the host's /etc/resolv.conf as the guard sees it
 	SystemdResolvConf string // systemd-resolved's upstream file
-	Debug             bool
+	// SessionState (CCG_GUARD_SESSION_STATE=1) mounts <RuntimeRoot>/state
+	// read-only into new account containers and reports session-state-v1
+	// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4). Off by default: the guard
+	// may be upgraded before the host runs the state service.
+	SessionState bool
+	Debug        bool
 }
 
 // Names is the resource name builder of this instance.
@@ -178,6 +183,14 @@ func Load(getenv func(string) string, opt Options) (*Config, error) {
 		if len(c.DNSServers) > 8 {
 			return nil, bad("CCG_GUARD_CONTROL_DNS_SERVERS", "at most 8 servers")
 		}
+	}
+
+	switch get("CCG_GUARD_SESSION_STATE", "0") {
+	case "1":
+		c.SessionState = true
+	case "0":
+	default:
+		return nil, bad("CCG_GUARD_SESSION_STATE", "must be 0 or 1")
 	}
 
 	switch get("CCG_GUARD_LOG", "info") {

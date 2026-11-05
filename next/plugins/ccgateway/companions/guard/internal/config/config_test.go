@@ -21,7 +21,7 @@ func TestDefaults(t *testing.T) {
 		c.ControlNetwork != "ccg-control" || c.ControlBridge != "ccg-control0" || c.ControlSubnet.String() != "172.29.255.0/29" ||
 		c.ChainPrefix != "CCG" || c.Project != "ccgateway" || c.ProjectDir != "/opt/ccgateway" ||
 		c.RuntimeRoot != "/opt/ccgateway-runtime" || c.StateDir != "/var/lib/ccgateway-guard" ||
-		c.DockerSocket != "/var/run/docker.sock" || !c.ControlDNS || !c.HasToken || c.Token[0] != 0x01 {
+		c.DockerSocket != "/var/run/docker.sock" || !c.ControlDNS || !c.HasToken || c.Token[0] != 0x01 || c.SessionState {
 		t.Fatalf("%+v", c)
 	}
 	if c.Chain("PROXY-BRIDGE") != "CCG-PROXY-BRIDGE" || c.Names().App("21") != "ccg-21-app" {
@@ -37,12 +37,13 @@ func TestIsolatedInstance(t *testing.T) {
 		"CCG_GUARD_CONTROL_BRIDGE": "ccg-gt-ctl0", "CCG_GUARD_CONTROL_SUBNET": "172.29.255.8/29",
 		"CCG_GUARD_CHAIN_PREFIX": "CCG-GT", "CCG_GUARD_PROJECT": "ccgateway-gt", "CCG_GUARD_PROJECT_DIR": "/opt/ccgateway-gt",
 		"CCG_GUARD_RUNTIME_ROOT": "/opt/ccgateway-gt-runtime", "CCG_GUARD_CONTROL_DNS": "0",
-		"CCG_GUARD_CONTROL_DNS_SERVERS": "1.1.1.1,8.8.8.8",
+		"CCG_GUARD_CONTROL_DNS_SERVERS": "1.1.1.1,8.8.8.8", "CCG_GUARD_SESSION_STATE": "1",
 	}), Options{RequireToken: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Chain("PROXY-BRIDGE") != "CCG-GT-PROXY-BRIDGE" || c.ControlDNS || len(c.DNSServers) != 2 || c.Project != "ccgateway-gt" {
+	if c.Chain("PROXY-BRIDGE") != "CCG-GT-PROXY-BRIDGE" || c.ControlDNS || len(c.DNSServers) != 2 || c.Project != "ccgateway-gt" ||
+		!c.SessionState {
 		t.Fatalf("%+v", c)
 	}
 }
@@ -65,6 +66,7 @@ func TestRejects(t *testing.T) {
 		"CCG_GUARD_CONTROL_DNS":         {"CCG_GUARD_CONTROL_DNS": "yes"},
 		"CCG_GUARD_CONTROL_DNS_SERVERS": {"CCG_GUARD_CONTROL_DNS_SERVERS": "127.0.0.53"},
 		"CCG_GUARD_LOG":                 {"CCG_GUARD_LOG": "trace"},
+		"CCG_GUARD_SESSION_STATE":       {"CCG_GUARD_SESSION_STATE": "true"},
 	}
 	for v, m := range cases {
 		m["CCG_GUARD_TOKEN"] = map[bool]string{true: m["CCG_GUARD_TOKEN"], false: tok}[v == "CCG_GUARD_TOKEN"]

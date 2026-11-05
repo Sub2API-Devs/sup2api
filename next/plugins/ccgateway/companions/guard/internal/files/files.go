@@ -44,6 +44,14 @@ var segment = regexp.MustCompile(`^[A-Za-z0-9._-]{1,64}$`)
 // ValidSegment: [A-Za-z0-9._-]{1,64}, not "." or "..".
 func ValidSegment(s string) bool { return segment.MatchString(s) && s != "." && s != ".." }
 
+// StateDir is the session state socket directory under RuntimeRoot and
+// SocketName the only entry it may hold (SESSION-MEMORY-TOOLS-USED-DESIGN.md
+// §7.2; the compose service "state" creates the socket).
+const (
+	StateDir   = "state"
+	SocketName = "valkey.sock"
+)
+
 // GatewayFiles are the only names under shared-egress/ (03 §3.7.7).
 var GatewayFiles = map[string]bool{
 	"boot.json": true, "boot.nft": true, "dns.json": true, "active.nft": true, "operation.json": true,

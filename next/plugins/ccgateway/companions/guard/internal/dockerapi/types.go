@@ -45,6 +45,7 @@ type Mount struct {
 	Destination string `json:"Destination"`
 	Mode        string `json:"Mode"`
 	RW          bool   `json:"RW"`
+	Propagation string `json:"Propagation"`
 }
 
 // EndpointInfo is a container's endpoint on one network.

@@ -29,3 +29,4 @@ func (r *Root) CreateTemp(rel []string, p, s string) (*os.File, string, error) {
 func (r *Root) FreeBytes() (uint64, error)                          { return 0, errUnsupported }
 func (r *Root) VerifyFile(abs string) error                         { return errUnsupported }
 func (r *Root) VerifyDir(abs string, allow func(string) bool) error { return errUnsupported }
+func (r *Root) VerifySocketDir(abs string) error                    { return errUnsupported }

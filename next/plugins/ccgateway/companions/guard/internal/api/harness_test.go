@@ -33,6 +33,8 @@ type memFiles struct {
 	files  map[string][]byte
 	bad    map[string]string
 	writes []string
+
+	stateChecks int
 }
 
 func newMemFiles() *memFiles { return &memFiles{files: map[string][]byte{}, bad: map[string]string{}} }
@@ -57,6 +59,17 @@ func (m *memFiles) VerifyResolv(aid string) error {
 	}
 	if _, ok := m.files[rel]; !ok {
 		return &files.Error{Rel: rel, Why: "missing"}
+	}
+	return nil
+}
+
+// stateChecks counts VerifySocketDir calls; bad["state"] rejects.
+func (m *memFiles) VerifySocketDir() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.stateChecks++
+	if why, ok := m.bad["state"]; ok {
+		return &files.Error{Rel: "state", Why: why}
 	}
 	return nil
 }

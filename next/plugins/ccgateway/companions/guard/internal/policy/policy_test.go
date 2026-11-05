@@ -55,6 +55,36 @@ func TestAppGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden(t, "app", spec)
+	if len(spec.HostConfig.Binds) != 2 || len(spec.Volumes) != 2 {
+		t.Fatalf("switch off must keep two mounts: %v %v", spec.HostConfig.Binds, spec.Volumes)
+	}
+}
+
+// covers: SESSION-MEMORY §7.4 the session state switch adds exactly one
+// read-only bind and its mount point; nothing else changes
+func TestAppSessionState(t *testing.T) {
+	in := appInput()
+	in.SessionState = true
+	spec, err := App(n, "/opt/ccgateway-runtime", "21", in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden(t, "app-session-state", spec)
+	binds := spec.HostConfig.Binds
+	if len(binds) != 3 || binds[2] != "/opt/ccgateway-runtime/state:/run/ccg-state:ro" {
+		t.Fatalf("binds = %v", binds)
+	}
+	if _, ok := spec.Volumes["/run/ccg-state"]; !ok || len(spec.Volumes) != 3 {
+		t.Fatalf("volumes = %v", spec.Volumes)
+	}
+	off, _ := App(n, "/opt/ccgateway-runtime", "21", appInput())
+	off.HostConfig.Binds = append(off.HostConfig.Binds, StateBind("/opt/ccgateway-runtime"))
+	off.Volumes[StateMount] = struct{}{}
+	a, _ := json.Marshal(off)
+	b, _ := json.Marshal(spec)
+	if !bytes.Equal(a, b) {
+		t.Fatalf("the switch changed more than the third mount:\n%s\n%s", a, b)
+	}
 }
 
 // covers: O7 BUG-20(fixed) D5 03§4.6 three job uses

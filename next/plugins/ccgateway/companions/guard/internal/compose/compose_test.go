@@ -83,7 +83,12 @@ func TestUpCommand(t *testing.T) {
 		strings.Contains(strings.Join(x.calls[1], " "), "--force-recreate") {
 		t.Fatalf("%q", x.calls[1])
 	}
-	for _, s := range []string{"guard", "", "controller egress", "ccg-guard"} {
+	x.calls = nil
+	_ = r.Up(context.Background(), "state", false)
+	if len(x.calls) != 2 || strings.Contains(strings.Join(x.calls[1], " "), "--profile") || x.calls[1][len(x.calls[1])-1] != "state" {
+		t.Fatalf("state: %q", x.calls)
+	}
+	for _, s := range []string{"guard", "", "controller egress", "ccg-guard", "state egress", "valkey"} {
 		if err := r.Up(context.Background(), s, false); !errors.Is(err, ErrService) {
 			t.Errorf("%q allowed", s)
 		}

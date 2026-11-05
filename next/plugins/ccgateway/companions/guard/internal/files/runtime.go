@@ -62,13 +62,21 @@ func (rt Runtime) VerifyGatewayDir() error {
 	return rt.R.VerifyDir(rt.R.Path()+"/shared-egress", GatewayDirAllowed)
 }
 
+// VerifySocketDir checks state/ before an account container with the
+// session state mount is created or started. The guard never creates,
+// writes or cleans this directory: the install script owns it.
+func (rt Runtime) VerifySocketDir() error {
+	return rt.R.VerifySocketDir(rt.R.Path() + "/" + StateDir)
+}
+
 // SweepResult is one rejected path of the startup sweep (03 §6.4).
 type SweepResult struct {
 	Rel string `json:"rel"`
 	Why string `json:"why"`
 }
 
-// Sweep checks every <aid>/resolv.conf, <aid>/app.nft and shared-egress/.
+// Sweep checks every <aid>/resolv.conf, <aid>/app.nft, shared-egress/ and
+// state/ (checked only, never removed or repaired).
 // key reports which directory names are account keys.
 func (rt Runtime) Sweep(key func(string) bool) (checked int, rejected []SweepResult, err error) {
 	entries, err := rt.R.List(nil)
@@ -77,6 +85,15 @@ func (rt Runtime) Sweep(key func(string) bool) (checked int, rejected []SweepRes
 	}
 	for _, e := range entries {
 		switch {
+		case e.Name == StateDir:
+			checked++
+			if e.Type != "dir" {
+				rejected = append(rejected, SweepResult{Rel: e.Name, Why: map[bool]string{true: "symlink", false: "type"}[e.Type == "symlink"]})
+				continue
+			}
+			if err := rt.VerifySocketDir(); err != nil {
+				rejected = append(rejected, sweepErr(e.Name, err))
+			}
 		case e.Name == "shared-egress":
 			checked++
 			if e.Type != "dir" {

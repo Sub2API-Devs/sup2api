@@ -418,11 +418,15 @@ func (r *Root) List(rel []string) ([]Entry, error) {
 }
 
 func (r *Root) list(dfd int) ([]Entry, error) {
-	dup, err := syscall.Dup(dfd)
+	// A new open file description of the same directory: a dup would
+	// share dfd's directory offset (and r.fd's, for the root itself), so a
+	// second listing of the same Root would start at the end and see
+	// nothing, and two concurrent listings would split the entries.
+	own, err := syscall.Openat(dfd, ".", syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return nil, err
 	}
-	f := os.NewFile(uintptr(dup), "dir")
+	f := os.NewFile(uintptr(own), "dir")
 	defer f.Close()
 	namesList, err := f.Readdirnames(-1)
 	if err != nil {
@@ -569,6 +573,65 @@ func (r *Root) VerifyDir(abs string, allow func(string) bool) error {
 		case allow != nil && !allow(e.Name):
 			return &Error{Rel: erel, Why: "name"}
 		}
+	}
+	return nil
+}
+
+// VerifySocketDir checks the session state socket directory before it is
+// bind mounted (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.2): the directory
+// itself is checked like every level (root owner, no group or other
+// write), and it holds nothing, or exactly one root-owned socket named
+// SocketName with one link. The socket's own mode is not checked:
+// Valkey creates it 0666 on purpose (access control is the ACL password).
+func (r *Root) VerifySocketDir(abs string) error {
+	rel, err := r.relOf(abs)
+	if err != nil {
+		return err
+	}
+	dfd, err := r.openDir(rel, false)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &Error{Rel: strings.Join(rel, "/"), Why: "missing"}
+		}
+		return err
+	}
+	defer syscall.Close(dfd)
+	entries, err := r.list(dfd)
+	if err != nil {
+		return err
+	}
+	base := strings.Join(rel, "/")
+	for _, e := range entries {
+		erel := base + "/" + e.Name
+		if e.Name != SocketName {
+			return &Error{Rel: erel, Why: "name"}
+		}
+		st, err := lstatAt(dfd, e.Name)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue // Valkey is restarting: an empty directory is fine
+			}
+			return err
+		}
+		if err := checkSocket(st, r.uid, erel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkSocket: a socket (not a link, regular file, FIFO or device) with
+// one link, owned by uid.
+func checkSocket(st *syscall.Stat_t, uid uint32, rel string) error {
+	switch {
+	case st.Mode&syscall.S_IFMT == syscall.S_IFLNK:
+		return &Error{Rel: rel, Why: "symlink"}
+	case st.Mode&syscall.S_IFMT != syscall.S_IFSOCK:
+		return &Error{Rel: rel, Why: "type"}
+	case st.Nlink != 1:
+		return &Error{Rel: rel, Why: "hardlink"}
+	case st.Uid != uid:
+		return &Error{Rel: rel, Why: "owner"}
 	}
 	return nil
 }

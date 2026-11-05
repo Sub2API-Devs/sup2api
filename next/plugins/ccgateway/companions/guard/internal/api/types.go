@@ -20,6 +20,11 @@ var Features = []string{
 	"jobs-v1", "load-gzip-v1", "upgrade-compose-v1",
 }
 
+// FeatureSessionState is reported only with CCG_GUARD_SESSION_STATE=1: new
+// account containers get the state socket mount, so the controller may
+// hand out Valkey credentials (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4).
+const FeatureSessionState = "session-state-v1"
+
 // Health is GET /v1/health.
 type Health struct {
 	Version    string   `json:"version"`

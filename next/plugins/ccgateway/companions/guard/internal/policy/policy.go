@@ -193,7 +193,23 @@ type AppInput struct {
 	ImageLabel  string
 	MemoryBytes int64
 	NanoCPUs    int64
+	// SessionState adds the session state socket directory as a third,
+	// read-only bind. It comes from the guard's own configuration
+	// (CCG_GUARD_SESSION_STATE), never from the request.
+	SessionState bool
 }
+
+// StateDir is the session state socket directory under RuntimeRoot and
+// StateMount its mount point in account containers
+// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.2).
+const (
+	StateDir   = "state"
+	StateMount = "/run/ccg-state"
+)
+
+// StateBind is the third app bind: <root>/state read-only (propagation
+// stays Docker's default rprivate).
+func StateBind(root string) string { return root + "/" + StateDir + ":" + StateMount + ":ro" }
 
 // App is the account container (03 §4.2), created but not started.
 func App(n names.Names, root, aid string, in AppInput) (ContainerSpec, error) {
@@ -232,6 +248,16 @@ func App(n names.Names, root, aid string, in AppInput) (ContainerSpec, error) {
 	}
 	init := true
 	net := n.Net(aid)
+	// docker-py sends Config.Volumes for every bind (same inspect shape).
+	volumes := map[string]struct{}{"/work": {}, "/etc/resolv.conf": {}}
+	binds := []string{
+		n.Volume(aid) + ":/work:rw",
+		root + "/" + aid + "/resolv.conf:/etc/resolv.conf:ro",
+	}
+	if in.SessionState {
+		volumes[StateMount] = struct{}{}
+		binds = append(binds, StateBind(root))
+	}
 	return ContainerSpec{
 		Image: in.Image,
 		User:  "1000:1000",
@@ -241,13 +267,9 @@ func App(n names.Names, root, aid string, in AppInput) (ContainerSpec, error) {
 			names.LabelAuth:    in.AuthLabel,
 			names.LabelImage:   in.ImageLabel,
 		},
-		// docker-py sends Config.Volumes for every bind (same inspect shape).
-		Volumes: map[string]struct{}{"/work": {}, "/etc/resolv.conf": {}},
+		Volumes: volumes,
 		HostConfig: HostConfig{
-			Binds: []string{
-				n.Volume(aid) + ":/work:rw",
-				root + "/" + aid + "/resolv.conf:/etc/resolv.conf:ro",
-			},
+			Binds:       binds,
 			NetworkMode: net,
 			Memory:      mem,
 			// Swap is unlimited (the host's swap): a request over the memory
