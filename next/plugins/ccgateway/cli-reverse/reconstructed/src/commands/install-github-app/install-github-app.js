@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install-github-app/install-github-app.tsx
  * pieces: chunk-2xbvbqx2.js (3)
  * attribution: fingerprint 2, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";

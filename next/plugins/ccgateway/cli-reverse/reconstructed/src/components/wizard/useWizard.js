@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/wizard/useWizard.ts
  * pieces: chunk-pqe1nn4c.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useContext } from "../../../vendor/react/cjs/react.production.js";
 import { wizardSlot } from "./WizardProvider.js";

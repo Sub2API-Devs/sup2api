@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/cli.tsx
  * pieces: cli.js (10)
  * attribution: placement 7, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { setAiAgentEnv } from "../utils/http.js";
 import { parseGhStandinArgs } from "../utils/agentProxy/ghStandin.js";

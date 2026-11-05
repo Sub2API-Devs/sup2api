@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
  * pieces: chunk-539esr4f.js (6), chunk-brqnbz3r.js (1)
  * attribution: esm-layout 2, esm-fingerprint 4, cjs-require-graph 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM, __commonJS } from "../../../../../runtime/bun-runtime.js";
 import {

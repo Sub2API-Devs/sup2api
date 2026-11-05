@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/applySettingsChange.ts
  * pieces: chunk-01b7fqej.js (2)
  * attribution: placement 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { createSignal } from "../signal.js";

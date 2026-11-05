@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h61dq9nz.js (10)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { migrateEnableAllProjectMcpServersToSettings } from "../../migrations/migrateEnableAllProjectMcpServersToSettings.js";
 import { runMigrations } from "../../main.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/inboundAttachments.ts
  * pieces: chunk-16n0efh2.js (1), chunk-jf14gxs3.js (1), chunk-kd6y3qsy.js (74), chunk-my9ygfcz.js (4)
  * attribution: fingerprint 5, placement 61, layout 12, callgraph-fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname, sep, join, basename, dirname } from "path";
 import { symlink, lstat, lutimes, utimes, readdir, rmdir, link, unlink, rm, realpath } from "fs/promises";

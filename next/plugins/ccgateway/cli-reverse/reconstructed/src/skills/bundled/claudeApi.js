@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/claudeApi.ts
  * pieces: chunk-847e240k.js (5), chunk-az5scn6b.js (1), chunk-cm73gsrm.js (1), chunk-ne2890fx.js (2)
  * attribution: sole-consumer 3, affinity 1, fingerprint 4, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseFrontmatter } from "../../utils/frontmatterParser.js";
 import { listAvailablePluginSubcommands } from "../../cli/handlers/plugins.js";

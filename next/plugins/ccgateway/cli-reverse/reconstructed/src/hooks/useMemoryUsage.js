@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useMemoryUsage.ts
  * pieces: chunk-czq1j3j2.js (2)
  * attribution: affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useState, useRef } from "../../vendor/react/cjs/react.production.js";
 import { useInterval } from "../ink/components/Input.js";

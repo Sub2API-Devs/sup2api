@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-7jxyna5q.js (17)
  * attribution: placement 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { baseSliceAlias as baseSliceAlias_2 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { toStringExport } from "./toString.js";

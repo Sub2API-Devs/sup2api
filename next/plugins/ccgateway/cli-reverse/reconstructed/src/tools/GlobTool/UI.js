@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GlobTool/UI.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-wjygkcr4.js (1)
  * attribution: callgraph-fingerprint 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { truncate } from "../../utils/format.js";
 import { MAX_DESCRIPTION_CHARS } from "../../constants/outputLimits.js";

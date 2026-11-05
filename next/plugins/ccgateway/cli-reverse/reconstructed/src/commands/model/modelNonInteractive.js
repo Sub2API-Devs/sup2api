@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-sg8kbk5k.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LEGACY_MODEL_IDS } from "../../utils/model/modelIds.js";
 import { COMMON_INFO_ARGS_ALIAS, COMMON_HELP_ARGS } from "../../constants/xml.js";

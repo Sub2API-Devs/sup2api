@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/select-input-option.tsx
  * pieces: chunk-0rd17ynw.js (1), chunk-p1yqn9ds.js (5)
  * attribution: fingerprint 2, placement 1, layout 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";

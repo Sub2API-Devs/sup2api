@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/proxy.ts
  * pieces: chunk-1hnjmk23.js (1), chunk-355mdh7x.js (53), chunk-7kayq7nc.js (1)
  * attribution: fingerprint 5, placement 6, layout 18, facade-exports 26
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isIP } from "net";
 import { checkServerIdentity } from "tls";

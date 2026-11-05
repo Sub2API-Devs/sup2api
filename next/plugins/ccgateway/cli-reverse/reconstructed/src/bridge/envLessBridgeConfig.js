@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/envLessBridgeConfig.ts
  * pieces: chunk-d0pp22ee.js (3)
  * attribution: fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, numberSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";

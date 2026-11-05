@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/registerSkillHooks.ts
  * pieces: chunk-g88zyy4n.js (3)
  * attribution: placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonStringify } from "../slowOperations.js";
 import { computeContentHash } from "../commitAttribution.js";

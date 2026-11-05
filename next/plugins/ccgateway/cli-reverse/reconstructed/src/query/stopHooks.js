@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/query/stopHooks.ts
  * pieces: chunk-w3ch4xq2.js (4)
  * attribution: placement 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { postSamplingHookRegistry } from "../utils/hooks/postSamplingHooks.js";
 import { rememberTurnParams, noteMainRequestForFork } from "../plugins/functionHooks/modelApi.js";

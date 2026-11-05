@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/spawnInProcess.ts
  * pieces: chunk-94s4dsgm.js (1), chunk-pgmbxgj8.js (4)
  * attribution: fingerprint 1, placement 3, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { withTimeout } from "../sleep.js";
 import { TEAMMATE_TEARDOWN_TIMEOUT_MS } from "../../tasks/InProcessTeammateTask/InProcessTeammateTask.js";

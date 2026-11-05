@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/effort/effort.tsx
  * pieces: chunk-1mh58gcg.js (1), chunk-5dqwe9kx.js (17), chunk-n2cdp9nk.js (2)
  * attribution: placement 8, layout 5, fingerprint 6, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getMainLoopModel } from "../../utils/model/model.js";
 import {

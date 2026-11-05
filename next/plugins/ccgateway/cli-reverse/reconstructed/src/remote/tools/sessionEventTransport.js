@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-sjeyntvz.js (29)
  * attribution: placement 29
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { callPlumbingOverSession, BridgeSessionRecovery, mcpClientModule } from "./callPlumbing.js";
 import { SLEEPING_GRACE_MS, LIVENESS_PROBE_TIMEOUT_MS } from "./protocolConstants.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/ultrareviewQuota.ts
  * pieces: chunk-a2r96cyy.js (18)
  * attribution: fingerprint 1, placement 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../../utils/env.js";
 import { checkOverageGate_2 } from "../../commands/review/reviewRemote.js";

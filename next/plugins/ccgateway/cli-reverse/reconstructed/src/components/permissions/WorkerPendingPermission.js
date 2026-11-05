@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/WorkerPendingPermission.tsx
  * pieces: chunk-czq1j3j2.js (2), chunk-qq0rce8p.js (1)
  * attribution: placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { taskDescriptionSuffix } from "../../tasks/endedByModel.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeEnabled.ts
  * pieces: chunk-csb2jdt5.js (1), chunk-et4eevep.js (11), chunk-h3xdf7nq.js (17)
  * attribution: fingerprint 1, placement 23, facade-majority 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSessionFeatureValues } from "../bootstrap/sessionFeatureValues.js";
 import { env } from "../utils/env.js";

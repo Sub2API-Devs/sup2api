@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
  * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-ayc8mk37.js:20831-23181 esm-fingerprint
 var h = {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AskUserQuestionTool/prompt.ts
  * pieces: chunk-5btfj7kh.js (4), chunk-c0pq6qyx.js (1)
  * attribution: placement 1, layout 2, callgraph-fingerprint 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ENTER_PLAN_MODE_TOOL_NAME } from "../EnterPlanModeTool/constants.js";
 import { EXITPLANMODE } from "../ExitPlanModeTool/constants.js";

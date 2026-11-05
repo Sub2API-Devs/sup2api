@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-x60qr24n.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { codeModeAccepted } from "./accepted.js";
 import { isAsyncReplEnabled, isAsyncLaneMode } from "../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";

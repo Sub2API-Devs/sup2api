@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginDirectories.ts
  * pieces: chunk-5s0qaz1x.js (32), chunk-5xgkngpb.js (6), chunk-exfmq47h.js (2)
  * attribution: placement 19, fingerprint 7, affinity 1, layout 12, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { relative, sep, isAbsolute, join, delimiter, resolve as resolve_2, parse, dirname } from "path";
 import { readdir, stat, rm } from "fs/promises";

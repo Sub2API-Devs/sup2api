@@ -4,6 +4,7 @@
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
  * pieces: chunk-b5df2wx1.js (10)
  * attribution: esm-layout 3, esm-fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_https_proxy_agent } from "../../../../../https-proxy-agent/dist/index.js";

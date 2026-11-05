@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-mer7cb3z.js (1), chunk-zata70pr.js (65)
  * attribution: placement 66
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, join } from "path";
 import { stripSyncedSkillPrefix } from "../../skills/syncedSkills.js";

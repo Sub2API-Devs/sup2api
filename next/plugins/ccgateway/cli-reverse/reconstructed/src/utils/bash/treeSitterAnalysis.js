@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/treeSitterAnalysis.ts
  * pieces: chunk-5xgkngpb.js (10), chunk-xzmy9dn4.js (1)
  * attribution: fingerprint 6, file-local 4, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { typeOf, typeUrlOf } from "../../tools/ArtifactTool/permissions/dbWriteInputs.js";
 

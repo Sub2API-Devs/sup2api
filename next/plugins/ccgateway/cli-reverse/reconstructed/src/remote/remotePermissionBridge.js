@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/remote/remotePermissionBridge.ts
  * pieces: chunk-ck4jrdtf.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { SYNTHETIC_MODEL } from "../utils/messages.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/shellCompletion.ts
  * pieces: chunk-czq1j3j2.js (8), chunk-ptrwzav4.js (1)
  * attribution: callgraph-witnessed 1, layout 1, fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { findLastContentTokenIndex, findTokenSplitOffset } from "../../components/Markdown.js";
 import { isBlankToken_2 } from "../markdownHeadings.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/upload.ts
  * pieces: chunk-033d1naw.js (49)
  * attribution: placement 21, layout 22, fingerprint 4, facade-majority 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath, opendir, lstat } from "fs/promises";
 import { join, extname, basename } from "path";

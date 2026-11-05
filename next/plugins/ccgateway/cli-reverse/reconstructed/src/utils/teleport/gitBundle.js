@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport/gitBundle.ts
  * pieces: chunk-sfy2wa1e.js (80)
  * attribution: placement 80
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, open, stat, realpath, unlink } from "fs/promises";
 import { resolve, join, dirname, isAbsolute, basename } from "path";

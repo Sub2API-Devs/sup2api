@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-k1t1w9mg.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { toInteger_default } from "./toInteger.js";
 

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/genericProcessUtils.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-y28agbhb.js (1)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-y28agbhb.js:1374-1454 placement (2.1.88 match: isProcessRunning, 1)

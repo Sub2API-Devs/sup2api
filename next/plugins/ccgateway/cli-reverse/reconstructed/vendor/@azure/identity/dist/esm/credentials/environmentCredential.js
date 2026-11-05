@@ -4,6 +4,7 @@
  * third-party: @azure/identity@4.10.1
  * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { credentialLogger, processEnvVars, formatSuccess, formatError } from "../util/logging.js";
 import {

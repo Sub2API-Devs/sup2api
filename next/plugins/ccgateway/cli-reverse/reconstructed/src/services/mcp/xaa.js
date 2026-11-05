@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/xaa.ts
  * pieces: chunk-01kgd7xg.js (1), chunk-aw801t9e.js (1), chunk-ft6a2kja.js (11), chunk-ghww1f0b.js (7)
  * attribution: fingerprint 9, layout 4, callgraph-witnessed 1, placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve } from "path";
 import { pathToFileURL } from "url";

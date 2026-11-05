@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git/gitConfigParser.ts
  * pieces: chunk-85eyj5gy.js (17), chunk-a04tk21p.js (8)
  * attribution: placement 24, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { open } from "fs/promises";
 import { join } from "path";

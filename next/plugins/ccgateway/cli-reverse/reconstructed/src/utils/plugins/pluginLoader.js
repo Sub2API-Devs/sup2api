@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginLoader.ts
  * pieces: chunk-0yw3taqg.js (1), chunk-4hx0rq5z.js (1), chunk-5xgkngpb.js (196), chunk-6vxyfwtv.js (1), chunk-b08ck61p.js (1)
  * attribution: fingerprint 21, placement 128, affinity 1, layout 44, file-local 2, callgraph-witnessed 2, callgraph-fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { join, sep, relative, isAbsolute, parse, resolve as resolve_2, dirname, basename } from "path";

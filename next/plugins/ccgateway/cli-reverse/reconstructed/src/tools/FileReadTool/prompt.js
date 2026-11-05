@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/prompt.ts
  * pieces: chunk-8nzbdydx.js (4)
  * attribution: fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { leanPromptOf, leanRewriteOf } from "../../utils/model/promptBundles.js";
 import { NO_REREAD_AFTER_EDIT_NOTE } from "../../constants/promptSections.js";

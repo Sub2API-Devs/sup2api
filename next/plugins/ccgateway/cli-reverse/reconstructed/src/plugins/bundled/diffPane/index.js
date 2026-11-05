@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-01kgd7xg.js (1), chunk-c7hntn0y.js (10)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isRemoteSessionAvailable } from "../../../remote/remoteMode.js";
 import {

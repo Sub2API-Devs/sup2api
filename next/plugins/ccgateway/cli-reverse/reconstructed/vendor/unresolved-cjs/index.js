@@ -4,6 +4,7 @@
  * third-party: unresolved-cjs (unresolved)
  * pieces: chunk-3p78mpxm.js (3), chunk-7ycvgepx.js (1), chunk-p57a7983.js (1), chunk-qg41pqt6.js (2), chunk-sz26a4x2.js (1), chunk-t889g22j.js (2), chunk-ww9agm6g.js (1)
  * attribution: cjs-unmatched 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { cliBoxesData } from "../cli-boxes/boxes.json.js";

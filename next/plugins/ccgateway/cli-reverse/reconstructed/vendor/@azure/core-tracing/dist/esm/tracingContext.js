@@ -4,6 +4,7 @@
  * third-party: @azure/core-tracing@1.2.0..1.3.1
  * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { agentPolicy } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { tlsPolicy } from "../../../core-rest-pipeline/dist/esm/policies/tlsPolicy.js";

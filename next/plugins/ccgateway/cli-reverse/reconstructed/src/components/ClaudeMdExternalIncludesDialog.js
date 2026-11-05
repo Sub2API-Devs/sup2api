@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ClaudeMdExternalIncludesDialog.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-6gtnap6b.js (5)
  * attribution: fingerprint 2, placement 1, file-last-pair 1, facade-exports 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getCurrentProjectConfig, saveCurrentProjectConfig } from "../utils/config.js";
 import { hasExternalClaudeMdIncludes, getMemoryFilesCached } from "../utils/claudemd.js";

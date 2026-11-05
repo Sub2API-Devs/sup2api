@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/claudeApiContent.ts
  * pieces: chunk-mjdtqz3w.js (2), chunk-twha5jmp.js (7), chunk-y1rdce29.js (174)
  * attribution: placement 165, layout 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0_7 from "../../../assets/plugin-eval-quickref-e95bcd1b.md.zst" with { type: "file" };
 import __cc_resource_0 from "../../../assets/batches-azab338a.md" with { type: "text" };

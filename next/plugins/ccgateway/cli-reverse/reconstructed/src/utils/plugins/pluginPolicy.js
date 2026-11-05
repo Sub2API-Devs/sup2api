@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginPolicy.ts
  * pieces: chunk-r7hswen6.js (5)
  * attribution: callgraph-witnessed 1, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSettingsForSourceForUpkeep, getSettingsForSource } from "../settings/settings.js";
 import {

@@ -4,6 +4,7 @@
  * third-party: @smithy/util-stream@4.4.0..4.5.8
  * pieces: chunk-1fkvp0h1.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 

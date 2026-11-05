@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/markdown.ts
  * pieces: chunk-ptrwzav4.js (29)
  * attribution: fingerprint 4, layout 20, placement 4, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   markedConfigStateMemo,

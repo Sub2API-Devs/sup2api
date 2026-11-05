@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/ErrorOverview.tsx
  * pieces: chunk-2avr6cej.js (3)
  * attribution: placement 1, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFileSync } from "fs";
 import { MAX_ERROR_LENGTH, stripFileUrlPrefix } from "../../components/messages/UserResourceUpdateMessage.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-hjswk319.js (13)
  * attribution: sole-consumer 1, placement 11, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isModeDependentModelSetting, isOpusFableAdvisorSetting } from "../../utils/model/planModeModel.js";
 import { strip1mSuffix } from "../../utils/model/modelIds.js";

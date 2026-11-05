@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/chromeNativeHost.ts
  * pieces: chunk-08zxrh96.js (11)
  * attribution: fingerprint 6, layout 4, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { appendFile, unlink, mkdir, chmod, readdir, rmdir } from "fs/promises";
 import { hostname, platform } from "os";

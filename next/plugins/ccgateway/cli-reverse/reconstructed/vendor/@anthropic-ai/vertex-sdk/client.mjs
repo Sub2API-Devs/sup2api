@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
  * pieces: chunk-1vqm62xf.js (4)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { APIConnectionError } from "../sdk/core/error.mjs";
 import { castToError } from "../bedrock-sdk/internal/errors.mjs";

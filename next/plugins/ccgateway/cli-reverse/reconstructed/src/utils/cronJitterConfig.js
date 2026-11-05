@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronJitterConfig.ts
  * pieces: chunk-823fv89k.js (2)
  * attribution: fingerprint 1, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";

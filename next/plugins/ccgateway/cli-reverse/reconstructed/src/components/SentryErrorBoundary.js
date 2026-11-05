@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/SentryErrorBoundary.ts
  * pieces: chunk-rkbsrtg1.js (2)
  * attribution: affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { REACT_PROFILER_TYPE } from "../../vendor/react/cjs/react.production.js";
 import { logError } from "../utils/log.js";

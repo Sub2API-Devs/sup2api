@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git/gitFilesystem.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-77bb8s6j.js (1), chunk-85eyj5gy.js (81), chunk-fepf8jp6.js (1), chunk-s4mtq5zk.js (1)
  * attribution: fingerprint 9, callgraph-fingerprint 2, placement 2, layout 29, facade-exports 42, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { open, stat, readFile, lstat, realpath, readdir } from "fs/promises";
 import { join, resolve, relative, isAbsolute, dirname, sep } from "path";

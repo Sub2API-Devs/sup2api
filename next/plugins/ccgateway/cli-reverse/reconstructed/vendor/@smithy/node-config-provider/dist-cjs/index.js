@@ -4,6 +4,7 @@
  * third-party: @smithy/node-config-provider@2.3.0..3.0.0
  * pieces: chunk-3p78mpxm.js (1), chunk-cqstz3az.js (1)
  * attribution: cjs-require-graph 1, cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../property-provider/dist-cjs/index.js";

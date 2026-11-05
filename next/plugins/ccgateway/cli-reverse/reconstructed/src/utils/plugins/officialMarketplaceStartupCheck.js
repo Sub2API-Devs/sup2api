@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/officialMarketplaceStartupCheck.ts
  * pieces: chunk-czq1j3j2.js (5)
  * attribution: fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { env } from "../env.js";

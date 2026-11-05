@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-n51jggtb.js (5), chunk-vn9gygmp.js (2)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/running.prelude.js-gamvqz19.txt" with { type: "text" };
 import __cc_resource_1 from "../../../assets/file.prelude.js-234qxsta.txt" with { type: "text" };

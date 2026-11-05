@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7ktcr4q9.js (11)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, parse } from "path";
 import { mkdir, open, unlink, statfs } from "fs/promises";

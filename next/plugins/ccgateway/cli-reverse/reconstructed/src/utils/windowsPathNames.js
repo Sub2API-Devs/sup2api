@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-20pzh3fp.js (3), chunk-eannrp4k.js (8)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { trimEndChars, firstLineOf } from "./stringUtils.js";
 import { isReservedDeviceName } from "./windowsProfileFolders.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/types.ts
  * pieces: chunk-880p06ha.js (8)
  * attribution: fingerprint 4, layout 3, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { applySingleMotion } from "./motions.js";
 import { deferInit } from "../../runtime/deferred-init.js";

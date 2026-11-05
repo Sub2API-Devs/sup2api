@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-j8f885h1.js (17)
  * attribution: placement 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { checkedListLength } from "../dispatch/valueSizing.js";
 import { MAX_TREE_TEXT_CHARS } from "../ui/treeConstants.js";

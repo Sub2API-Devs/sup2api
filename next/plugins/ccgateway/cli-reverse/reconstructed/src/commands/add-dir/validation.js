@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/add-dir/validation.ts
  * pieces: chunk-4x0f46hf.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, dirname } from "path";
 import { stat } from "fs/promises";

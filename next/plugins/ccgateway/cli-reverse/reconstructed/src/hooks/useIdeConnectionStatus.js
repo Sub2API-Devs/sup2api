@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useIdeConnectionStatus.ts
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-5xgkngpb.js:3331660-3331977 fingerprint (2.1.88 match: useIdeConnectionStatus, 1)

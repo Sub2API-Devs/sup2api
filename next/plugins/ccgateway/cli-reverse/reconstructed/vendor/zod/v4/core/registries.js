@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-m4y44r15.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-m4y44r15.js:50476-50483 esm-layout

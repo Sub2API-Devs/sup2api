@@ -4,6 +4,7 @@
  * third-party: @smithy/eventstream-codec@4.2.13..4.2.14
  * pieces: chunk-ayc8mk37.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Crc32 } from "../../../@aws-crypto/crc32/build/module/index.js";
 

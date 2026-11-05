@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/modelOptions.ts
  * pieces: chunk-exfmq47h.js (1), chunk-vn3g7zt8.js (81), chunk-wefvmrb3.js (1)
  * attribution: fingerprint 17, placement 48, layout 13, callgraph-fingerprint 1, callgraph-witnessed 3, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getModelStrings, isModelAvailableOnProvider, resolveProviderModelId } from "./modelStrings.js";
 import { catalogFamilyDefaultKey, getModelUnavailabilityReason } from "./classifierModel.js";

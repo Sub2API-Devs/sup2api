@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/RemoteAgentTask/RemoteAgentTask.tsx
  * pieces: chunk-5xgkngpb.js (30), chunk-c7hntn0y.js (1), chunk-czq1j3j2.js (1), chunk-ex2q6ads.js (1), chunk-pqw3c7pj.js (1)
  * attribution: fingerprint 13, placement 3, layout 16, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { spareAuthIneligibility } from "../../entrypoints/warmSpare/claimCredentials.js";

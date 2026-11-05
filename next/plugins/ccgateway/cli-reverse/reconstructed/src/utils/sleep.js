@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sleep.ts
  * pieces: chunk-290tacpj.js (1), chunk-a2q0x549.js (1), chunk-yxxb6qww.js (11)
  * attribution: fingerprint 1, placement 4, facade-exports 5, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createAbortController } from "./abortController.js";
 import { deferInit, runDeferredInits } from "../../runtime/deferred-init.js";

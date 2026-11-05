@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-czq1j3j2.js (23)
  * attribution: placement 21, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { MAX_REPO_URL_CHARS } from "../../utils/detectRepository.js";
 import { getRootSession } from "../../bootstrap/state.js";

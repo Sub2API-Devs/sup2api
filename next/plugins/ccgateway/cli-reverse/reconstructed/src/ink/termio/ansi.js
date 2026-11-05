@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/ansi.ts
  * pieces: chunk-3zb8bxyj.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-3zb8bxyj.js:191-508 fingerprint (2.1.88 match: C0, 0.886)
 /**

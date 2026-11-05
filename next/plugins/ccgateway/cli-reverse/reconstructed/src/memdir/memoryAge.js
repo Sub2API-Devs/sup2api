@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memoryAge.ts
  * pieces: chunk-5xgkngpb.js (3), chunk-wb51jffc.js (1)
  * attribution: file-local 1, fingerprint 2, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-5xgkngpb.js:119634-119705 file-local

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/transitions.ts
  * pieces: chunk-880p06ha.js (37)
  * attribution: fingerprint 12, file-local 3, layout 7, placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   executeToggleCase,

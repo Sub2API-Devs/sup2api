@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/plugins/pluginCliCommands.ts
  * pieces: chunk-h30gsc89.js (38), chunk-mbyxant6.js (7)
  * attribution: placement 22, layout 17, fingerprint 5, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, join } from "path";
 import { createHash, randomUUID } from "crypto";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/installCounts.ts
  * pieces: chunk-5xgkngpb.js (15), chunk-b3a6nm9h.js (1)
  * attribution: placement 3, fingerprint 4, layout 8, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { randomBytes } from "crypto";

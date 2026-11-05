@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/concurrentSessions.ts
  * pieces: chunk-4ht4pcp0.js (1), chunk-exfmq47h.js (67), chunk-p21mddyh.js (1)
  * attribution: fingerprint 4, placement 65
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, basename, sep } from "path";
 import { writeFile, unlink, mkdir, chmod, readFile, lstat, readdir } from "fs/promises";

@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-pd6th42n.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPlainObject } from "../../../webapi/lib/validate.js";
 import { JOSENotSupported_3, JWKInvalid } from "../../../webapi/lib/content_encryption.js";

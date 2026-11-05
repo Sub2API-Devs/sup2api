@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInput.tsx
  * pieces: chunk-czq1j3j2.js (22)
  * attribution: fingerprint 2, sole-consumer 18, affinity 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getActiveAgentForInput } from "../../state/selectors.js";
 import { EMPTY_MESSAGES } from "../../state/inProgressToolUses.js";

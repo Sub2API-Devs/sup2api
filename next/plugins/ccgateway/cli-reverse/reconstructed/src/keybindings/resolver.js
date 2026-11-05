@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/resolver.ts
  * pieces: chunk-m2f3rb0f.js (18)
  * attribution: placement 9, fingerprint 2, layout 4, callgraph-fingerprint 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { chordsEqual, keyEventToKeystroke } from "./match.js";
 import { chordToString } from "./parser.js";

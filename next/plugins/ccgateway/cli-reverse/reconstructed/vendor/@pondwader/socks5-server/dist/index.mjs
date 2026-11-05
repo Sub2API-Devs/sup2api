@@ -4,6 +4,7 @@
  * third-party: @pondwader/socks5-server@1.0.10
  * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import net from "net";
 

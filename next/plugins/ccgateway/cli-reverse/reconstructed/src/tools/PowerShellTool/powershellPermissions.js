@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/powershellPermissions.ts
  * pieces: chunk-5xgkngpb.js (3), chunk-6zpsr8vx.js (19), chunk-z20c443b.js (2)
  * attribution: affinity 1, callgraph-fingerprint 1, fingerprint 7, layout 11, file-local 2, shared-adjacent 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve } from "path";
 import {

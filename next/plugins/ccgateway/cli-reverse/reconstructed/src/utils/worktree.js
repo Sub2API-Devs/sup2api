@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/worktree.ts
  * pieces: chunk-5xgkngpb.js (127), chunk-exfmq47h.js (7), chunk-z20c443b.js (6)
  * attribution: placement 14, facade-exports 49, layout 48, fingerprint 4, file-local 1, affinity 9, sole-consumer 14, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   sep,

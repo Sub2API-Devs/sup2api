@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tools/toolExecution.ts
  * pieces: chunk-5xgkngpb.js (130)
  * attribution: placement 101, fingerprint 7, layout 21, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { randomUUID } from "crypto";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/bashProvider.ts
  * pieces: chunk-5xgkngpb.js (27)
  * attribution: placement 11, layout 14, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, join } from "path";
 import { basename as basename_43, isAbsolute as isAbsolute_41 } from "path/win32";

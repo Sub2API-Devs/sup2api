@@ -4,6 +4,7 @@
  * third-party: readdirp@4.1.0..4.1.2
  * pieces: chunk-k7sq4jmf.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Readable } from "stream";
 import { lstat, stat as stat_2, readdir, realpath } from "fs/promises";

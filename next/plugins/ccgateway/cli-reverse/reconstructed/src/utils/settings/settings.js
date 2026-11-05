@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/settings.ts
  * pieces: chunk-5fn9rb8r.js (177), chunk-n0hwmqka.js (1), chunk-z20c443b.js (15), chunk-za46rn2f.js (1)
  * attribution: placement 174, facade-majority 3, layout 12, fingerprint 4, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, dirname, join, isAbsolute, parse, resolve, basename } from "path";
 import { lstatSync, readlinkSync } from "fs";

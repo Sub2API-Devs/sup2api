@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-vn3g7zt8.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_standardwebhooks } from "../../../../standardwebhooks/dist/index.js";

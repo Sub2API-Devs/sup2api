@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/credential-provider-web-identity@3.936.0
  * pieces: chunk-z5f8ea78.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFileSync } from "fs";
 import {

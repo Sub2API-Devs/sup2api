@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/ViewHookMode.tsx
  * pieces: chunk-5tpnqyt5.js (3), chunk-xrwmcqkn.js (1)
  * attribution: fingerprint 3, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { escapeControlCharsForDisplay, escapeControlChars } from "../../utils/stringUtils.js";

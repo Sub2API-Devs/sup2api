@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5e7d3nv9.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useContext, useRef, useReducer, useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
 import { TerminalSizeContext } from "../ink/terminalModes.js";

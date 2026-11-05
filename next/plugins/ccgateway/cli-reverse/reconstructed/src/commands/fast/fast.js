@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/fast/fast.tsx
  * pieces: chunk-0yw3taqg.js (1), chunk-5j7d17eb.js (1), chunk-73r4a0j7.js (1), chunk-czq1j3j2.js (10), chunk-n7hfhatx.js (8), chunk-wefvmrb3.js (2)
  * attribution: fingerprint 4, callgraph-fingerprint 1, layout 7, facade-exports 2, placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isFastModeEnabled,

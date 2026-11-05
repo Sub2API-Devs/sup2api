@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-20ssm8df.js (10)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonStringifyRaw, slowLogging, jsonParseRaw } from "../../utils/slowOperations.js";
 import {

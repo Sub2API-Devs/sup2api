@@ -4,6 +4,7 @@
  * third-party: @smithy/credential-provider-imds@4.3.0..4.3.9
  * pieces: chunk-s21g8j63.js (32)
  * attribution: esm-fingerprint 10, esm-layout 22
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { request } from "http";
 import { Buffer as ae } from "buffer";

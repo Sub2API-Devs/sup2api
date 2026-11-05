@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/onChangeAppState.ts
  * pieces: chunk-2bycp31m.js (1), chunk-ct61sn5h.js (22)
  * attribution: callgraph-fingerprint 1, placement 21, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isCompactPairWithheldFromRemote, isBridgeBindingForeign } from "../utils/sessionStorage.js";
 import { useShimmerAnimation } from "../components/Spinner/useShimmerAnimation.js";

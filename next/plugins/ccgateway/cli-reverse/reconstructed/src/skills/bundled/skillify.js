@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/skillify.ts
  * pieces: chunk-ne2890fx.js (2)
  * attribution: file-last-pair 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isBundledSkillGatedOff } from "../bundledSkillsGate.js";
 import { DESIGN } from "./bundledSkillNames.js";

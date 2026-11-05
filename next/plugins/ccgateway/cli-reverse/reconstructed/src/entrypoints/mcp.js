@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/mcp.ts
  * pieces: chunk-aw801t9e.js (7), chunk-be03srwe.js (6)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { array, stringSchema, zodStrictObject } from "../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../cli/handlers/util.js";

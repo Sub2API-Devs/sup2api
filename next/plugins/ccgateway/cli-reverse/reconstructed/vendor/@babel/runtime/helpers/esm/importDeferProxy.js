@@ -4,6 +4,7 @@
  * third-party: @babel/runtime@7.29.10
  * pieces: chunk-qq5knpkd.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-qq5knpkd.js:1585-1670 esm-layout

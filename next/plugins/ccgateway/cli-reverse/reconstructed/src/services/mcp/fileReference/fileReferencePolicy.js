@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-kzqbn6hv.js (10), chunk-xggcs0yq.js (22)
  * attribution: placement 25, layout 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isIdeOrSdkType, isPluginServerConfig } from "../types.js";
 import { moduleStore } from "../mcpClientCapabilities.js";

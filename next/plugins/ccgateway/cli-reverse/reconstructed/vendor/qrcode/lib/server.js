@@ -4,6 +4,7 @@
  * third-party: qrcode@1.5.4
  * pieces: chunk-s2h2kd6t.js (7)
  * attribution: esm-layout 2, esm-fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { require_can_promise } from "./can-promise.js";
 import { require_qrcode } from "./core/qrcode.js";

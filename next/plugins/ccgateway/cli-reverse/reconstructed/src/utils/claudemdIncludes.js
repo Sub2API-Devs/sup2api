@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vb7ng9fr.js (15)
  * attribution: placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lexMarkdown } from "./claudemd.js";
 import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";

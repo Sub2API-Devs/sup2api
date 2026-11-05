@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-trxp2tmn.js (15)
  * attribution: placement 11, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isRemoteRelayed } from "../utils/sessionShape.js";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";

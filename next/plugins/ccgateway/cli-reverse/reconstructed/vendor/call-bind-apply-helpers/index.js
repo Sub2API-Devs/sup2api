@@ -4,6 +4,7 @@
  * third-party: call-bind-apply-helpers@1.0.2
  * pieces: chunk-ww9agm6g.js (2)
  * attribution: cjs-layout 1, cjs-require-graph 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_function_bind } from "../function-bind/index.js";

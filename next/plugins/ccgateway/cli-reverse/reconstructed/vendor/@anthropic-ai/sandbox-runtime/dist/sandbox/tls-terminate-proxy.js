@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
  * pieces: chunk-qg41pqt6.js (26)
  * attribution: esm-layout 4, esm-fingerprint 22
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Duplex } from "stream";
 import { TLSSocket, checkServerIdentity } from "tls";

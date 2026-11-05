@@ -2,8 +2,8 @@
   "name": "original-vs-reconstructed-dist",
   "baseline": "original",
   "candidate": "reconstructed/dist",
-  "date": "2026-11-05T17:08:54.701Z",
-  "wallMs": 347098,
+  "date": "2026-11-05T19:21:17.352Z",
+  "wallMs": 398752,
   "bun": "1.4.4+38afee6c8",
   "node": "v24.20.0",
   "platform": "win32-x64",
@@ -219,7 +219,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2510,
+        "durationMs": 3051,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -229,7 +229,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2798,
+        "durationMs": 3366,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -251,7 +251,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 1485,
+        "durationMs": 1820,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -261,7 +261,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5251,
+        "durationMs": 6218,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -283,7 +283,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3293,
+        "durationMs": 3746,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -293,7 +293,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3488,
+        "durationMs": 3891,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -315,7 +315,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5344,
+        "durationMs": 5733,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -325,7 +325,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4428,
+        "durationMs": 4728,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -347,7 +347,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2484,
+        "durationMs": 2607,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -357,7 +357,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5300,
+        "durationMs": 5167,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -379,7 +379,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5778,
+        "durationMs": 5621,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -389,7 +389,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3281,
+        "durationMs": 3196,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -411,7 +411,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5449,
+        "durationMs": 5617,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -421,7 +421,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4420,
+        "durationMs": 4604,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -443,7 +443,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2342,
+        "durationMs": 2433,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -453,7 +453,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4727,
+        "durationMs": 5005,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -475,7 +475,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5140,
+        "durationMs": 5509,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -485,7 +485,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2908,
+        "durationMs": 3126,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -507,7 +507,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5126,
+        "durationMs": 6311,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -517,7 +517,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4243,
+        "durationMs": 5360,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -539,7 +539,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2310,
+        "durationMs": 3345,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -549,7 +549,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4725,
+        "durationMs": 8393,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -571,7 +571,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5122,
+        "durationMs": 4905,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -581,7 +581,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2914,
+        "durationMs": 3580,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -603,7 +603,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5115,
+        "durationMs": 6672,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -613,7 +613,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4224,
+        "durationMs": 5538,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -635,7 +635,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2263,
+        "durationMs": 3152,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -645,7 +645,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4592,
+        "durationMs": 5923,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -667,7 +667,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4884,
+        "durationMs": 6312,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -677,7 +677,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2838,
+        "durationMs": 3533,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -699,7 +699,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4775,
+        "durationMs": 6186,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -709,7 +709,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3918,
+        "durationMs": 5014,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -731,7 +731,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2065,
+        "durationMs": 2806,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -741,7 +741,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4334,
+        "durationMs": 5333,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -763,7 +763,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4723,
+        "durationMs": 5669,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -773,7 +773,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2695,
+        "durationMs": 3099,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -795,7 +795,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4807,
+        "durationMs": 5507,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -805,7 +805,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3991,
+        "durationMs": 4568,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -827,7 +827,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2163,
+        "durationMs": 2490,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -837,7 +837,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4561,
+        "durationMs": 5030,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -859,7 +859,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 4874,
+        "durationMs": 5527,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -869,7 +869,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 2752,
+        "durationMs": 3086,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -891,7 +891,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4865,
+        "durationMs": 5708,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -901,7 +901,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4004,
+        "durationMs": 4683,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -926,7 +926,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2096,
+        "durationMs": 2576,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -936,7 +936,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3892,
+        "durationMs": 5399,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -958,7 +958,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4335,
+        "durationMs": 6001,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -968,7 +968,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5114,
+        "durationMs": 3369,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -990,7 +990,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 2671,
+        "durationMs": 5289,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -1000,7 +1000,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 4060,
+        "durationMs": 4213,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -1022,7 +1022,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 14320,
+        "durationMs": 16502,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -1032,7 +1032,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 21919,
+        "durationMs": 21280,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -1124,7 +1124,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 2696,
+        "durationMs": 4446,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -1134,7 +1134,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 3586,
+        "durationMs": 3396,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -1156,7 +1156,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4677,
+        "durationMs": 5080,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -1166,7 +1166,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4870,
+        "durationMs": 5246,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -1310,7 +1310,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 23256,
+        "durationMs": 26158,
         "apiRequests": 1,
         "externalRequests": [
           "CONNECT api.anthropic.com:443",
@@ -1382,7 +1382,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 25190,
+        "durationMs": 28732,
         "apiRequests": 1,
         "externalRequests": [
           "CONNECT api.anthropic.com:443",
@@ -1746,7 +1746,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3674,
+        "durationMs": 3183,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -1756,7 +1756,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4005,
+        "durationMs": 4918,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -1900,7 +1900,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2665,
+        "durationMs": 3494,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -1910,7 +1910,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3352,
+        "durationMs": 4106,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2056,7 +2056,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2680,
+        "durationMs": 5073,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2066,7 +2066,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3523,
+        "durationMs": 4935,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2210,7 +2210,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2825,
+        "durationMs": 6389,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2220,7 +2220,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4084,
+        "durationMs": 5137,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2366,7 +2366,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2786,
+        "durationMs": 5049,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2376,7 +2376,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4147,
+        "durationMs": 5732,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2520,7 +2520,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 2875,
+        "durationMs": 7811,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2530,7 +2530,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4498,
+        "durationMs": 7729,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2673,7 +2673,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3106,
+        "durationMs": 7438,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2683,7 +2683,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5795,
+        "durationMs": 7331,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -2812,7 +2812,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 3720,
+        "durationMs": 8481,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -2822,7 +2822,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 4275,
+        "durationMs": 8683,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -3551,7 +3551,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5137,
+        "durationMs": 9716,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -3561,7 +3561,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6213,
+        "durationMs": 9452,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -4443,7 +4443,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4680,
+        "durationMs": 11985,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -4453,7 +4453,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6465,
+        "durationMs": 17157,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -5337,7 +5337,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 5800,
+        "durationMs": 9627,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -5347,7 +5347,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 6032,
+        "durationMs": 9565,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -5491,7 +5491,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4797,
+        "durationMs": 8997,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -5501,7 +5501,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4971,
+        "durationMs": 11906,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -5767,7 +5767,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7234,
+        "durationMs": 14956,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -5777,7 +5777,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7434,
+        "durationMs": 14568,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -6257,7 +6257,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3062,
+        "durationMs": 6175,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6267,7 +6267,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3229,
+        "durationMs": 4009,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6289,7 +6289,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 18278,
+        "durationMs": 27268,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6299,7 +6299,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 27983,
+        "durationMs": 35426,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6387,7 +6387,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4483,
+        "durationMs": 2898,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6397,7 +6397,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3003,
+        "durationMs": 7220,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6419,7 +6419,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5087,
+        "durationMs": 6639,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6429,7 +6429,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4178,
+        "durationMs": 5190,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6451,7 +6451,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5172,
+        "durationMs": 6978,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6461,7 +6461,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4269,
+        "durationMs": 4568,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6485,7 +6485,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5095,
+        "durationMs": 8044,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6495,7 +6495,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3543,
+        "durationMs": 6528,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6519,7 +6519,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4551,
+        "durationMs": 7451,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6529,7 +6529,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3681,
+        "durationMs": 7014,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6551,7 +6551,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4665,
+        "durationMs": 6605,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6561,7 +6561,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3673,
+        "durationMs": 6430,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -6583,7 +6583,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 5706,
+        "durationMs": 6468,
         "apiRequests": 0,
         "externalRequests": [
           "CONNECT api.anthropic.com:443",
@@ -6605,7 +6605,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 4720,
+        "durationMs": 9969,
         "apiRequests": 0,
         "externalRequests": [
           "CONNECT api.anthropic.com:443",
@@ -6664,7 +6664,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 12943,
+        "durationMs": 13684,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -6674,7 +6674,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 11876,
+        "durationMs": 10909,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -6822,7 +6822,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4411,
+        "durationMs": 8255,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -6832,7 +6832,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 12265,
+        "durationMs": 10473,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -7098,7 +7098,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8887,
+        "durationMs": 11613,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -7108,7 +7108,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 10351,
+        "durationMs": 10932,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -7374,7 +7374,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6917,
+        "durationMs": 9334,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -7384,7 +7384,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 9644,
+        "durationMs": 8843,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -8264,7 +8264,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 10655,
+        "durationMs": 10075,
         "apiRequests": 9,
         "externalRequests": [],
         "leaks": [],
@@ -8274,7 +8274,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 10371,
+        "durationMs": 12659,
         "apiRequests": 9,
         "externalRequests": [],
         "leaks": [],
@@ -9748,7 +9748,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8017,
+        "durationMs": 7434,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -9758,7 +9758,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8325,
+        "durationMs": 5672,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -10028,7 +10028,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 10306,
+        "durationMs": 10545,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -10038,7 +10038,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 12599,
+        "durationMs": 8844,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -10919,7 +10919,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5867,
+        "durationMs": 4754,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -10929,7 +10929,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7083,
+        "durationMs": 8048,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -11819,7 +11819,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8687,
+        "durationMs": 8982,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -11829,7 +11829,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8429,
+        "durationMs": 8794,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -12234,7 +12234,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6508,
+        "durationMs": 7505,
         "apiRequests": 4,
         "externalRequests": [],
         "leaks": [],
@@ -12244,7 +12244,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7098,
+        "durationMs": 8032,
         "apiRequests": 4,
         "externalRequests": [],
         "leaks": [],
@@ -12719,7 +12719,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5118,
+        "durationMs": 5538,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -12729,7 +12729,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6986,
+        "durationMs": 7713,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -13131,7 +13131,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6796,
+        "durationMs": 7659,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -13141,7 +13141,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6863,
+        "durationMs": 7542,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -13541,7 +13541,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6040,
+        "durationMs": 7745,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -13551,7 +13551,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7195,
+        "durationMs": 9591,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -13951,7 +13951,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4921,
+        "durationMs": 4465,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -13961,7 +13961,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6552,
+        "durationMs": 5338,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -14361,7 +14361,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7177,
+        "durationMs": 9210,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -14371,7 +14371,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7129,
+        "durationMs": 7947,
         "apiRequests": 6,
         "externalRequests": [],
         "leaks": [],
@@ -15001,7 +15001,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5871,
+        "durationMs": 7235,
         "apiRequests": 5,
         "externalRequests": [],
         "leaks": [],
@@ -15011,7 +15011,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8823,
+        "durationMs": 7991,
         "apiRequests": 5,
         "externalRequests": [],
         "leaks": [],
@@ -15711,7 +15711,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5285,
+        "durationMs": 5987,
         "apiRequests": 5,
         "externalRequests": [],
         "leaks": [],
@@ -15721,7 +15721,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5439,
+        "durationMs": 8080,
         "apiRequests": 5,
         "externalRequests": [],
         "leaks": [],
@@ -16420,7 +16420,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6623,
+        "durationMs": 8002,
         "apiRequests": 5,
         "externalRequests": [],
         "leaks": [],
@@ -16430,7 +16430,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7103,
+        "durationMs": 6856,
         "apiRequests": 5,
         "externalRequests": [],
         "leaks": [],
@@ -17134,7 +17134,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5917,
+        "durationMs": 3535,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -17144,7 +17144,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6159,
+        "durationMs": 6123,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -17152,7 +17152,7 @@
         "problems": []
       },
       "diffs": [],
-      "rawDiffCount": 31,
+      "rawDiffCount": 29,
       "normalizationHits": {
         "path:tree": 3,
         "path:cwd": 27,
@@ -17415,7 +17415,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7515,
+        "durationMs": 8032,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -17425,7 +17425,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7596,
+        "durationMs": 8067,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -17827,7 +17827,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4027,
+        "durationMs": 4109,
         "apiRequests": 7,
         "externalRequests": [],
         "leaks": [],
@@ -17837,7 +17837,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 9037,
+        "durationMs": 8433,
         "apiRequests": 7,
         "externalRequests": [],
         "leaks": [],
@@ -19049,7 +19049,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 4884,
+        "durationMs": 4946,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -19059,7 +19059,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5218,
+        "durationMs": 5191,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -19286,7 +19286,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6114,
+        "durationMs": 5031,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -19296,7 +19296,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 5040,
+        "durationMs": 5166,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -19450,7 +19450,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6055,
+        "durationMs": 6134,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -19460,7 +19460,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6230,
+        "durationMs": 5209,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -19945,7 +19945,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 3654,
+        "durationMs": 3528,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -19955,7 +19955,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6026,
+        "durationMs": 5772,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -20100,7 +20100,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 6524,
+        "durationMs": 6193,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -20110,7 +20110,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 9106,
+        "durationMs": 8808,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -20515,7 +20515,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 36751,
+        "durationMs": 37583,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -20525,7 +20525,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 43438,
+        "durationMs": 42600,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -20796,7 +20796,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 14062,
+        "durationMs": 14710,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -20806,7 +20806,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 16067,
+        "durationMs": 18107,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -20993,7 +20993,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 8164,
+        "durationMs": 10014,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -21003,7 +21003,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 12159,
+        "durationMs": 11482,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -21060,7 +21060,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 7522,
+        "durationMs": 9172,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -21070,7 +21070,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 10498,
+        "durationMs": 10779,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -21403,7 +21403,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 13148,
+        "durationMs": 12729,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -21413,7 +21413,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 15507,
+        "durationMs": 14979,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -21897,7 +21897,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8212,
+        "durationMs": 8438,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -21907,7 +21907,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8576,
+        "durationMs": 10200,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -22271,7 +22271,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 20347,
+        "durationMs": 21189,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -22281,7 +22281,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 24896,
+        "durationMs": 27790,
         "apiRequests": 3,
         "externalRequests": [],
         "leaks": [],
@@ -22786,7 +22786,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 8303,
+        "durationMs": 8691,
         "apiRequests": 4,
         "externalRequests": [],
         "leaks": [],
@@ -22796,7 +22796,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 10920,
+        "durationMs": 10334,
         "apiRequests": 4,
         "externalRequests": [],
         "leaks": [],
@@ -23441,7 +23441,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 23931,
+        "durationMs": 24491,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -23451,7 +23451,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 25032,
+        "durationMs": 25918,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -23459,7 +23459,7 @@
         "problems": []
       },
       "diffs": [],
-      "rawDiffCount": 34,
+      "rawDiffCount": 32,
       "normalizationHits": {
         "uuid": 5,
         "path:cwd": 20,
@@ -23722,7 +23722,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 22237,
+        "durationMs": 22897,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -23732,7 +23732,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 22769,
+        "durationMs": 23724,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -24002,7 +24002,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 21639,
+        "durationMs": 22466,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -24012,7 +24012,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 22166,
+        "durationMs": 23043,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -24159,7 +24159,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 22792,
+        "durationMs": 23111,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -24169,7 +24169,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 23245,
+        "durationMs": 23606,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -24316,7 +24316,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 23048,
+        "durationMs": 23287,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24326,7 +24326,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 23495,
+        "durationMs": 23919,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24351,7 +24351,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 19795,
+        "durationMs": 20013,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24361,7 +24361,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 20290,
+        "durationMs": 20501,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24386,7 +24386,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 26678,
+        "durationMs": 26796,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -24396,7 +24396,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 27434,
+        "durationMs": 27427,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -24404,7 +24404,7 @@
         "problems": []
       },
       "diffs": [],
-      "rawDiffCount": 25,
+      "rawDiffCount": 24,
       "normalizationHits": {
         "uuid": 3,
         "path:cwd": 17,
@@ -24544,7 +24544,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 22882,
+        "durationMs": 23255,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24554,7 +24554,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 24297,
+        "durationMs": 23764,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24579,7 +24579,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 19906,
+        "durationMs": 20069,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24589,7 +24589,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 20861,
+        "durationMs": 21066,
         "apiRequests": 0,
         "externalRequests": [],
         "leaks": [],
@@ -24615,7 +24615,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 33067,
+        "durationMs": 33415,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -24625,7 +24625,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 33651,
+        "durationMs": 34241,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -24633,7 +24633,7 @@
         "problems": []
       },
       "diffs": [],
-      "rawDiffCount": 52,
+      "rawDiffCount": 49,
       "normalizationHits": {
         "uuid": 7,
         "path:cwd": 36,
@@ -24913,7 +24913,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 23049,
+        "durationMs": 22788,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -24923,7 +24923,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 25040,
+        "durationMs": 24343,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -25220,7 +25220,7 @@
       "baseline": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 5005,
+        "durationMs": 5656,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -25230,7 +25230,7 @@
       "candidate": {
         "exitCode": 1,
         "timedOut": false,
-        "durationMs": 6345,
+        "durationMs": 6475,
         "apiRequests": 1,
         "externalRequests": [],
         "leaks": [],
@@ -25393,7 +25393,7 @@
       "baseline": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 24873,
+        "durationMs": 24564,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -25403,7 +25403,7 @@
       "candidate": {
         "exitCode": 0,
         "timedOut": false,
-        "durationMs": 25863,
+        "durationMs": 25231,
         "apiRequests": 2,
         "externalRequests": [],
         "leaks": [],
@@ -25411,7 +25411,7 @@
         "problems": []
       },
       "diffs": [],
-      "rawDiffCount": 34,
+      "rawDiffCount": 36,
       "normalizationHits": {
         "uuid": 5,
         "path:cwd": 22,

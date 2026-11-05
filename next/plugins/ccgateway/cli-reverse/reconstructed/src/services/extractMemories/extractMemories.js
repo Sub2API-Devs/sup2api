@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/extractMemories/extractMemories.ts
  * pieces: chunk-70rvh5wm.js (29), chunk-t5chern7.js (1)
  * attribution: placement 25, fingerprint 1, file-local 1, layout 2, facade-majority 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize, sep, basename } from "path";
 import { booleanishSchema } from "../../utils/spellcheck.js";

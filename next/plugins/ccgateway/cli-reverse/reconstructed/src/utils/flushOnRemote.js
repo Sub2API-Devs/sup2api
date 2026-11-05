@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ke6sf0r9.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isStorageV5Enabled } from "./hoverRest.js";
 import { primeFileDescriptorCredentials } from "./fileDescriptorCredentials.js";

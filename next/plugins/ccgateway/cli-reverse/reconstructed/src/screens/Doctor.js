@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/screens/Doctor.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-cckh1dq3.js (1), chunk-ejn7s5p2.js (1), chunk-exfmq47h.js (1)
  * attribution: fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getModelMaxOutputTokens } from "../utils/context.js";
 import { identity as identity_2 } from "../utils/identity.js";

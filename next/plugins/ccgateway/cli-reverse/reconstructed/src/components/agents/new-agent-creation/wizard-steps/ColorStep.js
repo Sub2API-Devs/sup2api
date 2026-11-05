@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/new-agent-creation/wizard-steps/ColorStep.tsx
  * pieces: chunk-j6tt9nsa.js (4)
  * attribution: placement 3, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production } from "../../../../../vendor/react/cjs/react.production.js";
 import { notificationChannelLabel } from "../../../../commands/config/configSettings.js";

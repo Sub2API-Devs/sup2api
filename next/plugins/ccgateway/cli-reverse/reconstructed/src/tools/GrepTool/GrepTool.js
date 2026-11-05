@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GrepTool/GrepTool.ts
  * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 10, fingerprint 5, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, sep } from "path";
 import { __toESM } from "../../../runtime/bun-runtime.js";

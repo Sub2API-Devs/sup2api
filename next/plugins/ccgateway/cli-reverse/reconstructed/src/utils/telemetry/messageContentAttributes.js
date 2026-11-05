@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-a0xc6evk.js (8), chunk-s584m62r.js (11)
  * attribution: placement 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import {

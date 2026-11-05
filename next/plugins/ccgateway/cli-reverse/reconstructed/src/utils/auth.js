@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/auth.ts
  * pieces: chunk-5qsfbz2c.js (1), chunk-5xgkngpb.js (5), chunk-c4qa5qn0.js (2), chunk-exfmq47h.js (368), chunk-h3xdf7nq.js (1), chunk-ma8ytfb3.js (2), chunk-vgaj51qh.js (1), chunk-z20c443b.js (1)
  * attribution: fingerprint 20, affinity 5, placement 8, layout 103, facade-majority 244, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFile, stat, realpath } from "fs/promises";
 import { join, dirname, resolve } from "path";

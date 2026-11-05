@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/resolveDefaultShell.ts
  * pieces: chunk-zjspdyjm.js (1)
  * attribution: callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getInitialSettings } from "../settings/settings.js";
 import { isBashAvailable, isPowerShellToolEnabled } from "./shellToolUtils.js";

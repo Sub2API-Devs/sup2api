@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/AppState.tsx
  * pieces: chunk-77bb8s6j.js (1), chunk-swe0kb5q.js (8), chunk-t11pnrxp.js (12)
  * attribution: callgraph-witnessed 2, placement 16, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

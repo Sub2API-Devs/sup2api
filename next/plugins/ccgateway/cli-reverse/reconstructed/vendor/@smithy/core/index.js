@@ -4,6 +4,7 @@
  * third-party: @smithy/core@3.30.0
  * pieces: chunk-1fkvp0h1.js (2), chunk-3p78mpxm.js (1), chunk-7tj1as7s.js (1)
  * attribution: cjs-layout 3, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_tslib } from "../../tslib/tslib.js";

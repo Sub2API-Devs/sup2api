@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/api-logs@0.208.0..0.209.0
  * pieces: chunk-exfmq47h.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-exfmq47h.js:662236-662290 esm-layout

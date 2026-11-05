@@ -4,6 +4,7 @@
  * third-party: chokidar@6.0.0
  * pieces: chunk-k7sq4jmf.js (14)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import "path";
 import * as pathModule_2 from "path";

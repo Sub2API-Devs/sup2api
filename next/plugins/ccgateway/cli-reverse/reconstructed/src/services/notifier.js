@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/notifier.ts
  * pieces: chunk-3xmyjkbh.js (6)
  * attribution: fingerprint 5, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolveSetting } from "../utils/settings/userIntentSettings.js";
 import { executeNotificationHooks } from "../utils/hooks.js";

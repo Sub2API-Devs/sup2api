@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/review/reviewRemote.ts
  * pieces: chunk-53f0ndkv.js (6), chunk-a2r96cyy.js (1), chunk-pp134gqz.js (20)
  * attribution: placement 26, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { resolve } from "path";

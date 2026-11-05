@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2nmj44ge.js (2), chunk-715mxt6r.js (43)
  * attribution: placement 45
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, resolve, dirname, basename } from "path";
 import { createHash, randomBytes } from "crypto";

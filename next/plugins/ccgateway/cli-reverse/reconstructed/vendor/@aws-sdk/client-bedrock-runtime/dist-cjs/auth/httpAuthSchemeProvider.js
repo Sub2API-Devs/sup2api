@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
  * pieces: chunk-ayc8mk37.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_middleware_host_header_2 } from "../../../middleware-host-header/dist-cjs/index.js";

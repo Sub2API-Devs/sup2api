@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/claude-agent-sdk/query.js
  * pieces: chunk-tp1gh0pb.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { Stream } from "../../../src/utils/stream.js";

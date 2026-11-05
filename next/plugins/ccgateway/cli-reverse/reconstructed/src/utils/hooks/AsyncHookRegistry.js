@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/AsyncHookRegistry.ts
  * pieces: chunk-55y9c0xp.js (1), chunk-5xgkngpb.js (10), chunk-czq1j3j2.js (1)
  * attribution: placement 7, fingerprint 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../debug.js";
 import {

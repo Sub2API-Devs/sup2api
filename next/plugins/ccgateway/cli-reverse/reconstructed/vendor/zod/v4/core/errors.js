@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-m4y44r15.js (8)
  * attribution: esm-fingerprint 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonStringifyReplacer } from "./util.js";
 import { $constructor } from "./core.js";

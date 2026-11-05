@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/StatusIcon.tsx
  * pieces: chunk-n6w10qzg.js (1), chunk-t9559jxw.js (8)
  * attribution: fingerprint 2, placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { BLACK_CIRCLE, BULLET } from "../../constants/figures.js";

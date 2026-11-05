@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/events/emitter.ts
  * pieces: chunk-xd1cb3xs.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { EventEmitter as EventEmitter_2 } from "events";
 import { InkEvent } from "./event.js";

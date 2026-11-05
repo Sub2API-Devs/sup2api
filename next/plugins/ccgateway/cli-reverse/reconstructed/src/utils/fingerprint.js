@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fingerprint.ts
  * pieces: chunk-7jxyna5q.js (4)
  * attribution: fingerprint 1, file-local 1, callgraph-fingerprint 1, file-last-pair 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 

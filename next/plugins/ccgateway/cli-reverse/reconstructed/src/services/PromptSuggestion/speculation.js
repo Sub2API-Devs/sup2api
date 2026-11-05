@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/PromptSuggestion/speculation.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-n51jggtb.js (1), chunk-rypxzpmd.js (2)
  * attribution: callgraph-fingerprint 1, fingerprint 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CANCEL_MESSAGE } from "../../utils/messages.js";
 import { generateSuggestion, SUGGESTION_PROMPT } from "./promptSuggestion.js";

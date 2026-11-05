@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-jndyh8cy.js (13)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, relative, sep, isAbsolute, join } from "path";
 import { fetchEnvironmentsAndPools } from "../../utils/teleport/selfHostedPool.js";

@@ -4,6 +4,7 @@
  * third-party: parse5@7.2.0..7.2.1
  * pieces: chunk-p9ac6cnb.js (9)
  * attribution: esm-layout 5, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getDecoder } from "../../../entities/lib/esm/decode.js";
 import { uint16Array, uint16Array_2 } from "../../../entities/lib/esm/generated/decode-data-xml.js";

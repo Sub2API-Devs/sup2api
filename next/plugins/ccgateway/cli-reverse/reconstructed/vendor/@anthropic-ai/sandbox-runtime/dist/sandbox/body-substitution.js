@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
  * pieces: chunk-qg41pqt6.js (4)
  * attribution: esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Transform } from "stream";
 import { BODYLESS_METHODS } from "./request-filter.js";

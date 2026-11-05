@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/fetchTelemetry.ts
  * pieces: chunk-2jb250pa.js (1), chunk-395x6mw0.js (5)
  * attribution: fingerprint 5, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseUrlScheme, decodePercentRuns } from "../redaction/urlParsing.js";
 import { stripLeadingSpaceAndNewlines } from "../redaction/urlRedaction.js";

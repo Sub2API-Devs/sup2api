@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/BackgroundTaskStatus.tsx
  * pieces: chunk-34x4ecrv.js (1), chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (4), chunk-wjygkcr4.js (1)
  * attribution: fingerprint 5, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";
 import { isParkedMcpTask, skipsTranscript, isLocalScriptTask } from "../../tasks/taskKinds.js";

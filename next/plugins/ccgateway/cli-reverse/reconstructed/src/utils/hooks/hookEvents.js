@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hookEvents.ts
  * pieces: chunk-5xgkngpb.js (4), chunk-jd53r7dh.js (1), chunk-keyy05re.js (1)
  * attribution: placement 2, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getHookEventEmitState, writeHistoryEntry } from "./hookEventHelpers.js";
 import { HOOK_EVENTS, emitHookProgress } from "../../entrypoints/sdk/coreSchemas.js";

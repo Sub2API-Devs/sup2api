@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-asf5gh8x.js (42)
  * attribution: placement 33, layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname, relative, sep } from "path";
 import { constants } from "fs";

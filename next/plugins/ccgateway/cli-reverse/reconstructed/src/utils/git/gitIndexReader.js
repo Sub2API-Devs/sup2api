@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-01kgd7xg.js (56), chunk-7wx1ncrk.js (1)
  * attribution: placement 57
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { sep } from "path";

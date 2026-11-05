@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cliHighlight.ts
  * pieces: chunk-exfmq47h.js (3), chunk-nfa5pp07.js (10)
  * attribution: placement 6, sole-consumer 6, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sequential } from "./sequential.js";
 import { stripPrefix } from "./stringUtils.js";

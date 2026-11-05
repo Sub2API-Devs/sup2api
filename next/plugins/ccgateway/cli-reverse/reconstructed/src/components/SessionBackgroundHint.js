@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/SessionBackgroundHint.tsx
  * pieces: chunk-czq1j3j2.js (6)
  * attribution: sole-consumer 1, affinity 1, fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppState } from "../state/AppState.js";

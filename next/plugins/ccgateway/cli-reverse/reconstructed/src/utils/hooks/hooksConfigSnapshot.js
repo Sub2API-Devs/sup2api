@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hooksConfigSnapshot.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-ybq8sbnv.js (33)
  * attribution: callgraph-fingerprint 1, placement 31, fingerprint 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPersonalConfigRestricted } from "../personalConfigRestriction.js";
 import {

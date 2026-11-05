@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/lsp/LSPClient.ts
  * pieces: chunk-mvgr3jmb.js (9)
  * attribution: sole-consumer 7, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_vscode_jsonrpc } from "../../../vendor/vscode-jsonrpc/lib/node/main.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/utils.ts
  * pieces: chunk-5xgkngpb.js (5), chunk-cec8js9j.js (34), chunk-fmnbrxwy.js (1)
  * attribution: placement 10, sole-consumer 1, fingerprint 10, layout 13, file-local 5, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, parse } from "path";
 import { HostScoped } from "../../utils/hostScoped.js";

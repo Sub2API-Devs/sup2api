@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/voice.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-77bb8s6j.js (8), chunk-m7rax0fa.js (2)
  * attribution: fingerprint 3, placement 7, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

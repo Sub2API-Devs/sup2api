@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-m4y44r15.js (92)
  * attribution: esm-fingerprint 73, esm-layout 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { $ZodCheck } from "../core/checks.js";
 import {

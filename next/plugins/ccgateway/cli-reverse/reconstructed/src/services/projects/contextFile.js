@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-d830cg0f.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-d830cg0f.js:191-6278 placement
 var CONTINUE_IN_PROJECTS_SKILL_NAME = "send-to-project";

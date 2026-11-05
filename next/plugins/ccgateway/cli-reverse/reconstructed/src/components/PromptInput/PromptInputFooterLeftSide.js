@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputFooterLeftSide.tsx
  * pieces: chunk-0jvevkh1.js (1), chunk-czq1j3j2.js (31)
  * attribution: fingerprint 5, placement 18, layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parse } from "path";
 import { formatDuration, truncateToWidth } from "../../utils/format.js";

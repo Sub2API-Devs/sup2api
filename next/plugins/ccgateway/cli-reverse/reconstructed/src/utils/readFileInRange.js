@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/readFileInRange.ts
  * pieces: chunk-z68qgrbt.js (20)
  * attribution: fingerprint 7, layout 3, placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stat, readFile, open, readlink } from "fs/promises";
 import { fstat, createReadStream, constants } from "fs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/remoteIO.ts
  * pieces: chunk-1kk50rk6.js (56)
  * attribution: placement 53, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PassThrough } from "stream";
 import { URL as Ls } from "url";

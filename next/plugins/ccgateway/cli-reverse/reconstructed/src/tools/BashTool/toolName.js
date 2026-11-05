@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/toolName.ts
  * pieces: chunk-p223w7hd.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-p223w7hd.js:2334-2348 fingerprint (2.1.88 match: BASH_TOOL_NAME, 1)

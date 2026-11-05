@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/context.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-exfmq47h.js (3)
  * attribution: callgraph-fingerprint 1, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getCachedClientData, getFetchedClientData } from "./config.js";
 import { getCanonicalName } from "./model/canonicalModelName.js";

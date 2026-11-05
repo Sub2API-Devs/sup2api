@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-asf5gh8x.js (47)
  * attribution: placement 45, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir, tmpdir } from "os";
 import { join, dirname, basename } from "path";

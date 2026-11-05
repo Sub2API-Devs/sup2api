@@ -4,6 +4,7 @@
  * third-party: chokidar@6.0.0
  * pieces: chunk-k7sq4jmf.js (5)
  * attribution: esm-layout 1, esm-fingerprint 1, affinity 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { type as St } from "os";
 import { lstat, stat as stat_2, open, realpath } from "fs/promises";

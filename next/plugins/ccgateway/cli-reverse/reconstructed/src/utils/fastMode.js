@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fastMode.ts
  * pieces: chunk-avy0g5d4.js (2), chunk-exfmq47h.js (63), chunk-x2n44e87.js (1)
  * attribution: callgraph-fingerprint 1, affinity 1, callgraph-witnessed 1, layout 34, fingerprint 13, placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getAPIProvider } from "./model/providers.js";
 import { env } from "./env.js";

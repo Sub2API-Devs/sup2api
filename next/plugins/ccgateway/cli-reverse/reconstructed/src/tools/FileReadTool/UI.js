@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/UI.tsx
  * pieces: chunk-rt8b7gmx.js (3), chunk-xm6m8ykh.js (3)
  * attribution: affinity 1, fingerprint 3, callgraph-witnessed 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep } from "path";
 import { isDiskless } from "../../bootstrap/state.js";

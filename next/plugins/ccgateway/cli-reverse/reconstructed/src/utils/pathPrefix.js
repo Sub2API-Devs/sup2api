@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-56w0sgh9.js (4), chunk-dce9g6nv.js (1)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { relative, sep, isAbsolute } from "path";
 import { getPlatform } from "./platform.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teammate.ts
  * pieces: chunk-dtzk9y3z.js (27), chunk-sc94d59g.js (1)
  * attribution: facade-exports 24, layout 2, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { teammateContextStorage, getTeammateContext } from "./teammateContext.js";
 import { call } from "../commands/exit/exit.js";

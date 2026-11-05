@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportRepoMismatchDialog.tsx
  * pieces: chunk-th6qsjd3.js (3)
  * attribution: sole-consumer 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
 import {

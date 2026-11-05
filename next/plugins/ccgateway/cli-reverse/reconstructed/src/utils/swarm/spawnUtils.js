@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/spawnUtils.ts
  * pieces: chunk-355mdh7x.js (1), chunk-5j7d17eb.js (1)
  * attribution: fingerprint 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { buildInheritedCliFlags as buildInheritedCliFlags_2 } from "../../tools/shared/spawnMultiAgent.js";
 import { proactivityLevelIfActive } from "../proactivityLevel.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-nrv8bm0w.js (27)
  * attribution: placement 27
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, join, basename, sep } from "path";
 import { realpath } from "fs/promises";

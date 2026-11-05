@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/inputModes.ts
  * pieces: chunk-9yrsj5bk.js (5)
  * attribution: shared-adjacent 1, fingerprint 1, layout 1, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-9yrsj5bk.js:191-262 shared-adjacent (2.1.88 match: prependModeCharacterToInput, 1)

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/windowsPaths.ts
  * pieces: chunk-3yhwrhy0.js (3), chunk-5xgkngpb.js (1)
  * attribution: fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathWin32Module from "path/win32";
 import { getPlatform } from "./platform.js";

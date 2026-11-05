@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-mhn0amzz.js (24)
  * attribution: affinity 1, placement 23
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { fileURLToPath } from "url";
 import { isAbsolute, sep, dirname, join, delimiter } from "path";

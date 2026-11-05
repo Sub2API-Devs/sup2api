@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/exporter-metrics-otlp-proto@0.208.0
  * pieces: chunk-hvqbmbtb.js (1)
  * attribution: cjs-require-graph 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_OTLPMetricExporter } from "../../../../exporter-metrics-otlp-http/build/src/platform/node/OTLPMetricExporter.js";

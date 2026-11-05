@@ -4,6 +4,7 @@
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
  * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createClientLogger } from "../../../../../@azure/logger/dist/esm/index.js";
 import { AbortError_2 } from "../restError.js";

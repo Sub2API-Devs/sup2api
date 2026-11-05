@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/errorUtils.ts
  * pieces: chunk-7jxyna5q.js (2), chunk-k1t1w9mg.js (25), chunk-pcv9zvvv.js (14)
  * attribution: placement 26, fingerprint 3, layout 9, file-local 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { STATUS_CODES } from "http";
 import { APIError, APIConnectionError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";

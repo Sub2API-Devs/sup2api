@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mtls.ts
  * pieces: chunk-1hnjmk23.js (2), chunk-355mdh7x.js (41)
  * attribution: sole-consumer 1, fingerprint 3, placement 2, layout 14, facade-majority 23
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createPrivateKey, X509Certificate } from "crypto";
 import { Agent } from "https";

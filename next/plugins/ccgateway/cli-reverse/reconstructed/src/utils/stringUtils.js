@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/stringUtils.ts
  * pieces: chunk-7kayq7nc.js (2), chunk-8824h7w7.js (51), chunk-z20c443b.js (1)
  * attribution: placement 26, fingerprint 3, callgraph-witnessed 2, layout 20, file-local 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { MAX_SEED_NAME_CHARS } from "./swarm/teammateIds.js";
 import { replaceControlChars } from "./resultError.js";

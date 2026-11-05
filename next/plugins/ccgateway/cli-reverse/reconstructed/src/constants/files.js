@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/files.ts
  * pieces: chunk-2x8a0yk9.js (2)
  * attribution: fingerprint 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-2x8a0yk9.js:659-1577 fingerprint (2.1.88 match: BINARY_EXTENSIONS, 0.867)

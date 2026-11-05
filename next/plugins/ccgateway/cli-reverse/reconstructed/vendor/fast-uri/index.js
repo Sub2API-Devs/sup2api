@@ -4,6 +4,7 @@
  * third-party: fast-uri@3.1.2
  * pieces: chunk-xcs4sv9h.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_utils } from "./lib/utils.js";

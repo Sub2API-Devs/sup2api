@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/utils.ts
  * pieces: chunk-wvevfede.js (11)
  * attribution: affinity 1, fingerprint 3, layout 5, callgraph-witnessed 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../../utils/env.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

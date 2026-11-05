@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-9x09krra.js (11)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stat, realpath, mkdir, lstat } from "fs/promises";
 import { dirname, basename, join, relative, sep, resolve, posix } from "path";

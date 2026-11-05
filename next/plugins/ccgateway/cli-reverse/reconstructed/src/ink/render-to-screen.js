@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-to-screen.ts
  * pieces: chunk-2avr6cej.js (2), chunk-hnxhr3bs.js (1)
  * attribution: fingerprint 2, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { cellAtIndex, setCellStyleId, createScreen } from "./screen.js";
 import { getSecondRootError } from "./terminal.js";

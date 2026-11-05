@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-chhd9p2w.js (11)
  * attribution: placement 10, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { QUOTE_HOMOGLYPHS, SINGLE_QUOTE_RUNS } from "../../tools/ArtifactTool/artifactUrls.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

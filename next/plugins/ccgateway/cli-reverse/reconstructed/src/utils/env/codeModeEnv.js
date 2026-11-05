@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-b0ffgtxf.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createEnvAccessor } from "./envRegistry.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

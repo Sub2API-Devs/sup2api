@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/renderOptions.ts
  * pieces: chunk-ex0hdrp3.js (4)
  * attribution: fingerprint 1, layout 1, facade-exports 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { openSync } from "fs";
 import { ReadStream } from "tty";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-border.ts
  * pieces: chunk-2avr6cej.js (4), chunk-ptrwzav4.js (4), chunk-sz26a4x2.js (8)
  * attribution: fingerprint 3, layout 5, placement 5, sole-consumer 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPlainObject } from "../utils/isPlainObject.js";
 import { __toESM } from "../../runtime/bun-runtime.js";

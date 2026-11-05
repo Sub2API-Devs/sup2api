@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/shellQuoting.ts
  * pieces: chunk-5xgkngpb.js (7)
  * attribution: file-local 3, fingerprint 2, file-last-pair 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { shellQuoteArgs } from "./bashPipeCommand.js";
 

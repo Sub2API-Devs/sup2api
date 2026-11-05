@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-283n6avd.js (2), chunk-nfkwcnxd.js (1), chunk-xzmy9dn4.js (154)
  * attribution: placement 156, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname, sep, isAbsolute, join, basename, dirname, relative, parse } from "path";
 import { lstat, writeFile, unlink, stat, open, realpath, readFile } from "fs/promises";

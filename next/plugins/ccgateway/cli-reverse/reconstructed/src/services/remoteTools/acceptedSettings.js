@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-pd9bp1k5.js (14)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, resolve, basename } from "path";
 import { lstatSync, utimesSync, mkdirSync, writeFileSync, unlinkSync, constants } from "fs";

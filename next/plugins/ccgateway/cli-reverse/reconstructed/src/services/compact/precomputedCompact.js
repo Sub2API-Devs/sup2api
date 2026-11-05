@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (50)
  * attribution: placement 50
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname, resolve as resolve_2, relative, sep, isAbsolute } from "path";
 import { statSync, readFileSync } from "fs";

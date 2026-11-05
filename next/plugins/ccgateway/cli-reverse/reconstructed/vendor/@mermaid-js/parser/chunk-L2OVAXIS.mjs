@@ -4,6 +4,7 @@
  * third-party: @mermaid-js/parser@1.2.1..2.0.0
  * pieces: chunk-wwjb4dqs.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __export } from "../../../runtime/bun-runtime.js";
 import { isBufferDefault, utilTypes } from "./dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StructuredDiff/Fallback.tsx
  * pieces: chunk-e50jywsa.js (9)
  * attribution: file-last-pair 1, layout 1, fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   jsxProd_default,

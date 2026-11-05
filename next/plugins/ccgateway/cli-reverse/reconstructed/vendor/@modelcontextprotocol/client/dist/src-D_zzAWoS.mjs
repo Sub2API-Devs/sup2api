@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/client@2.0.0
  * pieces: chunk-qq5knpkd.js (157)
  * attribution: esm-fingerprint 114, esm-layout 37, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { deferredSchemaHandlers } from "../../../@babel/runtime/helpers/esm/importDeferProxy.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/systemPromptType.ts
  * pieces: chunk-7pwjpdkw.js (1)
  * attribution: facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-7pwjpdkw.js:2668-2692 facade-exports

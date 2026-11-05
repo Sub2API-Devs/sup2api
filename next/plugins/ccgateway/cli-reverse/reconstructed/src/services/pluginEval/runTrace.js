@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-af1hzzme.js (18)
  * attribution: placement 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, readdir, rm as rm_2, mkdir } from "fs/promises";
 import path from "path";

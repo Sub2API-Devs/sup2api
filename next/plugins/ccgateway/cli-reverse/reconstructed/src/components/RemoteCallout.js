@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/RemoteCallout.tsx
  * pieces: chunk-czq1j3j2.js (1), chunk-vax9bfta.js (1), chunk-yar0v238.js (1)
  * attribution: fingerprint 2, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { withHideWhile } from "./dialogs/dialogRequests.js";
 import { DoctorLazy } from "../cli/handlers/util.js";

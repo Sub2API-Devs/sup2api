@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/client@2.0.0
  * pieces: chunk-fra0jg2y.js (26), chunk-qq5knpkd.js (2)
  * attribution: esm-layout 8, esm-fingerprint 9, layout 7, affinity 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Ajv2020, formatsPlugin, DRAFT_2020_12_URIS, ajvModule } from "../../../ajv-formats/dist/formats.js";
 import { require_equal } from "../../../ajv/dist/runtime/equal.js";

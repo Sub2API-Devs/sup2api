@@ -4,6 +4,7 @@
  * third-party: semver@7.7.3..7.7.4
  * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_re } from "./internal/re.js";

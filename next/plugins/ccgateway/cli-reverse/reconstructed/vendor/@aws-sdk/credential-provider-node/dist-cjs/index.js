@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/credential-provider-node@3.936.0..3.972.2
  * pieces: chunk-qrtqtj8x.js (6)
  * attribution: esm-layout 3, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";

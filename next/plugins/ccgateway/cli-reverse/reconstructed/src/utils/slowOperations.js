@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/slowOperations.ts
  * pieces: chunk-6hadbefe.js (19), chunk-j8f885h1.js (1), chunk-trds6g68.js (4)
  * attribution: placement 11, file-local 1, layout 6, fingerprint 5, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath as realpath_2, writeFileSync } from "fs";
 import { extractDebugCategories } from "./debugFilter.js";

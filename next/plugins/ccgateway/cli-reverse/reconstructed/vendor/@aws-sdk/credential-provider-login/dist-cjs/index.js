@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/credential-provider-login@3.936.0..3.972.52
  * pieces: chunk-jghy7hde.js (5)
  * attribution: esm-layout 3, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { promises } from "fs";
 import { dirname, join } from "path";

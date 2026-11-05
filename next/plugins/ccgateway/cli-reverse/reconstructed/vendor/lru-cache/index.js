@@ -4,6 +4,7 @@
  * third-party: lru-cache@10.3.0..11.0.2
  * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_yallist } from "../yallist/yallist.js";

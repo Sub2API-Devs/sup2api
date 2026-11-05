@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/commitAttribution.ts
  * pieces: chunk-75pf2504.js (2), chunk-7jxyna5q.js (22), chunk-fta1hp2w.js (1), chunk-nh1pvp1m.js (1), chunk-qznkkbq5.js (1), chunk-sfy2wa1e.js (1)
  * attribution: placement 2, callgraph-fingerprint 2, fingerprint 12, layout 10, file-local 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { isAbsolute, sep, relative, join } from "path";

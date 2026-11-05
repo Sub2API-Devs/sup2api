@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/exporter-logs-otlp-proto@0.208.0
  * pieces: chunk-2gvcsb1c.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../../../runtime/bun-runtime.js";
 import { require_otlp_exporter_base } from "../../../../../otlp-exporter-base/build/src/index.js";

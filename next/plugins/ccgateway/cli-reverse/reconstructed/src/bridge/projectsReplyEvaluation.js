@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-pzvrh90y.js (1), chunk-wrdsh6q8.js (19)
  * attribution: placement 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { aliasCanonicalNames, HEARTHBOT } from "../services/mcp/ccrMetaMcp.js";

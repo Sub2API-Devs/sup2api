@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-18rrbwq1.js (2), chunk-czq1j3j2.js (1), chunk-emhzq435.js (10), chunk-q9vyeahf.js (1)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   useContext,

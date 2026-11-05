@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/upstreamproxy/upstreamproxy.ts
  * pieces: chunk-9knfmvrf.js (68), chunk-asf5gh8x.js (1), chunk-nxvwrdvj.js (1)
  * attribution: fingerprint 3, placement 67
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, delimiter, parse } from "path";
 import { homedir, tmpdir } from "os";

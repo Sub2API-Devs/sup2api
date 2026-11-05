@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileWriteTool/UI.tsx
  * pieces: chunk-4rfadb6m.js (17), chunk-5xgkngpb.js (3)
  * attribution: sole-consumer 3, affinity 1, file-local 1, layout 2, facade-majority 6, fingerprint 5, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, resolve } from "path";
 import { lintBackgroundMemoryWrite, rememberLintedWrite } from "../../memdir/memoryWriteLint.js";

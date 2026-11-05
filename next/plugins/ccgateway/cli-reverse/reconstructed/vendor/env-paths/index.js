@@ -4,6 +4,7 @@
  * third-party: env-paths@4.0.0
  * pieces: chunk-my2r02mp.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import os from "os";
 import E from "process";

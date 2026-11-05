@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/conversationRecovery.ts
  * pieces: chunk-0yw3taqg.js (3), chunk-5xgkngpb.js (58), chunk-frs14hy1.js (4)
  * attribution: sole-consumer 1, fingerprint 5, placement 57, file-local 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stat } from "fs/promises";
 import { relative, join } from "path";

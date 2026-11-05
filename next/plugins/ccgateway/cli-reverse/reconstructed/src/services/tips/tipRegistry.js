@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tips/tipRegistry.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-vbwrr9hv.js (1), chunk-z0x4zh5m.js (40)
  * attribution: placement 2, sole-consumer 23, fingerprint 3, layout 12, affinity 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { buildDesktopDeepLink } from "../../utils/desktopDeepLink.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { withTimeout as withTimeout_2 } from "../../utils/sleep.js";
 import { DISK_PROBE_TIMEOUT_MS, READ_ONLY_FAMILY_MS } from "./BashTool.js";

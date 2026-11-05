@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-47b8txen.js (7)
  * attribution: esm-layout 5, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasUnicodeWord, asciiWords_default } from "./_hasUnicodeWord.js";
 import { toStringExport } from "./toString.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/KeybindingContext.tsx
  * pieces: chunk-7wgjt81y.js (5)
  * attribution: affinity 1, fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createContext, useContext, useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";

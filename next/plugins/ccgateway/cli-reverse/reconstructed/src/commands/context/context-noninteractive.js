@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/context/context-noninteractive.ts
  * pieces: chunk-8gk80pm3.js (1), chunk-j7k80xbr.js (6)
  * attribution: fingerprint 2, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { formatTokens, formatTokenEstimate } from "../../utils/format.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/usePluginInstallationStatus.tsx
  * pieces: chunk-czq1j3j2.js (1)
  * attribution: callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useNotifications } from "../../context/notifications.js";
 import { useEffect } from "../../../vendor/react/cjs/react.production.js";

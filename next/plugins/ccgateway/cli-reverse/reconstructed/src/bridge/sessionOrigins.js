@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h03wbp1q.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-h03wbp1q.js:191-261 placement
 var REMOTE_CONTROL_REPL = "remote-control-repl";

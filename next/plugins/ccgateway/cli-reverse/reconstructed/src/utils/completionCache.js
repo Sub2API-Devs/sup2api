@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/completionCache.ts
  * pieces: chunk-42wa4pww.js (1), chunk-gazdcrw9.js (3)
  * attribution: callgraph-witnessed 1, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readFile, copyFile, writeFile } from "fs/promises";

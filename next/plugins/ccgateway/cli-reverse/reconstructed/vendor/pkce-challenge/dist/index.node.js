@@ -4,6 +4,7 @@
  * third-party: pkce-challenge@5.0.1
  * pieces: chunk-z18kt4r5.js (7)
  * attribution: esm-layout 2, esm-fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-z18kt4r5.js:191-197 esm-layout

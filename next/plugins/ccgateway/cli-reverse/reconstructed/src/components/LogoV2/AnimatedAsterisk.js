@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/AnimatedAsterisk.tsx
  * pieces: chunk-0fgj42c8.js (2), chunk-hnxhr3bs.js (3)
  * attribution: fingerprint 2, affinity 1, placement 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
 import { getInitialSettings } from "../../utils/settings/settings.js";

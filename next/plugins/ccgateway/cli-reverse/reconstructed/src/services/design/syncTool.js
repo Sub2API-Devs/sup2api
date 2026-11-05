@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-zevfa8jm.js (26)
  * attribution: placement 22, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, sep, extname } from "path";
 import { stat, realpath } from "fs/promises";

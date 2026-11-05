@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-jynns2s2.js (17)
  * attribution: placement 16, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, dirname } from "path";
 import { stat } from "fs/promises";

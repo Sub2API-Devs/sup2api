@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-htq1j0g1.js (64)
  * attribution: placement 64
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID, randomBytes } from "crypto";
 import { resolve, join, basename, dirname, isAbsolute, normalize } from "path";

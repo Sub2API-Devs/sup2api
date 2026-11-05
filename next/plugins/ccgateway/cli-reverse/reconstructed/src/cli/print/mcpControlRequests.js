@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vxsfen55.js (56)
  * attribution: placement 51, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_baseUniq, uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { identityEpoch } from "../../services/mcp/identityChange.js";

@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-47b8txen.js (5)
  * attribution: affinity 1, esm-layout 3, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-47b8txen.js:337-441 affinity

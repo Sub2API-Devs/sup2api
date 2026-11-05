@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/Tool.ts
  * pieces: chunk-2c3jp4kn.js (40)
  * attribution: placement 11, fingerprint 3, layout 25, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getProactivitySelectorGate, getProactivitySelectorGateEverOn } from "./bootstrap/state.js";
 import { isBareMode } from "./utils/envUtils.js";

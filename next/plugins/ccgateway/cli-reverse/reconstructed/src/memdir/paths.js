@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/paths.ts
  * pieces: chunk-exfmq47h.js (41)
  * attribution: placement 34, fingerprint 2, file-local 1, callgraph-fingerprint 2, layout 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, sep, normalize, isAbsolute } from "path";
 import { homedir } from "os";

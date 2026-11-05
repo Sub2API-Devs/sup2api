@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processTextPrompt.ts
  * pieces: chunk-pwdsqzsj.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { hasToolResultBlock, markToolSummaryMessage, createUserMessage } from "../messages.js";

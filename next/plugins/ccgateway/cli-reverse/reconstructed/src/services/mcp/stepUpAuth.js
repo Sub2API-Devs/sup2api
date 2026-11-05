@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-sywnjtqb.js (12), chunk-wvdswywk.js (7)
  * attribution: placement 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isSameOriginAsCcr, CCR_SESSION_MCP_PATH, ccrProxyTargetHost } from "./ccrMcpUrls.js";

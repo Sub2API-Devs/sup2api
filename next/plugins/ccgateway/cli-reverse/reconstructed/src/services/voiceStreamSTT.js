@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/voiceStreamSTT.ts
  * pieces: chunk-jhqxf120.js (11)
  * attribution: fingerprint 1, layout 7, facade-exports 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import ws from "ws";
 import { sanitizeErrnoForTelemetry } from "../utils/errors.js";

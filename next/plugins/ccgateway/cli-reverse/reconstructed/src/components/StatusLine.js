@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StatusLine.tsx
  * pieces: chunk-5xgkngpb.js (13), chunk-czq1j3j2.js (10), chunk-vn3g7zt8.js (2)
  * attribution: placement 15, fingerprint 3, layout 5, sole-consumer 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getToastyBreezeConfig, LOW_PRIORITY_COPY } from "../services/lowPriority/headers.js";
 import { bunStringWidth } from "../ink/stringWidth.js";

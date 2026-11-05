@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/denialTracking.ts
  * pieces: chunk-5xgkngpb.js (8)
  * attribution: fingerprint 3, layout 4, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bunHashPair } from "../pastedContent.js";
 import { canonicalFingerprint } from "../../services/api/requestFingerprint.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/AgentTool.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-bmmd67jf.js (1), chunk-czq1j3j2.js (1), chunk-tmsx2mh0.js (4)
  * attribution: fingerprint 5, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath } from "fs/promises";
 import { env } from "../../utils/env.js";

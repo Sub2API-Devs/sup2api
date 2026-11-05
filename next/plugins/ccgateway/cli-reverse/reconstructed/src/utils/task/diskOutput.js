@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/task/diskOutput.ts
  * pieces: chunk-3katra73.js (67), chunk-j8qkeqz1.js (2), chunk-tp1gh0pb.js (1)
  * attribution: facade-majority 33, layout 32, callgraph-fingerprint 1, file-local 1, placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { constants, fstat } from "fs";
 import { join, dirname, sep, isAbsolute, resolve, basename } from "path";

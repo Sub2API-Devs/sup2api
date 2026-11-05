@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/betas.ts
  * pieces: chunk-7kayq7nc.js (15), chunk-exfmq47h.js (56)
  * attribution: placement 61, fingerprint 8, affinity 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { OAUTH_BETA_HEADER } from "../constants/oauth.js";
 import {

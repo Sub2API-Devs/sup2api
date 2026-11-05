@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/otlp-exporter-base@0.208.0
  * pieces: chunk-vxhm2nqe.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_api } from "../../../api/build/src/index.js";

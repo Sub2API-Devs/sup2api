@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-hhxd8j4d.js (1), chunk-ppewqv2a.js (1)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getRootSessionOverride } from "../../context/replRootContext.js";
 import { stopBackgroundSession } from "../../utils/background/stopBackgroundSession.js";

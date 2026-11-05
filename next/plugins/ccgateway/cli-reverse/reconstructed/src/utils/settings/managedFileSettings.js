@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-z20c443b.js (39)
  * attribution: placement 39
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, join, resolve } from "path";
 import { coerceToPlainString, cleanForDisplay } from "../stringUtils.js";

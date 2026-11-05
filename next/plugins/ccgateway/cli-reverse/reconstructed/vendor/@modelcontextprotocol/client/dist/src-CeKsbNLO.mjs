@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/client@2.0.0
  * pieces: chunk-1hnjmk23.js (3), chunk-5xgkngpb.js (1), chunk-sywnjtqb.js (1)
  * attribution: esm-layout 2, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LOOPBACK_HOSTS } from "./index.mjs";
 import { isLoopbackUrl, isAllowedLoopbackUrl } from "../../../../src/services/claudeGateway/ssrfGuard.js";

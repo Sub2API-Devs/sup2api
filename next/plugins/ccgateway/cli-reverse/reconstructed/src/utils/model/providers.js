@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/providers.ts
  * pieces: chunk-5m8x0kb6.js (35), chunk-exfmq47h.js (32), chunk-hfc4cfnt.js (2)
  * attribution: placement 68, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   getGatewayAuth,

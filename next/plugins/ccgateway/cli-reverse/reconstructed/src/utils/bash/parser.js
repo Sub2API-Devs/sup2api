@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/parser.ts
  * pieces: chunk-9jzjcqxe.js (5), chunk-nzz6y5xm.js (14)
  * attribution: fingerprint 3, placement 8, callgraph-fingerprint 1, facade-exports 5, layout 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getParserModule } from "./bashParser.js";
 import { logEvent } from "../../services/analytics/index.js";

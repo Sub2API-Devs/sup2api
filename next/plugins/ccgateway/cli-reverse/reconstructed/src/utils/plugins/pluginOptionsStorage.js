@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginOptionsStorage.ts
  * pieces: chunk-5xgkngpb.js (2), chunk-pzdhtgn4.js (25)
  * attribution: placement 5, fingerprint 5, layout 16, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, rmdir } from "fs/promises";
 import { dirname, basename } from "path";

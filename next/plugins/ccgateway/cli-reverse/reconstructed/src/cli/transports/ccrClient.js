@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/transports/ccrClient.ts
  * pieces: chunk-hjswk319.js (1), chunk-qyz2x025.js (95)
  * attribution: fingerprint 3, placement 73, layout 13, affinity 4, sole-consumer 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { countWhere, setsEqual } from "../../utils/collections.js";

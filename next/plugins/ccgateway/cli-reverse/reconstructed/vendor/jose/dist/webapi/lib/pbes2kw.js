@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-0f6azspv.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { checkEncCryptoKey } from "./crypto_key.js";
 import { concat, encode } from "./buffer_utils.js";

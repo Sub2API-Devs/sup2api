@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PromptInput/PromptInputFooterSuggestions.tsx
  * pieces: chunk-tvbhy3tn.js (19)
  * attribution: placement 11, layout 5, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DIAMOND_GLYPH } from "../../constants/figures.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";

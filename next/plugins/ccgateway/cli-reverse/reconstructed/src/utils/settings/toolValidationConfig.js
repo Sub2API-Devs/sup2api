@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/toolValidationConfig.ts
  * pieces: chunk-z20c443b.js (4)
  * attribution: fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-z20c443b.js:210045-210912 fingerprint (2.1.88 match: TOOL_VALIDATION_CONFIG, 1)

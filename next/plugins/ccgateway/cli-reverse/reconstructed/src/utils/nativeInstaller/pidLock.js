@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/nativeInstaller/pidLock.ts
  * pieces: chunk-e5z7dpjd.js (10), chunk-p3km1ynr.js (1)
  * attribution: affinity 1, callgraph-witnessed 1, fingerprint 7, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { mkdir, readdir, lstat } from "fs/promises";

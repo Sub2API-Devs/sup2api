@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/core@3.936.0
  * pieces: chunk-1yr4143q.js (3), chunk-3p78mpxm.js (1)
  * attribution: esm-layout 2, esm-fingerprint 1, cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http as require_protocol_http_2 } from "../../../@smithy/protocol-http/dist-cjs/index.js";

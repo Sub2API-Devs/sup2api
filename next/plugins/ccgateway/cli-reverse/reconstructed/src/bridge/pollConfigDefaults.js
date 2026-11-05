@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/pollConfigDefaults.ts
  * pieces: chunk-nkxt28ky.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-nkxt28ky.js:532-956 fingerprint (2.1.88 match: DEFAULT_POLL_CONFIG, 0.704)

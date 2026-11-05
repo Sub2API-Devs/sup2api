@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/suggestions/commandSuggestions.ts
  * pieces: chunk-1kk50rk6.js (1), chunk-czq1j3j2.js (18), chunk-z20c443b.js (2)
  * attribution: fingerprint 8, placement 4, layout 7, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Fuse } from "../../../vendor/fuse.js/dist/fuse.mjs";
 import { syncedSkillUnqualifiedAlias } from "../commandPredicates.js";

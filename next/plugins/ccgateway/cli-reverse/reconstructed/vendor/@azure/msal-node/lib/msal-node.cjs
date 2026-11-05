@@ -4,6 +4,7 @@
  * third-party: @azure/msal-node@3.8.1
  * pieces: chunk-b5df2wx1.js (55)
  * attribution: esm-fingerprint 52, esm-layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import http from "http";
 import https from "https";

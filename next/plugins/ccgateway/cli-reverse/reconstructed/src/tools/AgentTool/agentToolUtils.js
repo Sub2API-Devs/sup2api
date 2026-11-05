@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/agentToolUtils.ts
  * pieces: chunk-5xgkngpb.js (8), chunk-frs14hy1.js (49)
  * attribution: fingerprint 6, placement 29, affinity 1, layout 16, callgraph-fingerprint 1, file-local 2, callgraph-witnessed 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/messages.ts
  * pieces: chunk-0ntcg6ht.js (1), chunk-0yw3taqg.js (2), chunk-5w5bn6qj.js (1), chunk-5xgkngpb.js (410), chunk-5ythzcas.js (6), chunk-a99d5w8y.js (1), chunk-bvz8t570.js (28), chunk-frs14hy1.js (1), chunk-h29vk4wn.js (1), chunk-hnxhr3bs.js (16), chunk-nt9amew5.js (13), chunk-rrnsdthq.js (1), chunk-w3ch4xq2.js (2), chunk-xp9fpmmg.js (1), chunk-zhnr3erp.js (2)
  * attribution: placement 220, fingerprint 67, layout 161, callgraph-witnessed 6, file-local 20, callgraph-fingerprint 5, sole-consumer 2, affinity 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { sep, isAbsolute, relative } from "path";

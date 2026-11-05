@@ -4,6 +4,7 @@
  * third-party: es-object-atoms@1.1.2
  * pieces: chunk-ww9agm6g.js (9)
  * attribution: cjs-require-graph 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { isNaNFallbackModule } from "../unresolved-cjs/index.js";

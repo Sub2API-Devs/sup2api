@@ -4,6 +4,7 @@
  * third-party: fuse.js@7.0.0
  * pieces: chunk-z20c443b.js (50)
  * attribution: affinity 3, esm-fingerprint 38, esm-layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isString,

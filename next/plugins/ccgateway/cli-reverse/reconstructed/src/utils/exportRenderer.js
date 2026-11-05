@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/exportRenderer.tsx
  * pieces: chunk-4rj00p91.js (2), chunk-hnxhr3bs.js (11)
  * attribution: placement 4, layout 6, fingerprint 2, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { appendToolsNotInList } from "../commands/hooks/hooks.js";
 import { isCodeModeEnabled } from "../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";

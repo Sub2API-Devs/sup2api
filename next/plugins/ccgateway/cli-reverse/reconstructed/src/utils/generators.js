@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/generators.ts
  * pieces: chunk-5xgkngpb.js (5)
  * attribution: placement 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-5xgkngpb.js:932606-932684 placement (2.1.88 match: returnValue, 1)

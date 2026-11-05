@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/resources@2.2.0
  * pieces: chunk-7ggk9e9h.js (2)
  * attribution: cjs-fingerprint 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../../../../../runtime/bun-runtime.js";
 import { require_execAsync } from "./execAsync.js";

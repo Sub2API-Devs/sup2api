@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/McpAuthTool/McpAuthTool.ts
  * pieces: chunk-k8ag9amq.js (3)
  * attribution: fingerprint 1, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   normalizeServerNameLong,

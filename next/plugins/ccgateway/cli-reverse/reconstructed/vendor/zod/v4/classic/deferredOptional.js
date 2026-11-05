@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-z20c443b.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { $ZodType } from "../core/schemas.js";
 import { ZodType } from "./schemas.js";

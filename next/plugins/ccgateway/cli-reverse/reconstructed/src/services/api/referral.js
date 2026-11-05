@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/referral.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (23), chunk-hnxhr3bs.js (1)
  * attribution: callgraph-fingerprint 1, fingerprint 8, layout 5, placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";

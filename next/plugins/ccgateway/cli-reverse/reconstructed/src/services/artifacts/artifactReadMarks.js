@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1dbza2qv.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseArtifactUrlInput } from "../../tools/ArtifactTool/constants.js";
 import { getShareEntry } from "./shareEntries.js";

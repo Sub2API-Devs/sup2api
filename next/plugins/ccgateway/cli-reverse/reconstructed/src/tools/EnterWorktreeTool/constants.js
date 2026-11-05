@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterWorktreeTool/constants.ts
  * pieces: chunk-3a9s57ey.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-3a9s57ey.js:1214-1237 fingerprint (2.1.88 match: ENTER_WORKTREE_TOOL_NAME, 1)

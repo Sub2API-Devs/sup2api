@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
  * pieces: chunk-b8zxeazh.js (3), chunk-f7kbssbx.js (4), chunk-mgs2qfsy.js (3)
  * attribution: esm-fingerprint 6, esm-layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { has_default } from "./qs/utils.js";
 import { isArray_default } from "./utils/values.mjs";

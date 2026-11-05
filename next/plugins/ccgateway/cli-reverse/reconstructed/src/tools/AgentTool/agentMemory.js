@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/agentMemory.ts
  * pieces: chunk-a2q0x549.js (18)
  * attribution: file-local 1, fingerprint 4, layout 11, callgraph-fingerprint 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join as join_2, sep as sep_2, dirname as dirname_2, basename, normalize as normalize_2 } from "path";
 import { sanitizePath } from "../../utils/sessionStoragePortable.js";

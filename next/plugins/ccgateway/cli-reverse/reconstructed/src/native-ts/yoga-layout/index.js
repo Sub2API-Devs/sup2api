@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/native-ts/yoga-layout/index.ts
  * pieces: chunk-2avr6cej.js (75)
  * attribution: callgraph-witnessed 6, placement 1, layout 39, fingerprint 22, callgraph-fingerprint 3, file-local 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-2avr6cej.js:145636-145684 callgraph-witnessed (2.1.88 match: AUTO_VALUE, 1)
 var UNDEFINED_VALUE = {

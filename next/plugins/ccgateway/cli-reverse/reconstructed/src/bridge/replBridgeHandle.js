@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/replBridgeHandle.ts
  * pieces: chunk-zd6y4dnq.js (36)
  * attribution: placement 36
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bridgeHostState } from "./bridgeHostState.js";
 import { clearSenderDropWriter, setSenderDropWriter } from "./deviceAttestation.js";

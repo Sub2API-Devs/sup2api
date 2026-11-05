@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-xja31b7a.js (21), chunk-zevfa8jm.js (17)
  * attribution: placement 37, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   checkAndRefreshOAuthTokenIfNeeded,

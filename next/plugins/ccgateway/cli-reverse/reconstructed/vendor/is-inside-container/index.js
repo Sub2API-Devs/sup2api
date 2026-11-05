@@ -4,6 +4,7 @@
  * third-party: is-inside-container@1.0.0
  * pieces: chunk-j8hasev3.js (4)
  * attribution: esm-layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import fs from "fs";
 import { hasDockerEnv, hasDockerCGroup } from "../is-docker/index.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/ndjsonSafeStringify.ts
  * pieces: chunk-md68gfrt.js (6)
  * attribution: placement 5, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasPromptHooks } from "../utils/telemetry/sessionTracing.js";
 import { isSessionReceiveHooked } from "../plugins/functionHooks/sessionHooks.js";

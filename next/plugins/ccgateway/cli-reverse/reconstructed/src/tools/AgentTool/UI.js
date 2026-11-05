@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/UI.tsx
  * pieces: chunk-p5q1xrhb.js (1), chunk-tmsx2mh0.js (3), chunk-wjygkcr4.js (39)
  * attribution: fingerprint 9, placement 2, layout 15, file-local 3, affinity 4, facade-exports 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { GENERAL_PURPOSE_AGENT } from "./built-in/generalPurposeAgent.js";
 import { COORDINATOR_WORKER_AGENT_TYPE } from "../../coordinator/workerAgent.js";

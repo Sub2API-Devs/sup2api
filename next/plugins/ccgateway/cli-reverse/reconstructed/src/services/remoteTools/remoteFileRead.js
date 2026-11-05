@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-aejveeja.js (36)
  * attribution: placement 23, sole-consumer 7, affinity 1, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize, sep, parse, isAbsolute, join, resolve, dirname, relative } from "path";
 import { constants } from "fs";

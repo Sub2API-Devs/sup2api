@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (21)
  * attribution: affinity 1, placement 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { posix, resolve as resolve_2, isAbsolute, relative } from "path";
 import { DESTRUCTIVE_PATTERNS_2 } from "./destructiveCommandWarning.js";

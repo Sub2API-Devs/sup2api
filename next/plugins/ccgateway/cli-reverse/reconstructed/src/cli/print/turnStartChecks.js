@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0yw3taqg.js (28), chunk-tmsx2mh0.js (7)
  * attribution: placement 32, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { isPlainObject } from "../../utils/isPlainObject.js";

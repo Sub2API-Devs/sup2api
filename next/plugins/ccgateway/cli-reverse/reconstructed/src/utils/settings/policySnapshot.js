@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7zp4c4xh.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { setStartupPolicySnapshot, getStartupPolicySnapshot } from "../../bootstrap/state.js";
 import { getSettingsForSource } from "./settings.js";

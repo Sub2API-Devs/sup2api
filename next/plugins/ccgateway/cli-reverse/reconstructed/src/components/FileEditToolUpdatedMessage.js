@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FileEditToolUpdatedMessage.tsx
  * pieces: chunk-8tdq6z7n.js (5), chunk-z20c443b.js (1)
  * attribution: file-local 2, callgraph-fingerprint 1, layout 1, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { countCharInString } from "../utils/stringUtils.js";
 import { countWhere } from "../utils/collections.js";

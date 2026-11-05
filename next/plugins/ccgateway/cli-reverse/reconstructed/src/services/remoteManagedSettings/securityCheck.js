@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/remoteManagedSettings/securityCheck.tsx
  * pieces: chunk-q4vys2qg.js (29)
  * attribution: placement 27, file-local 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Stream } from "../../utils/stream.js";
 import { createSignal } from "../../utils/signal.js";

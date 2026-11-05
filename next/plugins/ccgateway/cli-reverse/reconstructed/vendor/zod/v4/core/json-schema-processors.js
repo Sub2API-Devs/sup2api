@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-m4y44r15.js (12), chunk-z20c443b.js (1)
  * attribution: esm-layout 2, esm-fingerprint 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { NUMBER_FORMAT_RANGES, BIGINT_FORMAT_RANGES, getEnumValues, assignProp } from "./util.js";
 import { base64Charset, base64urlCharset } from "./schemas.js";

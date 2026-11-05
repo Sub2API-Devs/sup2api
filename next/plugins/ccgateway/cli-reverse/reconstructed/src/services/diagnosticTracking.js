@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/diagnosticTracking.ts
  * pieces: chunk-5xgkngpb.js (8), chunk-exfmq47h.js (1)
  * attribution: placement 5, layout 2, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LogsAPI } from "../../vendor/@opentelemetry/api-logs/build/esm/api/logs.js";
 import { ClaudeError, withTelemetryMessage, hasExactErrorMessage } from "../utils/errors.js";

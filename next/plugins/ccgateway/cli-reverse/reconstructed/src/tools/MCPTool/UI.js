@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/MCPTool/UI.tsx
  * pieces: chunk-5xgkngpb.js (3), chunk-w7hwdb2a.js (11), chunk-wjygkcr4.js (1)
  * attribution: placement 6, callgraph-fingerprint 2, layout 3, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { describeUnparsedInput, safeParseJSON } from "../../utils/json.js";
 import { jsonStringify, jsonStringifyRaw, jsonParse } from "../../utils/slowOperations.js";

@@ -4,6 +4,7 @@
  * third-party: chalk@5.6.0..5.6.2
  * pieces: chunk-h88kgep4.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-h88kgep4.js:226-1241 esm-layout
 var wrapAnsi16 =

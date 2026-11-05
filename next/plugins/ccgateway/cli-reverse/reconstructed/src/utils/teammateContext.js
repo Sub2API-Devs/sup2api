@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teammateContext.ts
  * pieces: chunk-dtzk9y3z.js (4)
  * attribution: callgraph-witnessed 2, callgraph-fingerprint 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 

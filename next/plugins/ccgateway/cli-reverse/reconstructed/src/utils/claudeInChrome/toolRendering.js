@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/toolRendering.tsx
  * pieces: chunk-vnst8cd9.js (2), chunk-wjygkcr4.js (5)
  * attribution: fingerprint 5, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { countWhere } from "../collections.js";
 import { shouldHideTasksFooter } from "../../components/tasks/taskStatusUtils.js";

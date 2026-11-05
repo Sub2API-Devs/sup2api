@@ -4,6 +4,7 @@
  * third-party: commander@12.0.0
  * pieces: chunk-ardnz7sf.js (1)
  * attribution: esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_commander_2 } from "./index.js";

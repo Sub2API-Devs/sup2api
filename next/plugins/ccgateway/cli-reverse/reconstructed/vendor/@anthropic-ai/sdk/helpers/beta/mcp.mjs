@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-5xgkngpb.js (1), chunk-bhrstd6k.js (1), chunk-h44h5gdv.js (1), chunk-jf14gxs3.js (1), chunk-k0v80sg8.js (1), chunk-keyy05re.js (1), chunk-n51jggtb.js (1), chunk-sywnjtqb.js (1)
  * attribution: esm-fingerprint 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../../../../src/cli/handlers/util.js";
 import {

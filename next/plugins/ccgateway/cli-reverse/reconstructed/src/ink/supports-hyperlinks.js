@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/supports-hyperlinks.ts
  * pieces: chunk-1jphxy9b.js (4)
  * attribution: sole-consumer 1, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { supportsHyperlinksPackage } from "../../vendor/supports-color/index.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-keyy05re.js (50)
  * attribution: placement 50
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { takeDirSyncHandle as takeDirSyncHandle_2, dirSyncSession } from "../../utils/teleport/dirSync.js";

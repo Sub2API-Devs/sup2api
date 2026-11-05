@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-q1gbn2mn.js (41)
  * attribution: placement 41
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, resolve, join } from "path";
 import { liveWeakRefs, logForDiagnosticsNoPII } from "../../../utils/diagLogs.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportStash.tsx
  * pieces: chunk-3tekt16c.js (4)
  * attribution: placement 2, fingerprint 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { userCheckoutSpawnTerms, stashToCleanState } from "../utils/teleport.js";

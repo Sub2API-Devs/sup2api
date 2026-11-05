@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/debugUtils.ts
  * pieces: chunk-9578f574.js (13)
  * attribution: fingerprint 4, layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonStringify } from "../utils/slowOperations.js";
 import { shortHash } from "../utils/shortHash.js";

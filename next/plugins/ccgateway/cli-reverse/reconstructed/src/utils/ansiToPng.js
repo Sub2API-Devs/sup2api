@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ansiToPng.ts
  * pieces: chunk-h0kck2eh.js (17)
  * attribution: sole-consumer 3, affinity 1, fingerprint 4, file-local 3, callgraph-fingerprint 3, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { inflateRawSync, deflateSync } from "zlib";
 import { DEFAULT_BG_RGB, parseAnsi } from "./ansiToSvg.js";

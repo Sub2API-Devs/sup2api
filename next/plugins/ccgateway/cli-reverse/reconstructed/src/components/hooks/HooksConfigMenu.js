@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/hooks/HooksConfigMenu.tsx
  * pieces: chunk-5tpnqyt5.js (10)
  * attribution: fingerprint 3, callgraph-fingerprint 1, file-local 2, sole-consumer 3, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSettings_DEPRECATED, getSettingsForSource } from "../../utils/settings/settings.js";
 import { hasAnyPluginHook, SelectHookMode } from "./SelectHookMode.js";

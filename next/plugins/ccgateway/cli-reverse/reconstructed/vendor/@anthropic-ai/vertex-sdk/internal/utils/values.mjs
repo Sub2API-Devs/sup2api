@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
  * pieces: chunk-1vqm62xf.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-1vqm62xf.js:977-1015 placement
 var isArray = (val) => {

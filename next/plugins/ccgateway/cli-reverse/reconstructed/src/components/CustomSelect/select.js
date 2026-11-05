@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/select.tsx
  * pieces: chunk-hnxhr3bs.js (1), chunk-p1yqn9ds.js (15), chunk-tvbhy3tn.js (2), chunk-yz6x5v95.js (44)
  * attribution: fingerprint 4, placement 49, layout 8, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

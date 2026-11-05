@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/ChannelsNotice.tsx
  * pieces: chunk-hnxhr3bs.js (7), chunk-hs37d1w3.js (1)
  * attribution: fingerprint 4, layout 2, callgraph-fingerprint 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sortKeysDeep } from "../../services/mcp/driveFileReferences.js";
 import { withFilledReferences } from "../../services/mcp/fileReference/wrapFileReferenceTool.js";

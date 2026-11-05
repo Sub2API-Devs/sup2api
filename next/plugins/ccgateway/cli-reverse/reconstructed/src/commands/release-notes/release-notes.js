@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/release-notes/release-notes.ts
  * pieces: chunk-kvgjd6de.js (7)
  * attribution: sole-consumer 3, fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useRef } from "../../../vendor/react/cjs/react.production.js";
 import {

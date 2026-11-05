@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/color/index.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-d8ygv17y.js (1)
  * attribution: fingerprint 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AGENT_COLOR_NAMES } from "../../tools/AgentTool/agentColorManager.js";
 import { getIsInteractive, getIsNonInteractiveSession } from "../../bootstrap/state.js";

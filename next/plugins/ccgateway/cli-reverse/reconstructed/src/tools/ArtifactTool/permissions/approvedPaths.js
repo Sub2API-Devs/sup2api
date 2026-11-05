@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-nfkwcnxd.js (14)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DB_FILE_NO_IDENTITY_MESSAGE, DB_FILE_NOT_A_FILE_MESSAGE } from "../promptText.js";
 import { MAX_DOCUMENT_BYTES, MAX_FIELD_VALUE_BYTES } from "../../../services/artifacts/artifactDb.js";

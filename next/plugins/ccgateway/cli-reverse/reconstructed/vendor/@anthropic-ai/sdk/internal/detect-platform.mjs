@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-gjbr82c9.js (5)
  * attribution: esm-layout 1, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { VERSION } from "../version.mjs";
 

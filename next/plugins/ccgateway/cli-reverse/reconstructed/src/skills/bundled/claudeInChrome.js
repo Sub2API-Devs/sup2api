@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/claudeInChrome.ts
  * pieces: chunk-ne2890fx.js (1), chunk-y8m17a3e.js (1)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { chromeToolSuffix } from "../../utils/claudeInChrome/chromeToolNames.js";
 import { registerBundledSkill } from "../bundledSkills.js";

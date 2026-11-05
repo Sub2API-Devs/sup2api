@@ -4,6 +4,7 @@
  * third-party: google-auth-library@10.6.2
  * pieces: chunk-e8d3a8an.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_package_2 } from "../../package.json.js";

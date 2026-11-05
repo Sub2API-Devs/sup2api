@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/xml-builder@3.921.0..3.972.5
  * pieces: chunk-fazwv9v4.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-fazwv9v4.js:5653-6047 esm-fingerprint
 var MESSAGE_ELEMENT_RE = /<message\b([^>]*)>([\s\S]*?)<\/message>/g;

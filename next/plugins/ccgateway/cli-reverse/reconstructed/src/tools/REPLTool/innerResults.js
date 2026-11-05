@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-n51jggtb.js (8)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isBase64ImageBlock, isBase64Page } from "./resultContent.js";
 import { READ as READ_2 } from "../FileReadTool/constants.js";

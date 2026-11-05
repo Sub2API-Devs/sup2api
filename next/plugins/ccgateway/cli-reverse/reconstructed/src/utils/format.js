@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/format.ts
  * pieces: chunk-8h0sw7zg.js (1), chunk-8n1fbght.js (30), chunk-fta1hp2w.js (1), chunk-j78f68ax.js (2)
  * attribution: placement 2, facade-exports 25, layout 5, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import {

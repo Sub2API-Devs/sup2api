@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/marketplaceManager.ts
  * pieces: chunk-5s0qaz1x.js (1), chunk-5xgkngpb.js (155), chunk-7jxyna5q.js (1), chunk-hb44av3w.js (1), chunk-tmkr83ys.js (1), chunk-z20c443b.js (1)
  * attribution: fingerprint 33, affinity 4, placement 22, callgraph-fingerprint 3, layout 92, file-local 1, sole-consumer 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, relative, sep, isAbsolute, resolve as resolve_2, basename, dirname } from "path";
 import { writeFile } from "fs/promises";

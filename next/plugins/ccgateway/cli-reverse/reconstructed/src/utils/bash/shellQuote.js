@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/shellQuote.ts
  * pieces: chunk-4z1ntdgk.js (1), chunk-pjaz7mpk.js (2)
  * attribution: fingerprint 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_isObjectLike } from "../../../vendor/lodash-es/toString.js";
 import { baseGetTagExport } from "../../../vendor/lodash-es/_baseGetTag.js";

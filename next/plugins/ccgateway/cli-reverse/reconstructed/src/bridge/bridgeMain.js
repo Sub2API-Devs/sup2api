@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeMain.ts
  * pieces: chunk-18851qev.js (54), chunk-a3r2kq46.js (1), chunk-v3wm90pf.js (14)
  * attribution: sole-consumer 18, fingerprint 17, layout 23, placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stat, realpath, lstat } from "fs/promises";
 import { dirname, basename, join, resolve } from "path";

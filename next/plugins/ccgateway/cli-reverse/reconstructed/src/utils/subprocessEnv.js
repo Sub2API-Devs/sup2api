@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/subprocessEnv.ts
  * pieces: chunk-3emqeq9c.js (1), chunk-ex0jqs9a.js (58)
  * attribution: fingerprint 1, placement 58
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, dirname, posix } from "path";
 import { homedir } from "os";

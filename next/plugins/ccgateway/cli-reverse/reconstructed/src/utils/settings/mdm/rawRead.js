@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/mdm/rawRead.ts
  * pieces: chunk-6eexe0f3.js (10)
  * attribution: sole-consumer 2, affinity 1, callgraph-fingerprint 1, layout 2, facade-exports 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { execFile } from "child_process";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/parser.ts
  * pieces: chunk-emhzq435.js (5)
  * attribution: fingerprint 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { bunStringWidth } from "../stringWidth.js";

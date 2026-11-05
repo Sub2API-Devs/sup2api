@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserResourceUpdateMessage.tsx
  * pieces: chunk-2avr6cej.js (1), chunk-wjygkcr4.js (3)
  * attribution: fingerprint 3, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   jsxProd_default,

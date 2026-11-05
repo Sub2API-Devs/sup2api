@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plan/plan.tsx
  * pieces: chunk-0b83n7d5.js (1), chunk-1n62canq.js (3)
  * attribution: placement 1, affinity 1, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { renderToAnsiString } from "../../utils/staticRender.js";
 import { stripAnsi, stripAnsiPerLine } from "../../utils/stripAnsi.js";

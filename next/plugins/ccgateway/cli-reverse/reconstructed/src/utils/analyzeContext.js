@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/analyzeContext.ts
  * pieces: chunk-5xgkngpb.js (25)
  * attribution: fingerprint 15, layout 7, placement 2, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute } from "path";
 import {

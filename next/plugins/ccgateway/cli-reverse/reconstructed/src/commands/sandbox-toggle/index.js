@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/sandbox-toggle/index.ts
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SandboxManager } from "../../utils/sandbox/sandbox-adapter.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";

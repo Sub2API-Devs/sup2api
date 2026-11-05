@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/middleware-host-header@3.936.0
  * pieces: chunk-3p78mpxm.js (2)
  * attribution: cjs-fingerprint 1, cjs-require-graph 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";

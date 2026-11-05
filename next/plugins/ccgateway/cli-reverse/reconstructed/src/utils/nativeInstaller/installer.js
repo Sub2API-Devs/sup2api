@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/nativeInstaller/installer.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (6), chunk-e5z7dpjd.js (53), chunk-wfxhhysk.js (1)
  * attribution: fingerprint 21, placement 5, sole-consumer 1, affinity 2, facade-exports 9, layout 23
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   stat,

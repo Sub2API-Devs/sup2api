@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/HistorySearchDialog.tsx
  * pieces: chunk-czq1j3j2.js (4)
  * attribution: sole-consumer 1, affinity 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useRegisterOverlay } from "../context/overlayContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";

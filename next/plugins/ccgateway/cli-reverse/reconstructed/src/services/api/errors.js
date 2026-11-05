@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/errors.ts
  * pieces: chunk-5xgkngpb.js (155), chunk-7jxyna5q.js (2), chunk-bc4jcw5z.js (2), chunk-k1t1w9mg.js (25), chunk-sywnjtqb.js (1)
  * attribution: fingerprint 19, placement 68, layout 93, affinity 1, sole-consumer 1, callgraph-witnessed 1, shared-adjacent 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, basename } from "path";
 import {

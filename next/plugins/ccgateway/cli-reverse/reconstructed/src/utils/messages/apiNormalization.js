@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (69), chunk-nt9amew5.js (2)
  * attribution: placement 68, layout 1, affinity 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash, randomUUID } from "crypto";
 import { isValidReminderId, parseReminderHeader, escapeBareReminderOpen } from "../systemReminder.js";

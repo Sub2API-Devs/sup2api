@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/autoMode.ts
  * pieces: chunk-exfmq47h.js (1), chunk-fmakjjce.js (13), chunk-fta1hp2w.js (2)
  * attribution: fingerprint 2, placement 11, layout 1, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stripVTControlCharacters } from "util";
 import { ANSI_ESCAPE_RE } from "../../utils/concurrentSessions.js";

@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/util-user-agent-node@3.936.0
  * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_middleware_user_agent } from "../../middleware-user-agent/dist-cjs/index.js";

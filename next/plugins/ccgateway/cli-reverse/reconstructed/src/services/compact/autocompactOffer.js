@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-8prszgkd.js (1), chunk-bc4jcw5z.js (7), chunk-czq1j3j2.js (19)
  * attribution: placement 27
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";

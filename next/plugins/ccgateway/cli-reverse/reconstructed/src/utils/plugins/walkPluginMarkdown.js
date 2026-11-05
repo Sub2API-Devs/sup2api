@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/walkPluginMarkdown.ts
  * pieces: chunk-5xgkngpb.js (3)
  * attribution: affinity 1, fingerprint 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, relative } from "path";
 import { getFsImplementation, safeResolvePath, isDuplicatePath } from "../fsOperations.js";

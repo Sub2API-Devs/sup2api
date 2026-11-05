@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/doctorDiagnostic.ts
  * pieces: chunk-tfmhpnyx.js (30)
  * attribution: placement 11, fingerprint 7, layout 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { win32, posix, join, delimiter } from "path";
 import { realpath, lstat } from "fs/promises";

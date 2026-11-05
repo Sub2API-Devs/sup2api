@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/exit.ts
  * pieces: chunk-323717f6.js (1), chunk-n49ac0t1.js (11), chunk-sbrfdm61.js (1)
  * attribution: fingerprint 1, placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getOutermostCallFrame } from "../utils/cwd.js";
 import { remoteCallFrameStorage } from "../remote/remoteMode.js";

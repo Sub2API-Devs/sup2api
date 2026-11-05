@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/sdk/coreSchemas.ts
  * pieces: chunk-0h9p4sxp.js (3), chunk-0nvx3515.js (2), chunk-0yw3taqg.js (2), chunk-5xgkngpb.js (13), chunk-6sf70a86.js (1), chunk-7kayq7nc.js (45), chunk-7pwjpdkw.js (1), chunk-cm73gsrm.js (1), chunk-czq1j3j2.js (1), chunk-frs14hy1.js (1), chunk-h71rb544.js (1), chunk-kh7eenke.js (1), chunk-m2gb6h8m.js (15), chunk-nh1pvp1m.js (2), chunk-tdcrpxkn.js (4), chunk-vn3g7zt8.js (1), chunk-wjygkcr4.js (1), chunk-xgksxb70.js (1), chunk-z20c443b.js (1)
  * attribution: fingerprint 32, sole-consumer 3, placement 48, affinity 1, layout 12, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { isAbsolute, sep } from "path";

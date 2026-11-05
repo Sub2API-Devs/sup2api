@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/events.ts
  * pieces: chunk-4qbrxszq.js (1), chunk-a0xc6evk.js (9)
  * attribution: fingerprint 3, placement 2, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../hostScoped.js";
 import { env } from "../env.js";

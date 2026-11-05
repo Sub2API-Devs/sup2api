@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-63094ahz.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-63094ahz.js:229-399 esm-fingerprint

@@ -4,6 +4,7 @@
  * third-party: @azure/msal-common@15.13.1
  * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-layout 1, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Constants } from "../../lib/index-node-DhUjlPuB.js";
 import { deferInit, runDeferredInits } from "../../../../../runtime/deferred-init.js";

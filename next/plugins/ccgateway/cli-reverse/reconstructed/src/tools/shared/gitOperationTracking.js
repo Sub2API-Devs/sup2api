@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/shared/gitOperationTracking.ts
  * pieces: chunk-7jxyna5q.js (64)
  * attribution: affinity 2, fingerprint 5, layout 43, sole-consumer 1, placement 10, file-local 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";

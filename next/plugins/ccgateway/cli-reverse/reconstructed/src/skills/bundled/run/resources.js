@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-xr0qfs7k.js (9)
  * attribution: placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../../assets/cli-40vh1c3p.md" with { type: "text" };
 import __cc_resource_1 from "../../../../assets/electron-8035775b.md.zst" with { type: "file" };

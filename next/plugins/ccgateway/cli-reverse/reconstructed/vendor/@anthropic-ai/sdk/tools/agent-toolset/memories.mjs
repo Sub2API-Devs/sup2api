@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-m6wtswwx.js (9), chunk-vn3g7zt8.js (2)
  * attribution: esm-layout 2, esm-fingerprint 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pHt from "crypto";
 import * as Nm from "path";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/betaSessionTracing.ts
  * pieces: chunk-3bj63apf.js (1), chunk-4qbrxszq.js (17)
  * attribution: fingerprint 10, placement 3, callgraph-witnessed 1, file-local 1, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";

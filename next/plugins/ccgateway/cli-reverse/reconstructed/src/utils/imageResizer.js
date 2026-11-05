@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/imageResizer.ts
  * pieces: chunk-dds7xhsh.js (1), chunk-jf14gxs3.js (2), chunk-nw81sbzb.js (39)
  * attribution: placement 16, callgraph-witnessed 2, fingerprint 13, affinity 1, layout 9, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { MAX_IMAGE_DIMENSION, IMAGE_SOURCE_MARKER_PREFIX, IMAGE_MARKER_PREFIX } from "./imageErrors.js";

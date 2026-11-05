@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/install.tsx
  * pieces: chunk-g2yr2739.js (6)
  * attribution: placement 1, file-last-pair 1, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { join } from "path";

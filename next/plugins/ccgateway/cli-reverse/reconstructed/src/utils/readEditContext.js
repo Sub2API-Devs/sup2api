@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/readEditContext.ts
  * pieces: chunk-n0hwmqka.js (8)
  * attribution: fingerprint 3, file-local 2, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   DIFF_CONTEXT_LINES_BEFORE,

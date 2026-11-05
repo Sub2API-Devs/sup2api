@@ -4,6 +4,7 @@
  * third-party: axios@1.15.2
  * pieces: chunk-ww9agm6g.js (67)
  * attribution: esm-fingerprint 52, esm-layout 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import url from "url";
 import hc from "crypto";

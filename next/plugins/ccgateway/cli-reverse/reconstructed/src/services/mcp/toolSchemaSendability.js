@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-d8kc7cr1.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { flattenInputSchema } from "../../remote/tools/inputSchemaFlatten.js";
 import { validateToolSchema } from "./toolSchemaValidation.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/useFeedbackSurvey.tsx
  * pieces: chunk-czq1j3j2.js (5), chunk-nh1pvp1m.js (1), chunk-spc1ee2a.js (1)
  * attribution: sole-consumer 3, affinity 1, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getLastAssistantMessage } from "../../utils/messages.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";

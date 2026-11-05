@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/ide/ide.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-dh16zjm4.js (24), chunk-qg41pqt6.js (1)
  * attribution: placement 4, sole-consumer 5, file-local 1, fingerprint 11, affinity 1, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isIP } from "net";
 import * as pathModule from "path";

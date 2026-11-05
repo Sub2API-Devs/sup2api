@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/policyLimits/index.ts
  * pieces: chunk-bvz8t570.js (1), chunk-czq1j3j2.js (1), chunk-exfmq47h.js (8), chunk-hfc4cfnt.js (1), chunk-pcv9zvvv.js (2), chunk-z20c443b.js (1)
  * attribution: fingerprint 7, placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { sortKeysDeep, isGateAOn } from "../../utils/settings/settingsSourceTrust.js";

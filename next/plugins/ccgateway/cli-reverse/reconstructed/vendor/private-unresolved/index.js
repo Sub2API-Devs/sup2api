@@ -4,6 +4,7 @@
  * third-party: private-unresolved/index.js
  * pieces: chunk-1hnjmk23.js (65), chunk-w3ch4xq2.js (1)
  * attribution: cjs-unmatched+string-clue 66
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_v3 } from "../zod/v3/index.cjs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/reload-plugins/reload-plugins.ts
  * pieces: chunk-bwd173d9.js (27)
  * attribution: sole-consumer 26, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, readdir, stat } from "fs/promises";
 import { basename, join } from "path";

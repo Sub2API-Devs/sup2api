@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/batch.ts
  * pieces: chunk-ne2890fx.js (7)
  * attribution: placement 2, fingerprint 3, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";
 import { ENTER_PLAN_MODE_TOOL_NAME } from "../../tools/EnterPlanModeTool/constants.js";

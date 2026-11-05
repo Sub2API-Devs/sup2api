@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/bridge/bridge.tsx
  * pieces: chunk-163scjsz.js (25), chunk-46zjpx8m.js (1), chunk-gzk78dcy.js (3), chunk-vax9bfta.js (5)
  * attribution: placement 4, fingerprint 9, layout 9, affinity 2, sole-consumer 8, file-local 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getBridgeDisabledDiagnosis } from "../../bridge/bridgeEntitlement.js";
 import { logOrgPolicyDenied } from "../../services/policyLimits/orgPolicyDeniedEvent.js";

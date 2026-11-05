@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/browser.ts
  * pieces: chunk-mg3ab5yg.js (13)
  * attribution: sole-consumer 1, affinity 1, fingerprint 3, layout 7, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { pathToFileURL, fileURLToPath } from "url";
 import { execFileNoThrow } from "./execFileNoThrow.js";

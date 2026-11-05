@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/bashParser.ts
  * pieces: chunk-h9zrcz6k.js (94)
  * attribution: file-local 1, facade-exports 3, layout 19, fingerprint 64, callgraph-witnessed 6, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { identity } from "../identity.js";
 import {

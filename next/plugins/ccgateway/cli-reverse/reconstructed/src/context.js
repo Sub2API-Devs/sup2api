@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/context.ts
  * pieces: chunk-5xgkngpb.js (25)
  * attribution: sole-consumer 1, affinity 1, fingerprint 3, placement 13, layout 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { IGNORE_SUBMODULES_DIRTY_FLAG } from "./utils/git/gitSafeEnv.js";
 import { logForDiagnosticsNoPII } from "./utils/diagLogs.js";

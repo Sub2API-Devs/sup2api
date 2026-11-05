@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memoryTypes.ts
  * pieces: chunk-a2q0x549.js (20)
  * attribution: placement 7, layout 8, fingerprint 4, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPlainObject } from "../utils/isPlainObject.js";
 import {

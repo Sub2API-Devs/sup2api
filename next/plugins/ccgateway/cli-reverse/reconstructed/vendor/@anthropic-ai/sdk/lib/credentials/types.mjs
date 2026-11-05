@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-bxxnnnh4.js (10)
  * attribution: esm-fingerprint 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AnthropicError } from "../../core/error.mjs";
 import { classifyOAuthErrorResponse } from "../../../../../src/services/oauth/oauthErrors.js";

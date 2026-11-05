@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/StdinContext.ts
  * pieces: chunk-xd1cb3xs.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createContext } from "../../../vendor/react/cjs/react.production.js";
 import { EventEmitter } from "../events/emitter.js";

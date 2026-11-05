@@ -4,6 +4,7 @@
  * third-party: @inquirer/figures@1.0.7..2.0.0
  * pieces: chunk-g66qqkzw.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isUnicodeSupported } from "../../../../is-unicode-supported/index.js";
 

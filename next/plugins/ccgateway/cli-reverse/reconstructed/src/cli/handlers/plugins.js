@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/plugins.ts
  * pieces: chunk-6g88e2yt.js (2), chunk-jdfzheem.js (65), chunk-zde45n7x.js (2)
  * attribution: placement 20, facade-exports 20, layout 19, fingerprint 2, affinity 1, file-local 1, sole-consumer 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, relative, resolve } from "path";
 import { shardedSnowflakeOff } from "../../utils/plugins/pluginGates.js";

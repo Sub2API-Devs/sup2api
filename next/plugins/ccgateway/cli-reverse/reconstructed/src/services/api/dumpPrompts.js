@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/dumpPrompts.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-p13f9wk2.js (1), chunk-pc3x100t.js (1), chunk-wd6hahbe.js (12)
  * attribution: fingerprint 3, placement 10, layout 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { promises } from "fs";

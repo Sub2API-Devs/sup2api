@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-m6wtswwx.js (26)
  * attribution: esm-fingerprint 22, esm-layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as fsPromisesModule from "fs/promises";
 import * as child_processModule from "child_process";

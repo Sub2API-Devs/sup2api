@@ -4,6 +4,7 @@
  * third-party: @mermaid-js/parser@1.2.1..2.0.0
  * pieces: chunk-6t6ry2vt.js (88), chunk-wwjb4dqs.js (148), chunk-z20c443b.js (83)
  * attribution: esm-fingerprint 105, esm-layout 213, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { baseGetTagExport } from "../../../../../lodash-es/_baseGetTag.js";
 import { rootExport, freeGlobalExport, symbolExport } from "../../../../../lodash-es/_root.js";

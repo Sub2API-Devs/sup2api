@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/earlyInput.ts
  * pieces: chunk-c391cw88.js (30)
  * attribution: placement 20, fingerprint 1, facade-majority 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession, flushInteractionTime, getLastInteractionTime } from "../bootstrap/state.js";

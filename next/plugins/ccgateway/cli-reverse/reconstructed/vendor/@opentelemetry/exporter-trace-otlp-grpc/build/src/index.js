@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/exporter-trace-otlp-grpc@0.208.0
  * pieces: chunk-8f37xdfp.js (2)
  * attribution: cjs-fingerprint+context 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_OTLPTraceExporter } from "./OTLPTraceExporter.js";

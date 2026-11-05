@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/ManageMarketplaces.tsx
  * pieces: chunk-wb51jffc.js (8)
  * attribution: placement 4, fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import {

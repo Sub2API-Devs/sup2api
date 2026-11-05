@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/LogoV2.tsx
  * pieces: chunk-hnxhr3bs.js (23)
  * attribution: placement 14, sole-consumer 8, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

@@ -4,6 +4,7 @@
  * third-party: jsonc-parser@3.2.1..3.3.1
  * pieces: chunk-aj4djjd6.js (9)
  * attribution: esm-layout 5, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseTree } from "./impl/parser.js";
 import { modify, applyEdit } from "./impl/edit.js";

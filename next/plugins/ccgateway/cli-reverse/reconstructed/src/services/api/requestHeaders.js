@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-exfmq47h.js (30), chunk-vn3g7zt8.js (46)
  * attribution: placement 66, layout 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isIP } from "net";
 import { RETRY_ON_529_QUERY_SOURCES } from "./withRetry.js";

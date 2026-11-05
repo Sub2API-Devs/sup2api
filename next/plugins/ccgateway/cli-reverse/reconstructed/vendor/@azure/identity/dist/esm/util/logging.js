@@ -4,6 +4,7 @@
  * third-party: @azure/identity@4.10.1
  * pieces: chunk-b5df2wx1.js (6)
  * attribution: esm-fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createClientLogger_2 } from "../../../../logger/dist/esm/index.js";
 

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fsOperations.ts
  * pieces: chunk-2jb250pa.js (1), chunk-5xgkngpb.js (4), chunk-6hadbefe.js (78), chunk-9knfmvrf.js (1), chunk-xjnnz630.js (1)
  * attribution: placement 79, layout 2, callgraph-fingerprint 1, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as fsModule from "fs";
 import * as pathModule from "path";

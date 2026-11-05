@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/autoDream/consolidationLock.ts
  * pieces: chunk-ergqq6hs.js (1), chunk-z7mex7te.js (13)
  * attribution: fingerprint 4, layout 9, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath, stat, readFile, mkdir, writeFile, unlink, utimes } from "fs/promises";
 import { join } from "path";

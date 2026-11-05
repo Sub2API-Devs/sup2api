@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SkillTool/constants.ts
  * pieces: chunk-1q7gzm2x.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-1q7gzm2x.js:12132-12147 fingerprint (2.1.88 match: SKILL_TOOL_NAME, 1)

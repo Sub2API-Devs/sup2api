@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AskUserQuestionTool/AskUserQuestionTool.tsx
  * pieces: chunk-5xgkngpb.js (2), chunk-zxdsqmea.js (10)
  * attribution: fingerprint 7, affinity 1, callgraph-fingerprint 1, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sanitizeAttentionText } from "../../components/fleet/sessionAttention.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";

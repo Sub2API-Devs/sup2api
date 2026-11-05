@@ -4,6 +4,7 @@
  * third-party: @smithy/querystring-builder@2.2.0
  * pieces: chunk-355mdh7x.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_uri_escape } from "../../util-uri-escape/dist-cjs/index.js";

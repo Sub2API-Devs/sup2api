@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/sedEditParser.ts
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getCommandArgv } from "../../utils/bash/commands.js";
 import { MULTIPLE_INPLACE_MARKER } from "./sedValidation.js";

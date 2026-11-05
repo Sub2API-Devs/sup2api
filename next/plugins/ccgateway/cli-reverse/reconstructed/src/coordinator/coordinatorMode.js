@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/coordinator/coordinatorMode.ts
  * pieces: chunk-4qfkyrk4.js (14), chunk-6f6qbsyw.js (1), chunk-czq1j3j2.js (2), chunk-ghnsph6v.js (2)
  * attribution: placement 11, layout 2, facade-exports 4, sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEnvTruthy } from "../utils/envUtils.js";
 import { getIsInteractive, getIsRemoteMode, getDisableSlashCommands } from "../bootstrap/state.js";

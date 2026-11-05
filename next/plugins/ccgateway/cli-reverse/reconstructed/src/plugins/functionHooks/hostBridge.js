@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7n3ata3a.js (44), chunk-f284hj51.js (2), chunk-j8f885h1.js (1)
  * attribution: placement 47
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { KEY_SEPARATOR } from "./ui/raster.js";

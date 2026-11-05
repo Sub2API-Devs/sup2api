@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/agentColorManager.ts
  * pieces: chunk-pse52p6n.js (2), chunk-vm6wzby5.js (5)
  * attribution: placement 3, fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getAgentColorMap } from "../../bootstrap/state.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

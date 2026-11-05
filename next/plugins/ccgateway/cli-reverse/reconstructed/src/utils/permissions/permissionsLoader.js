@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissionsLoader.ts
  * pieces: chunk-9s2vygnp.js (45), chunk-t58ha4ac.js (1)
  * attribution: placement 3, facade-majority 24, layout 17, file-local 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSessionFunctionHooks } from "../hooks/sessionHooks.js";
 import { isOfficialMarketplaceRef, hasSimilarMarketplaceName } from "../plugins/marketplaceNames.js";

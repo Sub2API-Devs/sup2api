@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-czq1j3j2.js (6)
  * attribution: placement 5, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { RECENT_INPUT_GUARD_MS_2 } from "../../hooks/useRecentInputGuard.js";

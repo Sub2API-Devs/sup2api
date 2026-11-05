@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/logging.ts
  * pieces: chunk-5xgkngpb.js (37)
  * attribution: fingerprint 6, affinity 1, placement 17, layout 12, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   fromEnumOpt,

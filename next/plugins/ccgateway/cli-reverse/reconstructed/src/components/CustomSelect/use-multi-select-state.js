@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/use-multi-select-state.ts
  * pieces: chunk-jqr4ms5p.js (3)
  * attribution: placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isDeepStrictEqual } from "util";
 import { init_react_production, useState, useCallback } from "../../../vendor/react/cjs/react.production.js";

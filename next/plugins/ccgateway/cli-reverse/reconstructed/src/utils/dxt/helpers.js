@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/dxt/helpers.ts
  * pieces: chunk-h29vk4wn.js (1), chunk-pzdhtgn4.js (3)
  * attribution: fingerprint 3, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, errorMessage } from "../errors.js";
 import { jsonParse } from "../slowOperations.js";

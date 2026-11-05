@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-kbr8ch1e.js (83)
  * attribution: placement 83
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes, createCipheriv, createHash } from "crypto";
 import { join, basename } from "path";

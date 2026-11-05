@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/loadSkillsDir.ts
  * pieces: chunk-5xgkngpb.js (76)
  * attribution: placement 22, fingerprint 11, layout 40, callgraph-witnessed 1, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, basename, dirname, sep, relative, isAbsolute } from "path";
 import { readdir, realpath } from "fs/promises";

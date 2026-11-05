@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/prompt.ts
  * pieces: chunk-qxwk69tt.js (1)
  * attribution: facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-qxwk69tt.js:191-2834 facade-exports (2.1.88 match: BRIEF_PROACTIVE_SECTION, 0.627)
 /**

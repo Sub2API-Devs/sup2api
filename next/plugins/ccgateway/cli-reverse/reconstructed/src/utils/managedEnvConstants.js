@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/managedEnvConstants.ts
  * pieces: chunk-z20c443b.js (30)
  * attribution: placement 10, fingerprint 3, layout 16, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEnvDefinedFalsy, isEnvTruthy } from "./envUtils.js";
 import { normalizeCaseForComparison_2 } from "./permissions/filesystem.js";

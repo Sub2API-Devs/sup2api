@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/App.tsx
  * pieces: chunk-2avr6cej.js (13)
  * attribution: affinity 2, fingerprint 3, placement 1, layout 5, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PureComponent_default } from "../../../vendor/react/cjs/react.production.js";
 import { EventEmitter } from "../events/emitter.js";

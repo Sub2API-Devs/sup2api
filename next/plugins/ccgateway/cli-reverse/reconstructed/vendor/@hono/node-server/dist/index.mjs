@@ -4,6 +4,7 @@
  * third-party: @hono/node-server@1.19.14..1.19.17
  * pieces: chunk-cacgqezg.js (17)
  * attribution: esm-fingerprint 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Readable } from "stream";
 import { Http2ServerRequest, constants } from "http2";

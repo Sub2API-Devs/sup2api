@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hooksConfigManager.ts
  * pieces: chunk-g4mtt8nt.js (4)
  * attribution: fingerprint 1, callgraph-witnessed 1, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { NOTIFICATION_EVENT_KINDS } from "../config.js";
 import { isRestrictedLinksEnabled } from "../../services/oauth/oauthErrors.js";

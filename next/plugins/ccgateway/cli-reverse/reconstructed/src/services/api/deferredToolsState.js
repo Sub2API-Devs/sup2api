@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-03tec5k5.js (40), chunk-c41z4928.js (8)
  * attribution: sole-consumer 3, affinity 1, placement 42, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isDeepStrictEqual } from "util";
 import { normalizeNfkc, BRACKET_CONFUSABLES, sanitizeLogLine } from "../../utils/sanitization.js";

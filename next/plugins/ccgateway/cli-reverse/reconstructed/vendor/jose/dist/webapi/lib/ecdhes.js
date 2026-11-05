@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-0f6azspv.js (5)
  * attribution: esm-layout 1, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { concat, uint32be, encode } from "./buffer_utils.js";
 import { digest } from "./helpers.js";

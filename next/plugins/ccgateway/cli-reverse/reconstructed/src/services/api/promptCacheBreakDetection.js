@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/promptCacheBreakDetection.ts
  * pieces: chunk-03tec5k5.js (20), chunk-5xgkngpb.js (83), chunk-7pwjpdkw.js (15), chunk-8tk33yy7.js (9), chunk-ac0ps64w.js (2)
  * attribution: placement 88, layout 28, sole-consumer 1, fingerprint 10, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isDeepStrictEqual } from "util";
 import { join } from "path";

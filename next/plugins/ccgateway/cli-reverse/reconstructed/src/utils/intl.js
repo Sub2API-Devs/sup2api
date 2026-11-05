@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/intl.ts
  * pieces: chunk-t3ta3dyx.js (24)
  * attribution: placement 12, fingerprint 6, callgraph-witnessed 1, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-t3ta3dyx.js:191-216 placement
 var INTL_CACHE = null;

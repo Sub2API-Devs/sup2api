@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/imageValidation.ts
  * pieces: chunk-ma8ytfb3.js (1), chunk-vr5v4gzz.js (3)
  * attribution: fingerprint 3, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { formatFileSize } from "./format.js";
 import { isPlainObject as isPlainObject_2 } from "./isPlainObject.js";

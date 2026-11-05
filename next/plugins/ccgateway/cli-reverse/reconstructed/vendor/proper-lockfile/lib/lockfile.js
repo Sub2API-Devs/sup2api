@@ -4,6 +4,7 @@
  * third-party: proper-lockfile@4.1.2
  * pieces: chunk-3c7mkwg0.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_graceful_fs } from "../../graceful-fs/graceful-fs.js";

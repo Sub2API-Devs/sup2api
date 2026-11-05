@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/memoize.ts
  * pieces: chunk-yneawn9n.js (7)
  * attribution: fingerprint 1, layout 1, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonStringify } from "./slowOperations.js";
 import { logForDebugging } from "./debug.js";

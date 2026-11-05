@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskOutputTool/TaskOutputTool.tsx
  * pieces: chunk-01kgd7xg.js (2), chunk-1kk50rk6.js (1)
  * attribution: fingerprint 2, file-last-pair 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BROADCAST_AGENT_TYPES } from "../../cli/remoteIO/gates.js";
 import { normalizeAgentIdOrNull } from "../../utils/agentId.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/utils.ts
  * pieces: chunk-5xgkngpb.js (9), chunk-rkc3d9jc.js (1)
  * attribution: fingerprint 6, affinity 1, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isObjectBlock } from "../../utils/toolResultStorage.js";
 import { PERSONAL_BLOCKING_EVENTS } from "../../utils/hooks/hookFailures.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/backends/TmuxBackend.ts
  * pieces: chunk-qtbtjf1h.js (6)
  * attribution: affinity 1, fingerprint 1, layout 2, facade-exports 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getUserTmuxSocket, isTmuxAvailable, isInsideTmux, getLeaderPaneId } from "./detection.js";
 import { execFileNoThrow } from "../../execFileNoThrow.js";

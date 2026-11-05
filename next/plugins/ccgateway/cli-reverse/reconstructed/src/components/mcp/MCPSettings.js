@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPSettings.tsx
  * pieces: chunk-h6004nzv.js (8)
  * attribution: callgraph-fingerprint 3, layout 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isArtifacts404Failure } from "../../services/mcp/redactMcpErrors.js";
 import { describeMcpServerOrigin } from "../../services/mcp/mcpServerOrigin.js";

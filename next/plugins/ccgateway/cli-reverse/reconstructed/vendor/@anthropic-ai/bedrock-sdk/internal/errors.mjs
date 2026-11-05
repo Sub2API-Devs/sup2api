@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
  * pieces: chunk-1vqm62xf.js (2), chunk-b8zxeazh.js (3), chunk-f7kbssbx.js (3)
  * attribution: esm-layout 4, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_fetch_http_handler } from "../../../@smithy/fetch-http-handler/dist-cjs/index.js";

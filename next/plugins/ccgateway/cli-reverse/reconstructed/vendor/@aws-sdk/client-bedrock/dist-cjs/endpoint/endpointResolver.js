@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-bedrock@3.936.0..3.938.0
  * pieces: chunk-gkj73j15.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_index_browser_2, import_util_endpoints } from "../index.js";
 import { ruleSet } from "./ruleset.js";

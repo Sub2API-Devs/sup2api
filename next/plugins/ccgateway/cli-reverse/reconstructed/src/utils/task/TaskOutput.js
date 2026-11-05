@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/task/TaskOutput.ts
  * pieces: chunk-5xgkngpb.js (5)
  * attribution: sole-consumer 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../debug.js";
 import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";

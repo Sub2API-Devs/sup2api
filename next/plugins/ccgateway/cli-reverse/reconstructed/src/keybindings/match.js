@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/match.ts
  * pieces: chunk-m2f3rb0f.js (5)
  * attribution: fingerprint 2, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSingleKeyActionInContexts, keystrokesEqual, getActionChord } from "./resolver.js";
 import { chordToDisplayString } from "./parser.js";

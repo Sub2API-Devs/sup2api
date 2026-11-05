@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportError.tsx
  * pieces: chunk-3tekt16c.js (7), chunk-7jxyna5q.js (1)
  * attribution: sole-consumer 1, affinity 1, facade-majority 4, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasFreshSubscriberToken } from "../commands/review/ultrareviewPreconditions.js";
 import { checkIsGitClean } from "../utils/background/remote/preconditions.js";

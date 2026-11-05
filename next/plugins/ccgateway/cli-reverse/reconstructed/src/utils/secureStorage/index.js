@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/secureStorage/index.ts
  * pieces: chunk-5me9t3vk.js (11)
  * attribution: placement 4, facade-majority 5, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { homedir } from "os";

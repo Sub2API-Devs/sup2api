@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/stringWidth.ts
  * pieces: chunk-85eyj5gy.js (2), chunk-bjt8vq6r.js (2)
  * attribution: fingerprint 3, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getGraphemeSegmenter } from "../utils/intl.js";
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../utils/sanitization.js";

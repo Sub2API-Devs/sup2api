@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/configs.ts
  * pieces: chunk-5m8x0kb6.js (1), chunk-exfmq47h.js (14)
  * attribution: fingerprint 2, placement 12, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PROVIDER_KEYS, catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import {

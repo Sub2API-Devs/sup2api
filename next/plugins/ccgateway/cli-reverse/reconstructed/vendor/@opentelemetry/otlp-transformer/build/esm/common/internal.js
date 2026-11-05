@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/otlp-transformer@0.208.0..0.209.0
  * pieces: chunk-a3r2kq46.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-a3r2kq46.js:25971-26046 esm-fingerprint

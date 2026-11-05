@@ -7,6 +7,7 @@
  * third-party: @aws-sdk/nested-clients@3.936.0
  * pieces: chunk-tvcdn76c.js (18)
  * attribution: placement 3, esm-fingerprint 10, esm-layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../../../../core/dist-cjs/index.js";

@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-0f6azspv.js (16), chunk-pd6th42n.js (15)
  * attribution: esm-fingerprint 20, esm-layout 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { JOSENotSupported_2, JWEInvalid_2, JWEDecryptionFailed_2 } from "../../node/esm/util/errors.js";
 import { message_2 } from "../../node/esm/lib/invalid_key_input.js";

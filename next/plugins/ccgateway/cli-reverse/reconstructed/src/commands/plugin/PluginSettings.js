@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/PluginSettings.tsx
  * pieces: chunk-0yw3taqg.js (1), chunk-5s0qaz1x.js (2), chunk-j6tt9nsa.js (3), chunk-wb51jffc.js (53)
  * attribution: fingerprint 16, affinity 4, placement 4, sole-consumer 14, file-local 3, layout 17, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logError } from "../../utils/log.js";
 import {

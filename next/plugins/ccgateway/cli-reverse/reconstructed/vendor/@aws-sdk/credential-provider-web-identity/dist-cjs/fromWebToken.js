@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/credential-provider-web-identity@3.936.0
  * pieces: chunk-z5f8ea78.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_client } from "../../core/dist-cjs/submodules/client/index.js";

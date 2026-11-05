@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/claude-agent-sdk/transport.js
  * pieces: chunk-tp1gh0pb.js (25)
  * attribution: placement 25
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { spawn } from "child_process";
 import { StringDecoder } from "string_decoder";

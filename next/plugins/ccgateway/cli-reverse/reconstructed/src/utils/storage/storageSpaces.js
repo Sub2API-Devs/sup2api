@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5qsfbz2c.js (21)
  * attribution: placement 21
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-5qsfbz2c.js:191-248 placement
 var KEY_SEPARATOR = String.fromCharCode(0);

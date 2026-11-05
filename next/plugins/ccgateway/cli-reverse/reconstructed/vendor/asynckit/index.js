@@ -4,6 +4,7 @@
  * third-party: asynckit@0.4.0..0.5.0
  * pieces: chunk-ww9agm6g.js (2)
  * attribution: cjs-layout 1, cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_defer } from "./lib/defer.js";

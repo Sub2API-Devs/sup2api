@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
  * pieces: chunk-tvcdn76c.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import {

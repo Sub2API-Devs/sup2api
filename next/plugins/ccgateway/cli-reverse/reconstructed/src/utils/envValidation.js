@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/envValidation.ts
  * pieces: chunk-71parphm.js (10), chunk-exfmq47h.js (1)
  * attribution: placement 10, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseIntLoose } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";

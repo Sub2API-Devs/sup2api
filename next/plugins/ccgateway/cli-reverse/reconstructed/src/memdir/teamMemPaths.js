@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/teamMemPaths.ts
  * pieces: chunk-a2q0x549.js (17)
  * attribution: fingerprint 5, layout 11, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join as join_2, sep as sep_2, dirname as dirname_2, basename, resolve } from "path";
 import { realpath, lstat } from "fs/promises";

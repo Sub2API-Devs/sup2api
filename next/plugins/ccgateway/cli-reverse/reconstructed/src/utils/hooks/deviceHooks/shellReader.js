@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-4z1ntdgk.js (40)
  * attribution: placement 32, layout 7, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { COMMAND_WRAPPERS_2, WRAPPERS_WITH_TIMEOUT, WRAPPER_VALUE_OPTIONS } from "./vouching.js";
 import { quote } from "../../bash/shellQuote.js";

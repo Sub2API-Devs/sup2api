@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queueProcessor.ts
  * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 7, layout 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
 import {

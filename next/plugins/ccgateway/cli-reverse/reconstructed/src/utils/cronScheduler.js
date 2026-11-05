@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronScheduler.ts
  * pieces: chunk-75adsf9v.js (9)
  * attribution: sole-consumer 2, affinity 1, fingerprint 1, layout 3, facade-exports 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import {

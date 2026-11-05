@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/powershell/dangerousCmdlets.ts
  * pieces: chunk-6d2p9h2d.js (1), chunk-p7vpkf52.js (3)
  * attribution: fingerprint 2, callgraph-fingerprint 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { COMMON_ALIASES } from "./parser.js";
 import { CROSS_PLATFORM_CODE_EXEC } from "../permissions/dangerousPatterns.js";

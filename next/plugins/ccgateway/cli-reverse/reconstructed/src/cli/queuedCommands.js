@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-jd53r7dh.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-jd53r7dh.js:6451-6659 placement (2.1.88 match: buildTranscriptEntries, 0.773)

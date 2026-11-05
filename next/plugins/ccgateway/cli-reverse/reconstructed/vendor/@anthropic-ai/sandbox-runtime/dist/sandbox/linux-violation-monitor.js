@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
  * pieces: chunk-qg41pqt6.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { mkdtempSync, rmSync } from "fs";
 import { join, posix } from "path";

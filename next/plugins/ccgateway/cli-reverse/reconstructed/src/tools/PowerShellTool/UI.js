@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/UI.tsx
  * pieces: chunk-4hpb3crc.js (6)
  * attribution: affinity 1, fingerprint 2, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   jsxProd_default_2,

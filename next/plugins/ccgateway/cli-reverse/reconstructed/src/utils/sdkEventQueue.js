@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sdkEventQueue.ts
  * pieces: chunk-0h9p4sxp.js (1), chunk-h29vk4wn.js (1)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-h29vk4wn.js:5616-5741 fingerprint (2.1.88 match: emitTaskTerminatedSdk, 0.607)

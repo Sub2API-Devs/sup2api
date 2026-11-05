@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/print.ts
  * pieces: chunk-0a7cfwp8.js (10), chunk-0yw3taqg.js (48), chunk-5xgkngpb.js (8), chunk-czq1j3j2.js (1), chunk-vxsfen55.js (8)
  * attribution: placement 12, layout 25, fingerprint 15, sole-consumer 17, callgraph-witnessed 2, affinity 2, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { cwd } from "process";

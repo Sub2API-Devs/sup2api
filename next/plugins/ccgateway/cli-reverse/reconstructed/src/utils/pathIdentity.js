@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-qaspter0.js (21)
  * attribution: placement 21
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize, isAbsolute, dirname, join, basename, sep } from "path";
 import { readlink, lstat, realpath, unlink, rmdir, readdir } from "fs/promises";

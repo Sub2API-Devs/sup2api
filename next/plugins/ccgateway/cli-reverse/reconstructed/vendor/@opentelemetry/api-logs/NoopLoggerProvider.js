@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/api-logs@0.208.0..0.209.0
  * pieces: chunk-exfmq47h.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { NoopEmitter } from "../../../src/services/analytics/growthbookClient.js";
 

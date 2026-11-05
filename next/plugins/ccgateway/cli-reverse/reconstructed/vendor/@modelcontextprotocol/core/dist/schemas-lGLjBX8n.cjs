@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/core@2.0.0
  * pieces: chunk-qq5knpkd.js (4)
  * attribution: esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-qq5knpkd.js:1173-1193 esm-fingerprint

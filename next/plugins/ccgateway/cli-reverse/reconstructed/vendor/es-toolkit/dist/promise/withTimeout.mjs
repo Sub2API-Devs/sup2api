@@ -4,6 +4,7 @@
  * third-party: es-toolkit@1.53.1
  * pieces: chunk-nvm0wye1.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createAbortController } from "../../../../src/utils/abortController.js";
 import { sleep } from "../../../../src/utils/sleep.js";

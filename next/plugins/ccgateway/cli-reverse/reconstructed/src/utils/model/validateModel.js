@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/validateModel.ts
  * pieces: chunk-bjbvd2mw.js (12), chunk-exfmq47h.js (4)
  * attribution: sole-consumer 2, fingerprint 2, layout 7, affinity 1, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getProviderState, OVERTURNED_DENY_TTL_MS } from "./providerCaches.js";
 import { isModelAllowed, normalizeForDenyMatch, denyEntryMatchesModel } from "./modelAllowlist.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolPool.ts
  * pieces: chunk-6f6qbsyw.js (8), chunk-dzw1343q.js (9)
  * attribution: placement 15, fingerprint 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { EXITPLANMODE_2 } from "../tools/ExitPlanModeTool/constants.js";
 import { ENTER_PLAN_MODE_TOOL_NAME } from "../tools/EnterPlanModeTool/constants.js";

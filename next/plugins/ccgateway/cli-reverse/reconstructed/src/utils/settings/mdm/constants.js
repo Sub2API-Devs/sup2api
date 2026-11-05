@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/mdm/constants.ts
  * pieces: chunk-4cd7tk6d.js (1), chunk-5xgkngpb.js (1), chunk-wb51jffc.js (1)
  * attribution: fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   countToolDefinitionTokens,

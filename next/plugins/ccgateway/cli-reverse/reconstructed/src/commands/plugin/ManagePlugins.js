@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/ManagePlugins.tsx
  * pieces: chunk-wb51jffc.js (36), chunk-x6t8knrk.js (2)
  * attribution: affinity 1, placement 26, layout 6, fingerprint 4, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as fsPromisesModule from "fs/promises";
 import * as pathModule from "path";

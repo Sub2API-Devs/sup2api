@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVirtualScroll.ts
  * pieces: chunk-hnxhr3bs.js (6)
  * attribution: sole-consumer 2, affinity 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   useRef,

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/startupProfiler.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-eehtd1bk.js (17)
  * attribution: fingerprint 6, sole-consumer 3, affinity 2, callgraph-fingerprint 1, layout 2, facade-exports 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, join } from "path";
 import os from "os";

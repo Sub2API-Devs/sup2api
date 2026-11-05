@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ink.ts
  * pieces: chunk-hhr6kfwg.js (1), chunk-jnsr1ny1.js (2)
  * attribution: fingerprint 1, callgraph-fingerprint 1, shared-adjacent 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ANSI_COLOR_NAME_SET } from "../ink/terminalColorSupport.js";
 import { isAgentColorName, AGENT_COLOR_TO_THEME_COLOR } from "../tools/AgentTool/agentColorManager.js";

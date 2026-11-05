@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/teamHelpers.ts
  * pieces: chunk-qrtkkn9z.js (39)
  * attribution: placement 4, layout 14, facade-exports 19, file-local 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readFile, open, writeFile, mkdir, rename, rm, stat } from "fs/promises";

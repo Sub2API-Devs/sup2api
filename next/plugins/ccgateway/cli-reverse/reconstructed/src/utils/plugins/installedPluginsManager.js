@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/installedPluginsManager.ts
  * pieces: chunk-5xgkngpb.js (112)
  * attribution: fingerprint 21, layout 54, callgraph-fingerprint 3, placement 33, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, resolve as resolve_2, sep, dirname, basename } from "path";
 import { createHash } from "crypto";

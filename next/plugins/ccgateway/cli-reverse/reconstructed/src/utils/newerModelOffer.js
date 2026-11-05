@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-czq1j3j2.js (28)
  * attribution: placement 28
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useEffect, createElement } from "../../vendor/react/cjs/react.production.js";
 import { withHideWhile } from "../components/dialogs/dialogRequests.js";

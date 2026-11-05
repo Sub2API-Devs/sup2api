@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/envUtils.ts
  * pieces: chunk-2k62t388.js (42), chunk-7kayq7nc.js (2), chunk-ndkzc8d3.js (2)
  * attribution: placement 19, fingerprint 9, layout 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, join, dirname, basename } from "path";
 import { identity as identity_2 } from "./identity.js";

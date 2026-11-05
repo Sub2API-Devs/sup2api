@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/query.ts
  * pieces: chunk-ppbxvak2.js (6), chunk-shzdmqn1.js (1), chunk-w3ch4xq2.js (29)
  * attribution: placement 7, sole-consumer 12, fingerprint 2, layout 14, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { codeModeAccepted } from "./utils/codeMode/accepted.js";
 import { SessionRootSlot, isVirtualConversationMessage } from "./bootstrap/sessionSlices.js";

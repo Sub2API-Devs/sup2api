@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ToolSearchTool/prompt.ts
  * pieces: chunk-3a9s57ey.js (14), chunk-amtnfsrk.js (1)
  * attribution: callgraph-fingerprint 1, placement 13, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { REPORTFINDINGS } from "../ReportFindingsTool/constants.js";
 import { WORKFLOW_TOOL_NAME } from "../WorkflowTool/constants.js";

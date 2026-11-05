@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-fq3fa37m.js (32)
  * attribution: placement 32
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/loopAutonomousPreamble-07qcyhv4.md" with { type: "text" };
 import __cc_resource_1 from "../../../assets/loopAutonomousPreamblePersistent-3zqtkrvg.md" with { type: "text" };

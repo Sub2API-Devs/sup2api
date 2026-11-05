@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/skillLoadedEvent.ts
  * pieces: chunk-n0gp41wj.js (6)
  * attribution: placement 5, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parsePluginIdentifier_2, isOfficialMarketplaceName_3 } from "../plugins/pluginIdentifier.js";
 import { isToolDetailsLoggingEnabled } from "../../services/analytics/metadata.js";

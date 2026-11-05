@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-pd6th42n.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_buffer_utils_2 } from "../../webapi/lib/buffer_utils.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/commandSemantics.ts
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-5xgkngpb.js:3192159-3192875 placement (2.1.88 match: PIPELINE_TAIL_CMDLETS, 0.467)
 /**

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2zeqrfs5.js (25)
  * attribution: placement 25
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, join, basename, dirname, resolve, isAbsolute, parse } from "path";
 import { constants } from "fs";

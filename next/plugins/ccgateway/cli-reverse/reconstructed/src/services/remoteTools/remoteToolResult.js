@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-3tymqgex.js (1), chunk-yvhjwwtt.js (22)
  * attribution: placement 23
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isRanOutcome, REMOTE_TOOL_SERVING_LIMITS } from "../../remote/tools/protocolConstants.js";
 import { EDIT } from "../../tools/FileEditTool/constants.js";

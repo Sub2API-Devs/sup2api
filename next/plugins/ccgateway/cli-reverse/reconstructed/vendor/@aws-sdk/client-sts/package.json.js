@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
  * pieces: chunk-539esr4f.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-539esr4f.js:2144-5178 placement

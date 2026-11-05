@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginStartupCheck.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-f2v3cjkz.js (1), chunk-j8f885h1.js (1), chunk-tt36reb3.js (4)
  * attribution: fingerprint 3, facade-exports 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getInitialSettings, getSettingsForSourceForUpkeep } from "../settings/settings.js";
 import { getAddDirEnabledPlugins } from "./addDirPluginSettings.js";

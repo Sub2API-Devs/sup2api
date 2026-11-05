@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/foundry-sdk@0.4.1..0.5.4
  * pieces: chunk-5g2k022m.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Anthropic } from "../sdk/client.mjs";
 import { readEnv } from "./internal/utils/env.mjs";

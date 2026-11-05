@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/constants.ts
  * pieces: chunk-p223w7hd.js (1)
  * attribution: callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ALLOW_LARGE_PARAM } from "../FileReadTool/constants.js";
 

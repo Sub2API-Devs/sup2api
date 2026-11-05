@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2kxh8s5r.js (77)
  * attribution: placement 77
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { arraysEqual } from "../../../utils/collections.js";
 import { parseArtifactUrl, ARTIFACT_SLUG_RE } from "../constants.js";

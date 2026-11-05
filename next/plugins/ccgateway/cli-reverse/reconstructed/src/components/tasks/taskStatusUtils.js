@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/taskStatusUtils.tsx
  * pieces: chunk-czq1j3j2.js (2), chunk-wjygkcr4.js (4)
  * attribution: placement 2, fingerprint 3, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BLACK_CIRCLE, PAUSE_GLYPH } from "../../constants/figures.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";

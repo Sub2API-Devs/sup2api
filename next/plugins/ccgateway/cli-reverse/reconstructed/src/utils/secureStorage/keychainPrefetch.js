@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/secureStorage/keychainPrefetch.ts
  * pieces: chunk-jcrjgjd4.js (8)
  * attribution: facade-exports 7, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { execFile } from "child_process";
 import { getKeychainCacheState, getUsername } from "./macOsKeychainHelpers.js";

@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/nested-clients@3.936.0
  * pieces: chunk-539esr4f.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_region_config_resolver } from "../../../../region-config-resolver/dist-cjs/index.js";

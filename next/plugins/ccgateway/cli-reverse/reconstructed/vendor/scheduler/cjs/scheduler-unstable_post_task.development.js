@@ -4,6 +4,7 @@
  * third-party: scheduler@0.26.0..0.28.0
  * pieces: chunk-2avr6cej.js (1)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-2avr6cej.js:2536-2546 esm-layout

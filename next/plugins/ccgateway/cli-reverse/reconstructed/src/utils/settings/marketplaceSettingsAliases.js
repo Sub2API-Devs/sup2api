@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-z20c443b.js (12)
  * attribution: placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PRIVACY_ENV_VARS, BETA_TRACING_ENV_VARS } from "../managedEnvConstants.js";
 import { isEnvTruthy, isEnvDefinedFalsy } from "../envUtils.js";

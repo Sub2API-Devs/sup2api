@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/platform.ts
  * pieces: chunk-08q4d92p.js (2), chunk-af1hzzme.js (1), chunk-bb1a67wr.js (15), chunk-j9w0w3wz.js (1)
  * attribution: fingerprint 4, shared-adjacent 1, placement 2, sole-consumer 1, affinity 1, layout 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFile, readdir } from "fs/promises";
 import { release } from "os";

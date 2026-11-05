@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-asf5gh8x.js (9)
  * attribution: placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createWriteStream, fchmod } from "fs";
 import { mkdir, lstat, readFile, rm, writeFile } from "fs/promises";

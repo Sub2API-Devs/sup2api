@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-x04h1tzj.js (8), chunk-xzmy9dn4.js (13)
  * attribution: placement 21
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PUBLISH_EDITS_AFTER_EDITS_HINT, PUBLISH_EDITS_AFTER_PUBLISH_HINT } from "./publishEdits.js";
 import { EDIT } from "../FileEditTool/constants.js";

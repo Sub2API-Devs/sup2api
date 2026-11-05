@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/token-providers@3.936.0..3.939.0
  * pieces: chunk-1yr4143q.js (4), chunk-t032zdr0.js (10)
  * attribution: esm-layout 7, esm-fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { promises } from "fs";
 import { __toESM } from "../../../../runtime/bun-runtime.js";

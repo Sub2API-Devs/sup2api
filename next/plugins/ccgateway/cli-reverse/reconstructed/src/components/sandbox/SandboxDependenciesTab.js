@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/sandbox/SandboxDependenciesTab.tsx
  * pieces: chunk-ex0jqs9a.js (1), chunk-y07105e8.js (14)
  * attribution: fingerprint 3, placement 1, layout 9, callgraph-fingerprint 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSandboxBwrapPath } from "../../utils/subprocessEnv.js";
 import { bunWhichSync } from "../../utils/which.js";

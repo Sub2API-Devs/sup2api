@@ -4,6 +4,7 @@
  * third-party: @azure/identity@4.10.1
  * pieces: chunk-b5df2wx1.js (35)
  * attribution: esm-fingerprint 33, esm-layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFile } from "fs/promises";
 import * as child_processModule from "child_process";

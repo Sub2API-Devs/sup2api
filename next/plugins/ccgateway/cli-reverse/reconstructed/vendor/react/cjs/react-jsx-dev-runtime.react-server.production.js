@@ -4,6 +4,7 @@
  * third-party: react@19.3.0..19.3.1
  * pieces: chunk-6n4z8qxn.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-6n4z8qxn.js:191-269 esm-fingerprint
 var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");

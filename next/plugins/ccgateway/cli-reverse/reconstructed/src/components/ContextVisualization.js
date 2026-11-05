@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ContextVisualization.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-qt8k81nz.js (27)
  * attribution: fingerprint 10, file-local 2, layout 7, callgraph-fingerprint 8, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { HostScoped } from "../utils/hostScoped.js";

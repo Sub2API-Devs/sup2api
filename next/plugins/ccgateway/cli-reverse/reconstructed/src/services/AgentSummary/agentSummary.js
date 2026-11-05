@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/AgentSummary/agentSummary.ts
  * pieces: chunk-frs14hy1.js (25)
  * attribution: placement 19, layout 4, callgraph-fingerprint 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { buildLaptopMemoryAttachment } from "../accountMemory/memoryContext.js";
 import { createAttachmentMessage_2 as createAttachmentMessage, logForDebugging } from "../../utils/debug.js";

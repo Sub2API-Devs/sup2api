@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Usage.tsx
  * pieces: chunk-j6tt9nsa.js (52), chunk-z03ry4rj.js (1)
  * attribution: placement 49, fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { formatResetText, formatTokens, formatRelativeTimeAgo, formatResetTime } from "../../utils/format.js";
 import {

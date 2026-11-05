@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/settingsSync/index.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (1), chunk-fwegbnps.js (2), chunk-vb7ng9fr.js (1)
  * attribution: callgraph-fingerprint 3, sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, join } from "path";
 import { ReferralEligibilityUnavailableError } from "../api/referral.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/usePrStatus.ts
  * pieces: chunk-84xc132a.js (1), chunk-czq1j3j2.js (12)
  * attribution: fingerprint 1, placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { watch } from "fs";
 import { getPrStatusColor } from "../components/PrBadge.js";

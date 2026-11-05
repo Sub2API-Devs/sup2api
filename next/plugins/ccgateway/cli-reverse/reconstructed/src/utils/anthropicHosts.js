@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-355mdh7x.js (26)
  * attribution: placement 25, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_node_http_handler } from "../../vendor/@smithy/node-http-handler/dist-cjs/index.js";

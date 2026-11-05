@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/osc.ts
  * pieces: chunk-2avr6cej.js (5), chunk-edrpfa7j.js (33)
  * attribution: fingerprint 12, layout 20, placement 3, callgraph-fingerprint 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Buffer as N } from "buffer";
 import { ESC, ESC_TYPE, BEL, SEP } from "./ansi.js";

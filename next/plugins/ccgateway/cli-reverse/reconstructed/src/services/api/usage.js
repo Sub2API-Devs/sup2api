@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/usage.ts
  * pieces: chunk-7pwjpdkw.js (53), chunk-rdsmmn25.js (9)
  * attribution: placement 59, callgraph-fingerprint 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isRateLimitMockingEnabled, getRawUtilization, currentUsageWindows } from "../claudeAiLimits.js";
 import { logForDebugging } from "../../utils/debug.js";

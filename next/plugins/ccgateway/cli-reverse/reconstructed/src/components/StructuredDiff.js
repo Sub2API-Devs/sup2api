@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/StructuredDiff.tsx
  * pieces: chunk-bh7ttv2b.js (1), chunk-e50jywsa.js (7)
  * attribution: fingerprint 3, placement 2, sole-consumer 1, affinity 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, memo } from "../../vendor/react/cjs/react.production.js";
 import { getColorDiff } from "../native-ts/color-diff/index.js";

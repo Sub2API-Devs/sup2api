@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/FileReadTool.ts
  * pieces: chunk-0fzr619q.js (1), chunk-5xgkngpb.js (52), chunk-cz93r0jz.js (1), chunk-gb7aq6sf.js (3), chunk-nw81sbzb.js (1)
  * attribution: placement 9, layout 31, fingerprint 8, file-local 2, facade-exports 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import "path";
 import * as pathModule_2 from "path";

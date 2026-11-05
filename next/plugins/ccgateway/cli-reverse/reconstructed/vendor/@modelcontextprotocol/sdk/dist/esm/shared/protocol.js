@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/sdk@1.29.0
  * pieces: chunk-efaj9q04.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   CancelledNotificationSchema,

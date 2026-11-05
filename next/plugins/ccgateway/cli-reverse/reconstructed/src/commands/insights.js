@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/insights.ts
  * pieces: chunk-f2v3cjkz.js (63), chunk-n5rwkt40.js (5), chunk-pc3x100t.js (1), chunk-vvzj896g.js (1), chunk-wjygkcr4.js (1)
  * attribution: sole-consumer 5, fingerprint 31, layout 26, callgraph-fingerprint 2, affinity 3, file-local 2, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, extname } from "path";
 import * as fsPromisesModule from "fs/promises";

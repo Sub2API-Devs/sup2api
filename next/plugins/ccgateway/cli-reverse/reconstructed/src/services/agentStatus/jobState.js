@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-aep4jqr7.js (1), chunk-rytc8e8q.js (25)
  * attribution: placement 24, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { appendFile } from "fs/promises";
 import { join } from "path";

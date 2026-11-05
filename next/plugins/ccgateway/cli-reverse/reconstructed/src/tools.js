@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools.ts
  * pieces: chunk-5xgkngpb.js (3), chunk-fmnbrxwy.js (15)
  * attribution: fingerprint 1, placement 5, layout 4, file-local 2, facade-exports 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { FileReadTool } from "./tools/FileReadTool/FileReadTool.js";
 import { FileWriteTool } from "./tools/FileWriteTool/FileWriteTool.js";

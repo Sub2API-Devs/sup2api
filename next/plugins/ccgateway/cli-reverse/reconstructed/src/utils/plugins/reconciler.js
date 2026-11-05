@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/reconciler.ts
  * pieces: chunk-w8hpkj60.js (3)
  * attribution: fingerprint 2, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, resolve } from "path";
 import { ownPropertyOrUndefined } from "./marketplaceSources.js";

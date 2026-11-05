@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-vn3g7zt8.js (6)
  * attribution: esm-fingerprint 5, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isArray } from "../utils/values.mjs";
 import { encode, maybe_map, isBufferLike, has } from "./utils.mjs";

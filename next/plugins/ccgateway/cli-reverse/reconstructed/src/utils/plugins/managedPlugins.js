@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/managedPlugins.ts
  * pieces: chunk-6sf70a86.js (7), chunk-gs416h43.js (2), chunk-r7hswen6.js (19)
  * attribution: placement 27, shared-adjacent 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isSkillOutsideCorePolicy } from "../../skills/bundledSkillsGate.js";
 import { getBuiltinPlugins } from "../../plugins/builtinPlugins.js";

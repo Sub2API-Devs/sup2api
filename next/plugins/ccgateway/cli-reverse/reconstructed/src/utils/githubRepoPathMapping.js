@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/githubRepoPathMapping.ts
  * pieces: chunk-rac70nh6.js (5)
  * attribution: fingerprint 3, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath } from "fs/promises";
 import { detectCurrentRepository, parseGitHubRepository } from "./detectRepository.js";

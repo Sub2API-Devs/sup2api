@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/mcp.tsx
  * pieces: chunk-pvz3y4bf.js (21), chunk-z20c443b.js (1)
  * attribution: sole-consumer 7, fingerprint 6, layout 6, callgraph-fingerprint 1, affinity 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   errorMessage,

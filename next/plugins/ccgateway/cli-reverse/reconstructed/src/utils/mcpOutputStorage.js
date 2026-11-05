@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcpOutputStorage.ts
  * pieces: chunk-1jwzj2da.js (1), chunk-5xgkngpb.js (4), chunk-qwkyjqpg.js (19)
  * attribution: placement 17, fingerprint 6, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, join } from "path";
 import {

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-kbra36ja.js (6)
  * attribution: placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { OFFICIAL_MARKETPLACE_NAME } from "./officialMarketplaceNames.js";
 import {

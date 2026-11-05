@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-wsa1bbj1.js (28)
  * attribution: placement 28
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { relative } from "path";
 import { Marked } from "../../../../vendor/marked/lib/marked.esm.js";

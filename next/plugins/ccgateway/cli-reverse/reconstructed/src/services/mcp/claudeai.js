@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/claudeai.ts
  * pieces: chunk-06vyq63w.js (29)
  * attribution: placement 13, fingerprint 2, layout 13, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getCliOwnedState } from "./cliOwnedClients.js";
 import { sequential } from "../../utils/sequential.js";

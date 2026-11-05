@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/sessionHooks.ts
  * pieces: chunk-7jxyna5q.js (2), chunk-9mafwvrf.js (4), chunk-q1gbn2mn.js (7)
  * attribution: affinity 2, callgraph-fingerprint 2, placement 3, sole-consumer 1, fingerprint 2, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isHookEqual } from "./hooksSettings.js";
 import { emitHookStoresChanged, onProcessRootHost } from "../../bootstrap/state.js";

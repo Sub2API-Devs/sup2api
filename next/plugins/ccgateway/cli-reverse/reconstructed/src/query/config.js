@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/query/config.ts
  * pieces: chunk-w3ch4xq2.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSessionId } from "../bootstrap/state.js";
 import { env } from "../utils/env.js";

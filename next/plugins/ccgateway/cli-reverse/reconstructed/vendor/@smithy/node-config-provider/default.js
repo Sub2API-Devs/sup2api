@@ -4,6 +4,7 @@
  * third-party: @smithy/node-config-provider@2.3.0..3.0.0
  * pieces: chunk-hgkabv79.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { require_node_config_provider } from "./dist-cjs/index.js";
 

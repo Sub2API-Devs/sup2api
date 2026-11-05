@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/dxt/zip.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-pzdhtgn4.js (13)
  * attribution: fingerprint 5, layout 1, placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize, isAbsolute } from "path";
 import { inflateRawSync } from "zlib";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/remote/RemoteSessionManager.ts
  * pieces: chunk-h29vk4wn.js (39), chunk-qyz2x025.js (1)
  * attribution: placement 36, layout 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isDeepStrictEqual } from "util";
 import { randomUUID } from "crypto";

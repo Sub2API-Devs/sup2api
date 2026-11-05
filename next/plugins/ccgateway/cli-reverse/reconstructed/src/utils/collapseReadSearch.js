@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/collapseReadSearch.ts
  * pieces: chunk-5xgkngpb.js (60)
  * attribution: placement 23, layout 23, fingerprint 13, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isTeamMemoryPath } from "../memdir/teamMemPrompts.js";
 import { FILE_WRITE_TOOL_NAME } from "../tools/FileWriteTool/prompt.js";

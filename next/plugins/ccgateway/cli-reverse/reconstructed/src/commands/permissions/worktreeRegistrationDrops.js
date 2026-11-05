@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-d6fqja04.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, normalize } from "path";
 import { stringSchema, zodStrictObject, array } from "../../../vendor/zod/v4/classic/schemas.js";

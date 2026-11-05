@@ -4,6 +4,7 @@
  * third-party: @alcalzone/ansi-tokenize@0.2.2
  * pieces: chunk-ngeq6w7y.js (7)
  * attribution: esm-layout 3, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isFullwidthCodePoint, isWideCodePoint } from "../../../get-east-asian-width/lookup-data.js";
 import {

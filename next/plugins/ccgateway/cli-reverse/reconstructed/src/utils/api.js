@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/api.ts
  * pieces: chunk-5xgkngpb.js (56), chunk-7pwjpdkw.js (2)
  * attribution: placement 29, fingerprint 6, callgraph-fingerprint 1, layout 19, file-local 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { isDeepStrictEqual } from "util";

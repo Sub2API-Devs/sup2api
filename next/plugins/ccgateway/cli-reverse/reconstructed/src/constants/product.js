@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/product.ts
  * pieces: chunk-bvz8t570.js (1), chunk-kyjhpxvs.js (5)
  * attribution: fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getArtifactHostOverride, claudeAiEnvironment } from "./claudeAiOrigin.js";
 

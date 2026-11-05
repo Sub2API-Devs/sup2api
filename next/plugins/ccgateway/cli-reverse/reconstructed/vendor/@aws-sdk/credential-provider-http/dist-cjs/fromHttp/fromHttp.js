@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/credential-provider-http@3.936.0..3.972.41
  * pieces: chunk-48h98ags.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import fsPromises from "fs/promises";
 import { import_property_provider, checkUrl, import_node_http_handler, import_client } from "./checkUrl.js";

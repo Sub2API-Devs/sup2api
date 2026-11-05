@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/headlessPluginInstall.ts
  * pieces: chunk-54b7qs0h.js (3)
  * attribution: placement 1, fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getPluginRegistry } from "./pluginLoadState.js";
 import {

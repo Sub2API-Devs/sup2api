@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useSwarmPermissionPoller.ts
  * pieces: chunk-czq1j3j2.js (1), chunk-pzfssawg.js (11)
  * attribution: fingerprint 7, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { permissionUpdateSchema } from "../utils/hooks/hookSpecificOutput.js";
 import { logForDebugging } from "../utils/debug.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0f2rgfjp.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { IO_MODELCONTEXTPROTOCOL_SKILLS } from "./mcpSkills.js";
 import { identityId2 } from "../../types/ids.js";

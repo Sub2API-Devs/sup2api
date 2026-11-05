@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/effort.ts
  * pieces: chunk-5dqwe9kx.js (2), chunk-bc4jcw5z.js (100), chunk-czq1j3j2.js (2), chunk-n2cdp9nk.js (1), chunk-z20c443b.js (2)
  * attribution: placement 56, callgraph-fingerprint 4, layout 40, fingerprint 5, callgraph-witnessed 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve } from "path";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";

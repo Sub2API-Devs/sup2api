@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/background/remote/remoteSession.ts
  * pieces: chunk-2azvgb86.js (4), chunk-5xgkngpb.js (14), chunk-srs15anp.js (1)
  * attribution: placement 17, fingerprint 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getOriginalCwd, getRootSession } from "../../../bootstrap/state.js";
 import { env } from "../../env.js";

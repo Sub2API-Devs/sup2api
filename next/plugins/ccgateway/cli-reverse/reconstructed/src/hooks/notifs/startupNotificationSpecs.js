@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-01kgd7xg.js (1), chunk-czq1j3j2.js (14)
  * attribution: placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
 import {

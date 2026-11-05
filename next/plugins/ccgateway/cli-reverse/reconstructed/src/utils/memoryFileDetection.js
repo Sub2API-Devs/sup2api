@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/memoryFileDetection.ts
  * pieces: chunk-5xgkngpb.js (12)
  * attribution: affinity 1, file-local 3, fingerprint 5, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { win32, posix, normalize } from "path";
 import { getClaudeConfigDirOrNull } from "./envUtils.js";

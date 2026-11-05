@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/wrapAnsi.ts
  * pieces: chunk-8n1fbght.js (32)
  * attribution: placement 32
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { C0 } from "./termio/ansi.js";
 import { bunStringWidth } from "./stringWidth.js";

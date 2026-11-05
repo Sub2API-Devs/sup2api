@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/tabstops.ts
  * pieces: chunk-42wa4pww.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createTokenizer } from "./termio/tokenize.js";
 import { ANSI_OR_C1_RE, WORD_JOINER } from "../utils/textWrap.js";

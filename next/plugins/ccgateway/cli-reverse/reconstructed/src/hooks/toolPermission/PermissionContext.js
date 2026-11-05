@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/PermissionContext.ts
  * pieces: chunk-g4tsxwy3.js (3)
  * attribution: placement 1, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { logPermissionDecision_2 } from "./permissionLogging.js";

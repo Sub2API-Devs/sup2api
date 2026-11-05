@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/http.ts
  * pieces: chunk-3wgj3rdg.js (1), chunk-exfmq47h.js (10), chunk-kd978n4z.js (4), chunk-m0y4n1hb.js (3)
  * attribution: fingerprint 1, placement 7, facade-exports 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { workloadStorage, getWorkload } from "./workloadContext.js";
 import { runInOutermostCallFrame } from "../cli/exit.js";

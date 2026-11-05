@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/init.ts
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isImportEnabled, IMPORT_OFFER_INSTRUCTIONS, useNewInitPrompt } from "./import/index.js";
 import { env } from "../utils/env.js";

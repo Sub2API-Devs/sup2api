@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-w3ch4xq2.js (58)
  * attribution: placement 57, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isInlineNotificationMode } from "../utils/attachments.js";
 import { getContentText, createAssistantMessage } from "../utils/messages.js";

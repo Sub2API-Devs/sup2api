@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/runAgent.ts
  * pieces: chunk-frs14hy1.js (41)
  * attribution: placement 22, fingerprint 3, layout 7, facade-exports 5, file-local 1, sole-consumer 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, join, resolve, basename } from "path";
 import { randomUUID } from "crypto";

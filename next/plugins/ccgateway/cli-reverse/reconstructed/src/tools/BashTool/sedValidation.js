@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/sedValidation.ts
  * pieces: chunk-5xgkngpb.js (17)
  * attribution: file-local 3, fingerprint 6, placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   getCommandArgv,

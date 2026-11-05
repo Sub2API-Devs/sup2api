@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/file.ts
  * pieces: chunk-0fny85bv.js (1), chunk-0fzr619q.js (29), chunk-9knfmvrf.js (1), chunk-e5z7dpjd.js (1)
  * attribution: fingerprint 12, placement 11, callgraph-fingerprint 1, layout 7, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { relative, sep, resolve, dirname, basename, extname, join, isAbsolute, normalize, parse } from "path";
 import { homedir } from "os";

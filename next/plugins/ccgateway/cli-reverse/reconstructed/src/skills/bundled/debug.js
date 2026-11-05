@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/debug.ts
  * pieces: chunk-ne2890fx.js (6)
  * attribution: affinity 1, fingerprint 1, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { registerBundledSkill } from "../bundledSkills.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/remote-env/remote-env.tsx
  * pieces: chunk-h5403648.js (1)
  * attribution: callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { RemoteEnvironmentDialog } from "../../components/RemoteEnvironmentDialog.js";

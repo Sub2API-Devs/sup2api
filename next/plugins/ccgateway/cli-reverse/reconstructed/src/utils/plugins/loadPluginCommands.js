@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/loadPluginCommands.ts
  * pieces: chunk-5xgkngpb.js (28)
  * attribution: placement 15, layout 5, file-local 2, fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, basename, dirname } from "path";
 import { homedir } from "os";

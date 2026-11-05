@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bufferedWriter.ts
  * pieces: chunk-6hadbefe.js (2)
  * attribution: fingerprint 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-6hadbefe.js:2093-2650 fingerprint (2.1.88 match: createBufferedWriter, 0.776)

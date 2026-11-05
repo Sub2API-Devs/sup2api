@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/terminal.ts
  * pieces: chunk-8n54kmae.js (1), chunk-edrpfa7j.js (43), chunk-xd1cb3xs.js (25)
  * attribution: fingerprint 5, placement 45, layout 18, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute } from "path";
 import { Buffer as N } from "buffer";

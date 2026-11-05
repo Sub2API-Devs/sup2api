@@ -4,6 +4,7 @@
  * third-party: delayed-stream@1.0.0
  * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 

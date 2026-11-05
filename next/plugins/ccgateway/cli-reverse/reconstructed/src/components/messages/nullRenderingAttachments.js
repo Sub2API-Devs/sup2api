@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/nullRenderingAttachments.ts
  * pieces: chunk-0wbdaeqh.js (2), chunk-hnxhr3bs.js (2)
  * attribution: placement 2, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-hnxhr3bs.js:21283-22930 fingerprint (2.1.88 match: NULL_RENDERING_TYPES, 0.459)
 /**

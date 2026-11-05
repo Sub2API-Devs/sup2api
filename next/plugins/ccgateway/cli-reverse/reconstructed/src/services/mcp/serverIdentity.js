@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-evj8g37g.js (81)
  * attribution: affinity 1, placement 63, layout 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isIPv6 } from "net";
 import { randomUUID } from "crypto";

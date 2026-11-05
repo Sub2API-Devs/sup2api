@@ -4,6 +4,7 @@
  * third-party: @aws-crypto/crc32@5.2.0
  * pieces: chunk-ayc8mk37.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __values } from "../../../../tslib/tslib.es6.mjs";
 import { fromArrayBuffer } from "../../../util/build/module/numToUint8.js";

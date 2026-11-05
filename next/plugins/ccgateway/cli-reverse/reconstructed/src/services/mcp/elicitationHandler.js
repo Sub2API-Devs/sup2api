@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/elicitationHandler.ts
  * pieces: chunk-0sfbgcrn.js (5), chunk-h4qtft3t.js (5), chunk-z9d6k8pq.js (4)
  * attribution: facade-exports 10, sole-consumer 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hostedDesktopRefusal_2 } from "./mcpWireUtils.js";
 import { logMCPDebug, logMCPError } from "../../utils/log.js";

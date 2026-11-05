@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-mj4tyz4n.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { describeRuleShape } from "../../components/permissions/rules/PermissionRuleDescription.js";
 import { permissionRuleValueFromString } from "./permissionRuleParser.js";

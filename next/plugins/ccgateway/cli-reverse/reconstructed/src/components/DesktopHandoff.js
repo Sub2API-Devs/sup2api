@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/DesktopHandoff.tsx
  * pieces: chunk-nj7rp16y.js (5), chunk-vbwrr9hv.js (1)
  * attribution: placement 2, fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   openCurrentSessionInDesktop,

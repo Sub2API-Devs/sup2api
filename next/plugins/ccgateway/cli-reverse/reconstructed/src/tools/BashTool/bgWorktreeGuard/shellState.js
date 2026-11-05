@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h2y5xkdx.js (14)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TOO_COMPLEX_SUFFIX, analyzeAssignment, STAT_VALUE_NOTE, DATE_VALUE_NOTE } from "./wordValues.js";
 import { MAX_SSH_TEXT_CHARS, programBaseName } from "./commandRules.js";

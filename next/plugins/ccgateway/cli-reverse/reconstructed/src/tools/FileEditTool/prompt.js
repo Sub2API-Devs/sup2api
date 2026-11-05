@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/prompt.ts
  * pieces: chunk-5xgkngpb.js (3)
  * attribution: fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { READ } from "../FileReadTool/constants.js";
 import { isTabReadSeparationEnabled } from "../FileReadTool/limits.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissionRuleParser.ts
  * pieces: chunk-ap4nnw1y.js (27), chunk-yvhjwwtt.js (1)
  * attribution: placement 25, layout 1, callgraph-witnessed 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { truncateTag } from "../../components/TagTabs.js";
 import { indexOfUnescaped, lastIndexOfUnescaped } from "./disallowedToolsFlag.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/firstPartyEventLoggingExporter.ts
  * pieces: chunk-08q4d92p.js (1), chunk-exfmq47h.js (18)
  * attribution: fingerprint 4, layout 6, placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID, createHash } from "crypto";
 import * as pathModule from "path";

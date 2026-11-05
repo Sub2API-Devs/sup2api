@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitWorktreeTool/ExitWorktreeTool.ts
  * pieces: chunk-fmnbrxwy.js (8)
  * attribution: affinity 1, fingerprint 2, callgraph-fingerprint 1, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath } from "fs/promises";
 import { homedir } from "os";

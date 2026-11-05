@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/sessionRunner.ts
  * pieces: chunk-jx5trqed.js (9)
  * attribution: placement 3, fingerprint 5, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { createWriteStream } from "fs";

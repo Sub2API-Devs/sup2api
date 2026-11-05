@@ -4,6 +4,7 @@
  * third-party: fast-sha256@1.3.0
  * pieces: chunk-vn3g7zt8.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 

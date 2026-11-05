@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/operators.ts
  * pieces: chunk-880p06ha.js (58)
  * attribution: fingerprint 16, layout 32, file-local 1, affinity 2, placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolveMotion, CHAR_MOTIONS } from "./types.js";
 import { isLinewiseMotion, isInclusiveMotion } from "./motions.js";

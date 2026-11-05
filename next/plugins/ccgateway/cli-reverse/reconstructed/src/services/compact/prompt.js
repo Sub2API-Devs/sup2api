@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/compact/prompt.ts
  * pieces: chunk-5xgkngpb.js (10), chunk-y4qw1rvm.js (3)
  * attribution: sole-consumer 1, affinity 1, callgraph-fingerprint 1, layout 2, fingerprint 4, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LOCAL_COMMAND_STDOUT } from "../../constants/xml.js";
 import { isTextBlock } from "../../utils/messages/textLineCount.js";

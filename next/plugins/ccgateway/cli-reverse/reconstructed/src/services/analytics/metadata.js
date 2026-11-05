@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/metadata.ts
  * pieces: chunk-01kgd7xg.js (1), chunk-exfmq47h.js (134), chunk-hfc4cfnt.js (1)
  * attribution: fingerprint 14, placement 81, sole-consumer 2, layout 38, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, extname } from "path";
 import { createHash, randomBytes } from "crypto";

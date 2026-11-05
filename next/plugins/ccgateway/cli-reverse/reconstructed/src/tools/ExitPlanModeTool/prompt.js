@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitPlanModeTool/prompt.ts
  * pieces: chunk-sc94d59g.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ASKUSERQUESTION } from "../AskUserQuestionTool/prompt.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

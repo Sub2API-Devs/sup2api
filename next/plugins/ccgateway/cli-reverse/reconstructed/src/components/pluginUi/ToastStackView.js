@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-czq1j3j2.js (36)
  * attribution: placement 36
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __export, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {

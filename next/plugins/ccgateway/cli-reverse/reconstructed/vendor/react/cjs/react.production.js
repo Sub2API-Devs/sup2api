@@ -4,6 +4,7 @@
  * third-party: react@19.3.0..19.3.1
  * pieces: chunk-zsz062c7.js (15)
  * attribution: esm-fingerprint 10, esm-layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __esm } from "../../../runtime/bun-runtime.js";
 

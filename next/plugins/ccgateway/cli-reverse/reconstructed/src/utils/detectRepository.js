@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/detectRepository.ts
  * pieces: chunk-s06bcw1p.js (31)
  * attribution: placement 3, layout 7, facade-majority 20, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { execFileNoThrowWithCwd } from "./execFileNoThrow.js";
 import { getGitRepoCache } from "./git/gitRepoCache.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/notifications.tsx
  * pieces: chunk-ad798f12.js (20), chunk-frs14hy1.js (5)
  * attribution: placement 22, fingerprint 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

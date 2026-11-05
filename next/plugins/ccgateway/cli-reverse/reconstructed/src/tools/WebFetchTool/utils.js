@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebFetchTool/utils.ts
  * pieces: chunk-56df17sz.js (1), chunk-5xgkngpb.js (37), chunk-exfmq47h.js (1)
  * attribution: fingerprint 10, placement 3, sole-consumer 1, affinity 2, layout 12, facade-majority 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import {

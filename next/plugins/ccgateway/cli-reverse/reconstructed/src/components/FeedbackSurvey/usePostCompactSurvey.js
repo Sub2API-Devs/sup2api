@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FeedbackSurvey/usePostCompactSurvey.tsx
  * pieces: chunk-czq1j3j2.js (10)
  * attribution: placement 2, fingerprint 4, layout 1, file-last-pair 1, file-local 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

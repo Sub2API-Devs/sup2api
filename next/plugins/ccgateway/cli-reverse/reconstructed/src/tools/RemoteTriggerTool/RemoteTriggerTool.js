@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/RemoteTriggerTool/RemoteTriggerTool.ts
  * pieces: chunk-77w0w3nj.js (31)
  * attribution: fingerprint 3, layout 28
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {

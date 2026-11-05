@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/ink.tsx
  * pieces: chunk-2avr6cej.js (19)
  * attribution: placement 4, sole-consumer 3, fingerprint 5, layout 3, affinity 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { writeSync, openSync, constants, closeSync, readSync } from "fs";
 import { format } from "util";

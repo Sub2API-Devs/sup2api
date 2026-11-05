@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ManagedSettingsSecurityDialog/utils.ts
  * pieces: chunk-z20c443b.js (54)
  * attribution: placement 47, fingerprint 3, layout 3, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   cleanOptionalText_2,

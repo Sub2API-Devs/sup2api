@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/dialogLaunchers.tsx
  * pieces: chunk-8899qs36.js (2), chunk-es82vc07.js (1), chunk-x51wp4j2.js (15)
  * attribution: placement 5, sole-consumer 2, fingerprint 4, callgraph-fingerprint 1, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createStore } from "./state/store.js";
 import { toSliceStore } from "./state/sliceHelpers.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/plugins/builtinPlugins.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-6sf70a86.js (13), chunk-gkq1vt4f.js (1)
  * attribution: fingerprint 2, placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { isStandaloneExecutable } from "../utils/slowOperations.js";

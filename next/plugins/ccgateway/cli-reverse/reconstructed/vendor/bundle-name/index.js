@@ -4,6 +4,7 @@
  * third-party: bundle-name@4.1.1
  * pieces: chunk-j8hasev3.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { runAppleScript } from "../run-applescript/index.js";
 

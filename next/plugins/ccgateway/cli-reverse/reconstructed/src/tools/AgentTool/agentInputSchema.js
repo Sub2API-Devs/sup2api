@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-tmsx2mh0.js (7), chunk-yz2nt7xx.js (1)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseAgentIdArg } from "../ObserverReportTool/ObserverReportTool.js";
 import { hasUntouchableRecordSpellingStrictAsync } from "../../utils/fsOperations.js";

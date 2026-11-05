@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/upstreamproxy/relay.ts
  * pieces: chunk-572btqwd.js (1), chunk-5xgkngpb.js (11), chunk-9knfmvrf.js (75), chunk-xzmy9dn4.js (1)
  * attribution: fingerprint 8, placement 24, layout 53, file-local 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readdir, readlink } from "fs/promises";
 import { createHash } from "crypto";

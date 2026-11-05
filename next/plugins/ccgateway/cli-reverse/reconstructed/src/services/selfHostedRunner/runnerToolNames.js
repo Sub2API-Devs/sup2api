@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1m3tnwbm.js (2), chunk-tkmz9z5j.js (6)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { splitRuleList } from "../../utils/permissions/disallowedToolsFlag.js";
 

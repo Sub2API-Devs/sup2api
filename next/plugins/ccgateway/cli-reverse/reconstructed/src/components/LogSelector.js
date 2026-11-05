@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogSelector.tsx
  * pieces: chunk-4j4pn0rx.js (1), chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (1), chunk-y1bp9wp9.js (13)
  * attribution: fingerprint 9, file-local 1, layout 4, callgraph-fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, basename } from "path";
 import { sortLogs } from "../types/logs.js";

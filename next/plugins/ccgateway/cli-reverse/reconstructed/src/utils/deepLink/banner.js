@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/banner.ts
  * pieces: chunk-pjbnxxq2.js (5)
  * attribution: placement 1, fingerprint 2, callgraph-fingerprint 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, sep } from "path";
 import { stat } from "fs/promises";

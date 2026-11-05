@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/lockfile.ts
  * pieces: chunk-3c7mkwg0.js (4)
  * attribution: placement 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { properLockfileIndex } from "../../vendor/proper-lockfile/index.js";
 import { getErrnoCode, errorMessage } from "./errors.js";

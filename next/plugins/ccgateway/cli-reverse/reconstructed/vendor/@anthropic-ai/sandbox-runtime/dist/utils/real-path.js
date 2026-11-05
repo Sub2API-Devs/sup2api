@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
  * pieces: chunk-getdj2mr.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import "path";
 import * as pathModule_2 from "path";

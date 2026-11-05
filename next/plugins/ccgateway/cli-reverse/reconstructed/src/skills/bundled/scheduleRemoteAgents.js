@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/scheduleRemoteAgents.ts
  * pieces: chunk-5fazksz3.js (12), chunk-evj8g37g.js (1), chunk-z20c443b.js (1)
  * attribution: fingerprint 6, layout 4, placement 2, file-local 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { uuidToBigInt, base58Encode } from "../../utils/taggedId.js";
 import { normalizeConnectorId } from "../../services/mcp/claudeai.js";

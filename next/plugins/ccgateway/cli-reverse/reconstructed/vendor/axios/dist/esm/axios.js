@@ -4,6 +4,7 @@
  * third-party: axios@1.15.2
  * pieces: chunk-0yw3taqg.js (1), chunk-ww9agm6g.js (107)
  * attribution: esm-fingerprint 82, esm-layout 26
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __export, __toESM } from "../../../../runtime/bun-runtime.js";
 import {

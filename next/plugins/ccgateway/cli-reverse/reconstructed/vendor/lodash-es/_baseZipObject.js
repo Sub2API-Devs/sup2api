@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-323717f6.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-323717f6.js:1871-1982 placement

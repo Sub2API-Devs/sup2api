@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/RemoteEnvironmentDialog.tsx
  * pieces: chunk-7jxyna5q.js (1), chunk-czq1j3j2.js (2), chunk-h5403648.js (6)
  * attribution: fingerprint 5, sole-consumer 1, placement 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   jsxProd_default,

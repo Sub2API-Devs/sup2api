@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-s4h0q5es.js (24)
  * attribution: placement 24
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { onOrgMemoryAuthCompletion } from "../orgMemory/orgMemoryDecision.js";

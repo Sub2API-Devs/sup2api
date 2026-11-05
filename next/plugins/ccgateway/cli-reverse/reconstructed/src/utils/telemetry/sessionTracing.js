@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/sessionTracing.ts
  * pieces: chunk-4qbrxszq.js (83), chunk-exfmq47h.js (1), chunk-n51jggtb.js (1)
  * attribution: placement 8, sole-consumer 12, fingerprint 16, layout 44, file-local 4, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEnvTruthy, isEnvDefinedFalsy } from "../envUtils.js";
 import { hasManagedPlugins } from "../plugins/managedPlugins.js";

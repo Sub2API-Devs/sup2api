@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/hooks.ts
  * pieces: chunk-2c3jp4kn.js (24), chunk-c7hntn0y.js (1), chunk-g4tsxwy3.js (4)
  * attribution: placement 24, callgraph-fingerprint 1, fingerprint 1, layout 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import {

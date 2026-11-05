@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/prompt.ts
  * pieces: chunk-7kayq7nc.js (1), chunk-ga95v15r.js (11)
  * attribution: facade-exports 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DEFAULT_CRON_JITTER_CONFIG, hasCronTasksSync } from "../../utils/cronTasks.js";
 import { env } from "../../utils/env.js";

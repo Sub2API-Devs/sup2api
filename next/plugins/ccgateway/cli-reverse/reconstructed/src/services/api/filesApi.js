@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/filesApi.ts
  * pieces: chunk-7jxyna5q.js (18)
  * attribution: fingerprint 10, layout 6, placement 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import * as fsPromisesModule from "fs/promises";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/pluginDetailsHelpers.tsx
  * pieces: chunk-wb51jffc.js (15)
  * attribution: placement 9, fingerprint 2, layout 3, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {

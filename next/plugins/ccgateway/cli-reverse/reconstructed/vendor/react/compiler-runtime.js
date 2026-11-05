@@ -4,6 +4,7 @@
  * third-party: react@19.3.0..19.3.1
  * pieces: chunk-zt8d60ng.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, addTransitionType } from "./cjs/react.production.js";
 

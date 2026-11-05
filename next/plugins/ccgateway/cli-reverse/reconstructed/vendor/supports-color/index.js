@@ -4,6 +4,7 @@
  * third-party: supports-color@7.2.0
  * pieces: chunk-1jphxy9b.js (2), chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 2, cjs-fingerprint+context 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_has_flag } from "../has-flag/index.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ScheduleCronTool/UI.tsx
  * pieces: chunk-896pyw2s.js (4), chunk-avy0g5d4.js (1), chunk-wjygkcr4.js (3)
  * attribution: placement 5, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   jsxProd_default,

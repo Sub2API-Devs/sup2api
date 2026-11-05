@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/turnCompletionVerbs.ts
  * pieces: chunk-wjygkcr4.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-wjygkcr4.js:200552-200642 fingerprint (2.1.88 match: TURN_COMPLETION_VERBS, 1)

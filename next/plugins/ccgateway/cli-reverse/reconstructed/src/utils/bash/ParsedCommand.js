@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/ParsedCommand.ts
  * pieces: chunk-5xgkngpb.js (8)
  * attribution: callgraph-witnessed 3, fingerprint 4, file-last-pair 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { analyzeCommand } from "./treeSitterAnalysis.js";
 import { isGuardOff, isInReExpansion, runGuarded, markGuardFired } from "./bashParserFlags.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/agentMemorySnapshot.ts
  * pieces: chunk-0fzr619q.js (1), chunk-5xgkngpb.js (1)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { writeFileSyncAndFlush_DEPRECATED } from "../../utils/file.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";

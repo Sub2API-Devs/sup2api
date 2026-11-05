@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/InProcessTransport.ts
  * pieces: chunk-sf59dqsf.js (2)
  * attribution: fingerprint 1, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-sf59dqsf.js:191-534 fingerprint (2.1.88 match: InProcessTransport, 1)

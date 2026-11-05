@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7jxyna5q.js (35), chunk-e3y61d7t.js (3), chunk-fepf8jp6.js (2)
  * attribution: placement 40
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readdirSync } from "fs";
 import { join } from "path";

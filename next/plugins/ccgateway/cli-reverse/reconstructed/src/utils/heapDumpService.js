@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/heapDumpService.ts
  * pieces: chunk-7d1pj5cy.js (3)
  * attribution: fingerprint 2, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getHeapStatistics, getHeapSpaceStatistics } from "v8";
 import { readdir, readFile, writeFile } from "fs/promises";

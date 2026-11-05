@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/rateLimitMessages.ts
  * pieces: chunk-77cpes3s.js (6), chunk-7pwjpdkw.js (15), chunk-z20c443b.js (3)
  * attribution: placement 9, fingerprint 6, callgraph-fingerprint 3, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { formatResetTimeWithLocale, utilizationPercent, planWindowPercent } from "../utils/format.js";
 import {

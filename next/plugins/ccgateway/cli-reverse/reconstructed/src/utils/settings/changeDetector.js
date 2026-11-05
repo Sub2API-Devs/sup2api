@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/changeDetector.ts
  * pieces: chunk-5fn9rb8r.js (1), chunk-a2q0x549.js (9)
  * attribution: callgraph-fingerprint 2, layout 3, fingerprint 3, affinity 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { watch, readdirSync } from "fs";

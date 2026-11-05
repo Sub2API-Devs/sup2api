@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-rkbsrtg1.js (22)
  * attribution: sole-consumer 1, placement 21
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { writeFile, unlink } from "fs/promises";
 import { formatSkillLoadingMetadata_2 } from "../../../utils/processUserInput/processSlashCommand.js";

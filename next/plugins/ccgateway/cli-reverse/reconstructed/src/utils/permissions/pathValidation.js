@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/pathValidation.ts
  * pieces: chunk-1h674sqv.js (29), chunk-fepf8jp6.js (2)
  * attribution: affinity 1, facade-exports 14, layout 12, file-local 1, callgraph-fingerprint 1, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, resolve, dirname, parse } from "path";
 import { homedir } from "os";

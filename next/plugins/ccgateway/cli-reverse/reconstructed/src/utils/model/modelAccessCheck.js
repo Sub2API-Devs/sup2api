@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7jxyna5q.js (12), chunk-7pwjpdkw.js (1)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getAttributionHeader, getCLISyspromptPrefix } from "../../constants/system.js";
 import { isWIFDispatchAuth } from "../auth.js";

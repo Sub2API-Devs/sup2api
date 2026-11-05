@@ -4,6 +4,7 @@
  * third-party: @growthbook/growthbook@1.6.1
  * pieces: chunk-exfmq47h.js (131)
  * attribution: esm-layout 25, esm-fingerprint 106
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { promiseTimeout, getAutoExperimentChangeType } from "./esm.min.js";
 

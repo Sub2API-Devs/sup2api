@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-4gtx349s.js (2), chunk-5a4djsnw.js (2), chunk-6hqkes0x.js (7), chunk-ecm5y1kv.js (2)
  * attribution: placement 9, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0_4 from "../../../assets/validate_palette.py-f97163c4.txt.zst" with { type: "file" };
 import __cc_resource_0 from "../../../assets/common.mjs-21a45017.txt.zst" with { type: "file" };

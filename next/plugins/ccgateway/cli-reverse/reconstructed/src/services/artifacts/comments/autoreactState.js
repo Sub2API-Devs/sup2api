@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-c0pq6qyx.js (6), chunk-r9a43qwr.js (27)
  * attribution: placement 33
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../analytics/growthbook.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/attribution.ts
  * pieces: chunk-0yw3taqg.js (1), chunk-5xgkngpb.js (25), chunk-7jxyna5q.js (2)
  * attribution: fingerprint 6, placement 11, layout 10, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath, stat } from "fs/promises";
 import { MAX_STRING_ARG_CHARS, CONTROL_CHARS_RE, GitListingError } from "./attributionFileClasses.js";

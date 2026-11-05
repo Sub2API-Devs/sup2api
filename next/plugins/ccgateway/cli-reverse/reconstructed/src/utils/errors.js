@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/errors.ts
  * pieces: chunk-51jy8ztq.js (1), chunk-5xgkngpb.js (1), chunk-63094ahz.js (68), chunk-asf5gh8x.js (1), chunk-hb44av3w.js (1), chunk-xd1cb3xs.js (1)
  * attribution: fingerprint 3, callgraph-witnessed 1, placement 68, facade-majority 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, join, relative } from "path";
 import { realpath, lstat } from "fs/promises";

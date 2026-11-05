@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/contextSuggestions.ts
  * pieces: chunk-qt8k81nz.js (8)
  * attribution: callgraph-witnessed 1, fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEnvTruthy } from "./envUtils.js";
 import { formatTokens } from "./format.js";

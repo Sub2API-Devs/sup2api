@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/replBridgeTransport.ts
  * pieces: chunk-qyz2x025.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { configureApiKeyHeaders } from "../services/api/client.js";
 import { getSessionIngressAuthToken_2 } from "../utils/sessionIngressAuth.js";

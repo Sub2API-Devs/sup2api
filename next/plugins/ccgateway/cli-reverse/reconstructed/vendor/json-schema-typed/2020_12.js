@@ -4,6 +4,7 @@
  * third-party: json-schema-typed@9.0.0
  * pieces: chunk-n6f7qd6s.js (2)
  * attribution: affinity 1, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPlainObject } from "../../src/utils/isPlainObject.js";
 

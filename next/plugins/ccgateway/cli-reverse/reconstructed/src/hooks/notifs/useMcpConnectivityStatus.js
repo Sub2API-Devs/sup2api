@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useMcpConnectivityStatus.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-vxsfen55.js (5), chunk-wh5pkk8m.js (2)
  * attribution: fingerprint 2, placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isUnconfiguredFailure, isArtifacts404Failure } from "../../services/mcp/redactMcpErrors.js";
 import {

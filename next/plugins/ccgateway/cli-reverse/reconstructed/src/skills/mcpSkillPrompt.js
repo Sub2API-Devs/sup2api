@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { READ_MCP_RESOURCE_DIR_TOOL_NAME } from "../tools/ReadMcpResourceDirTool/prompt.js";
 import { READMCPRESOURCETOOL } from "../tools/ReadMcpResourceTool/prompt.js";

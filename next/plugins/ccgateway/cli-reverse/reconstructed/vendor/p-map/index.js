@@ -4,6 +4,7 @@
  * third-party: p-map/index.js
  * pieces: chunk-mnmtaqy0.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-mnmtaqy0.js:191-1565 placement

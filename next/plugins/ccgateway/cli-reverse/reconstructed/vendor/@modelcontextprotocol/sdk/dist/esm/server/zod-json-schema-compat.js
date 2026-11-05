@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/sdk@1.29.0
  * pieces: chunk-efaj9q04.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getShape, getLiteralValue, objectFromShape } from "./zod-compat.js";
 

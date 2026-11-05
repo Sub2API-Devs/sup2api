@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2jb250pa.js (24)
  * attribution: placement 24
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { tryParseUrl, decodePercentEscapes } from "../resultError.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

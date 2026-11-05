@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/setup.ts
  * pieces: chunk-7jxyna5q.js (25)
  * attribution: placement 2, sole-consumer 1, facade-majority 17, fingerprint 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, readFile, mkdir, writeFile, chmod } from "fs/promises";
 import { homedir } from "os";

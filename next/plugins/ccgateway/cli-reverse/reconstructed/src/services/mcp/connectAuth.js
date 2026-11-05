@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h44h5gdv.js (31)
  * attribution: placement 31
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { isToolDetailsLoggingEnabled, THIRD_PARTY } from "../analytics/metadata.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/backends/it2Setup.ts
  * pieces: chunk-q0aehp15.js (8)
  * attribution: fingerprint 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { execFileNoThrow, execFileNoThrowWithCwd } from "../../execFileNoThrow.js";

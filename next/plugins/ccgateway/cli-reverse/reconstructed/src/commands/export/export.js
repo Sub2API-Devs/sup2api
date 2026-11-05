@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/export/export.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-mdd7hyf8.js (1), chunk-p19c94xn.js (4), chunk-vew675sq.js (4)
  * attribution: fingerprint 3, placement 4, affinity 1, layout 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname, dirname } from "path";
 import { mkdir, writeFile } from "fs/promises";

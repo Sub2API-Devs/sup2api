@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-frs14hy1.js (6), chunk-w3ch4xq2.js (11)
  * attribution: placement 15, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { classifyQuerySource, isMainQuerySource } from "../services/api/requestHeaders.js";
 import { env } from "../utils/env.js";

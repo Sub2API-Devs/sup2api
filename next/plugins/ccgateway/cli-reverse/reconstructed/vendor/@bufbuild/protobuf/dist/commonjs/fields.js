@@ -4,6 +4,7 @@
  * third-party: @bufbuild/protobuf@2.12.1
  * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_unsafe } from "../cjs/reflect/unsafe.js";

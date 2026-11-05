@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-3r3ajxh1.js (6)
  * attribution: placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getModelContextInfo } from "../../utils/model/modelContextInfo.js";
 import { getAutoCompactWindow } from "../../services/compact/autoCompact.js";

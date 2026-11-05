@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/xml-builder@3.921.0..3.972.5
  * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_fxp } from "../../../fast-xml-parser/lib/fxp.cjs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/profilerBase.ts
  * pieces: chunk-948bfvqt.js (4)
  * attribution: affinity 1, fingerprint 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { importMetaRequire } from "../../runtime/bun-runtime.js";
 import { formatFileSize } from "./format.js";

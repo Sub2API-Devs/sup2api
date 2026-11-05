@@ -4,6 +4,7 @@
  * third-party: @smithy/core@3.30.0
  * pieces: chunk-1b4mcch6.js (4), chunk-ayc8mk37.js (9)
  * attribution: esm-fingerprint 7, esm-layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Readable } from "stream";
 import { EventStreamCodec } from "../../../../eventstream-codec/dist-es/EventStreamCodec.js";

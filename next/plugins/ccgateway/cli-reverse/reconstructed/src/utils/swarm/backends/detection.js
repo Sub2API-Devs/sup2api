@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/backends/detection.ts
  * pieces: chunk-bj5py7ze.js (13)
  * attribution: fingerprint 2, layout 3, facade-exports 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../../env.js";
 import { firstLineOf } from "../../stringUtils.js";

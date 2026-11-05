@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FilePermissionDialog/ideDiffConfig.ts
  * pieces: chunk-e0skvs33.js (2)
  * attribution: placement 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-e0skvs33.js:1067-1197 placement (2.1.88 match: UNDERLINE_STYLES, 0.495)

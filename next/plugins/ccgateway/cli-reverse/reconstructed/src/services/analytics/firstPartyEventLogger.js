@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/firstPartyEventLogger.ts
  * pieces: chunk-exfmq47h.js (30)
  * attribution: affinity 1, fingerprint 3, facade-exports 11, layout 14, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import {

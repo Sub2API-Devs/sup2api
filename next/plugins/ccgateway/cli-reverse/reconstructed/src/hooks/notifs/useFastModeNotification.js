@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useFastModeNotification.tsx
  * pieces: chunk-czq1j3j2.js (9)
  * attribution: callgraph-fingerprint 1, file-local 2, fingerprint 3, layout 2, file-last-pair 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getIsRemoteMode } from "../../bootstrap/state.js";
 import {

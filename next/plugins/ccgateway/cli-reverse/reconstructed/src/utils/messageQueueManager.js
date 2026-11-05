@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/messageQueueManager.ts
  * pieces: chunk-1z79zgep.js (16), chunk-5xgkngpb.js (58), chunk-czq1j3j2.js (1), chunk-nh1pvp1m.js (1), chunk-w3ch4xq2.js (11)
  * attribution: placement 79, fingerprint 3, facade-majority 3, callgraph-fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import {

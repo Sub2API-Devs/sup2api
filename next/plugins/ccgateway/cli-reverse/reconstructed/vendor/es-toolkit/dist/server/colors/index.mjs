@@ -4,6 +4,7 @@
  * third-party: es-toolkit@1.53.1
  * pieces: chunk-hhr6kfwg.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sequential } from "../../../../../src/utils/sequential.js";
 

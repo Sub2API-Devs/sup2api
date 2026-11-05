@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVoiceIntegration.tsx
  * pieces: chunk-18rrbwq1.js (19), chunk-77bb8s6j.js (1), chunk-820m5cev.js (1)
  * attribution: placement 5, layout 12, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useVoiceStateStore, useGetVoiceState } from "../context/voice.js";
 import {

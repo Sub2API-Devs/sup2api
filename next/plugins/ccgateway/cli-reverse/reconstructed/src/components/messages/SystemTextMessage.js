@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/SystemTextMessage.tsx
  * pieces: chunk-fwegbnps.js (1), chunk-wjygkcr4.js (32)
  * attribution: placement 8, affinity 1, fingerprint 11, layout 12, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize, basename } from "path";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";

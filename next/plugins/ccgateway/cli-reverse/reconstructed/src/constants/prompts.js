@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/prompts.ts
  * pieces: build-report-lite-jwtbvm49.mjs (1), chunk-5xgkngpb.js (112)
  * attribution: fingerprint 17, callgraph-witnessed 2, layout 64, placement 27, affinity 1, callgraph-fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, join } from "path";
 import { version, release as release_3, type as ndo } from "os";

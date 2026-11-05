@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/rate-limit-options/index.ts
  * pieces: chunk-2qmwp9k3.js (3), chunk-5xgkngpb.js (1)
  * attribution: placement 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";

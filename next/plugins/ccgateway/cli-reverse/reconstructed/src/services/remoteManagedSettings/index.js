@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/remoteManagedSettings/index.ts
  * pieces: chunk-a28agxjs.js (35)
  * attribution: placement 13, fingerprint 5, layout 9, file-local 1, sole-consumer 5, callgraph-fingerprint 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFile } from "fs/promises";
 import { createHash } from "crypto";

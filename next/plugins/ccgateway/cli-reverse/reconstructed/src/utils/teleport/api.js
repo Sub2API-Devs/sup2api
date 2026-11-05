@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport/api.ts
  * pieces: chunk-06vyq63w.js (1), chunk-a3r2kq46.js (1), chunk-exfmq47h.js (81)
  * attribution: fingerprint 6, placement 76, facade-majority 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";

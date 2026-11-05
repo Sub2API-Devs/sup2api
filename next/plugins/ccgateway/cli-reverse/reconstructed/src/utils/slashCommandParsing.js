@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/slashCommandParsing.ts
  * pieces: chunk-qr15drgp.js (4)
  * attribution: fingerprint 1, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { splitSlashCommandInput } from "../commands.js";
 import { getPromptId } from "../bootstrap/state.js";

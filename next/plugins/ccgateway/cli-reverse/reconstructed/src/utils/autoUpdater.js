@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/autoUpdater.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (2), chunk-wzyv38y8.js (61)
  * attribution: fingerprint 12, affinity 2, placement 30, layout 18, callgraph-witnessed 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { open, writeFile, stat, access, readdir, unlink, copyFile, rm, rename } from "fs/promises";
 import { constants } from "fs";

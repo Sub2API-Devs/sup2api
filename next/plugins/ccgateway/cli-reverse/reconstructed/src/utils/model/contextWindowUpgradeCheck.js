@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/contextWindowUpgradeCheck.ts
  * pieces: chunk-mgpaej1g.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getUserSpecifiedModelSetting } from "./smallFastModel.js";
 import {

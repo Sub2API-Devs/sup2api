@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/ProgressBar.tsx
  * pieces: chunk-rf2d2hdc.js (2)
  * attribution: sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { terminalDetector } from "../../ink/terminalColorSupport.js";
 import { repeatString } from "../../utils/stringUtils.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/teamMemorySync/secretScanner.ts
  * pieces: chunk-2jb250pa.js (39), chunk-7jxyna5q.js (1), chunk-cm73gsrm.js (1), chunk-g8sg6xj8.js (1)
  * attribution: affinity 1, placement 32, fingerprint 6, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   allowSeparatorsInPattern,

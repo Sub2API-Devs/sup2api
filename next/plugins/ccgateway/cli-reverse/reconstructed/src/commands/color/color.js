@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/color/color.ts
  * pieces: chunk-4cv18f2g.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-4cv18f2g.js:560-607 fingerprint (2.1.88 match: RESET_ALIASES, 1)

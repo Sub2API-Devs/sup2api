@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/PowerShellTool.tsx
  * pieces: chunk-6zpsr8vx.js (12), chunk-azq8n2fy.js (3)
  * attribution: fingerprint 6, placement 4, file-local 1, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, basename } from "path";
 import { resolveToCanonical, hasSyncSecurityConcerns, isReadOnlyCommand } from "./readOnlyValidation.js";

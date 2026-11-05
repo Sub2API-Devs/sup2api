@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/teammatePromptAddendum.ts
  * pieces: chunk-xyjkbqyt.js (1)
  * attribution: facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-xyjkbqyt.js:191-644 facade-exports

@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/eventstream-handler-node@3.936.0
  * pieces: chunk-ayc8mk37.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Readable, PassThrough, pipeline } from "stream";
 import { EventStreamCodec } from "../../../@smithy/eventstream-codec/dist-es/EventStreamCodec.js";

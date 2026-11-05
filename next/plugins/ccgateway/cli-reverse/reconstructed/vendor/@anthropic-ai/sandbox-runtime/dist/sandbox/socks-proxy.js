@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
  * pieces: chunk-qg41pqt6.js (9)
  * attribution: esm-layout 3, esm-fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createServer } from "../../../../@pondwader/socks5-server/dist/index.mjs";
 import { PROXY_AUTH_USER, encodedCommandFromProxyUser } from "./sandbox-utils.js";

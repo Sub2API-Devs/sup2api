@@ -4,6 +4,7 @@
  * third-party: @azure/core-rest-pipeline@1.21.0
  * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 2, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-b5df2wx1.js:54403-54425 esm-fingerprint

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AssistantTextMessage.tsx
  * pieces: chunk-wjygkcr4.js (12)
  * attribution: placement 11, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   INVALID_API_KEY_MESSAGE,

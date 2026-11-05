@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/usePromptsFromClaudeInChrome.tsx
  * pieces: chunk-czq1j3j2.js (7)
  * attribution: placement 4, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";

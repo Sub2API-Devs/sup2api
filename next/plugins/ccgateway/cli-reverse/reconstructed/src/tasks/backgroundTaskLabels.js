@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-bqk7td02.js (22)
  * attribution: placement 20, layout 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../utils/env.js";
 import { getSessionCronTasks, getSessionId } from "../bootstrap/state.js";

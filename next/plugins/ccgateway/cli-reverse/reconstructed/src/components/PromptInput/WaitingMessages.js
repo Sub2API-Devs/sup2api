@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-czq1j3j2.js (21)
  * attribution: placement 20, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { isMainAgentCommand, isQueuedCommandEditable } from "../../utils/messageQueueManager.js";

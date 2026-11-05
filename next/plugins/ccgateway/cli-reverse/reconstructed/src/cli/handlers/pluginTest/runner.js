@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-f284hj51.js (29)
  * attribution: placement 29
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, relative, sep, isAbsolute, resolve } from "path";
 import { mkdir, writeFile, readFile, readdir } from "fs/promises";

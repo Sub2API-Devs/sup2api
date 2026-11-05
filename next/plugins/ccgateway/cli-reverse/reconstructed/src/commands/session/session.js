@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/session/session.tsx
  * pieces: chunk-5wayr1tc.js (5), chunk-czq1j3j2.js (1), chunk-zn7314wm.js (10)
  * attribution: sole-consumer 3, fingerprint 2, placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { require_utf8 } from "../../../vendor/qrcode/lib/renderer/utf8.js";

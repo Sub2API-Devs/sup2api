@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cwd.ts
  * pieces: chunk-0993wma0.js (5), chunk-exfmq47h.js (8), chunk-gcy2kcsb.js (1), chunk-sbrfdm61.js (23), chunk-tkka6eha.js (2)
  * attribution: placement 36, callgraph-fingerprint 1, layout 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpathSync } from "fs";
 import { cwd } from "process";

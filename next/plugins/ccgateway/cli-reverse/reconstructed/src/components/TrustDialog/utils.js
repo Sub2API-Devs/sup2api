@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TrustDialog/utils.ts
  * pieces: chunk-1zkxb015.js (3), chunk-71parphm.js (1), chunk-b29rcs2f.js (4), chunk-px2txms0.js (28), chunk-qa0fq590.js (8)
  * attribution: placement 14, layout 16, callgraph-fingerprint 2, fingerprint 8, affinity 1, sole-consumer 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, resolve, join } from "path";
 import { PROVIDER_CREDENTIAL_ENV_VARS } from "../../utils/managedEnvSafety.js";

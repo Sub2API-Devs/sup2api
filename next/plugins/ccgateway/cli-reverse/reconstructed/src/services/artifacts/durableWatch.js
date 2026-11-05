@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-8ydt468d.js (1), chunk-tsrpnscb.js (10), chunk-y0ps0qva.js (54)
  * attribution: placement 65
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { isCcrOriginUrl } from "../mcp/ccrMcpUrls.js";

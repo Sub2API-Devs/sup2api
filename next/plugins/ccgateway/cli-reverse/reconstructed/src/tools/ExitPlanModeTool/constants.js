@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ExitPlanModeTool/constants.ts
  * pieces: chunk-3q47vjad.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-3q47vjad.js:191-231 fingerprint (2.1.88 match: EXIT_PLAN_MODE_TOOL_NAME, 1)
 /**

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/exit/exit.tsx
  * pieces: chunk-7kcg75y3.js (1), chunk-czq1j3j2.js (1), chunk-dtzk9y3z.js (1)
  * attribution: placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { spawnSync } from "child_process";
 import { env } from "../../utils/env.js";

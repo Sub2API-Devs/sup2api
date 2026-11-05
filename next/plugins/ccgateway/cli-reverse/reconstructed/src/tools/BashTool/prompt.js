@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/prompt.ts
  * pieces: chunk-5xgkngpb.js (29), chunk-wrq65rh8.js (12)
  * attribution: placement 24, layout 13, callgraph-fingerprint 1, fingerprint 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPlainNonInteractive, isHeadlessHostSession } from "../../utils/sessionShape.js";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";

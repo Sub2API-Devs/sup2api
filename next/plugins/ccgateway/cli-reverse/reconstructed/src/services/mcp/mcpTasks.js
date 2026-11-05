@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-74h2zf7y.js (38), chunk-7rbeqb3j.js (19)
  * attribution: placement 57
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";

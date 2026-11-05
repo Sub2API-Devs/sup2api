@@ -4,6 +4,7 @@
  * third-party: ip-address@10.7.5
  * pieces: chunk-exfmq47h.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-exfmq47h.js:248172-248419 esm-fingerprint
 var PRIVATE_NETWORKS = [

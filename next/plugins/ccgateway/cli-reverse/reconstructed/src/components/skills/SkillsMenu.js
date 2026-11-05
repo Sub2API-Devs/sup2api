@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/skills/SkillsMenu.tsx
  * pieces: chunk-4fw9ejgj.js (4), chunk-5xgkngpb.js (1), chunk-mhn0amzz.js (1), chunk-sprn4z2j.js (1), chunk-wb51jffc.js (1)
  * attribution: placement 2, layout 1, callgraph-fingerprint 1, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CLAUDE_TEST_3 } from "../../plugins/bundled/claudeTest/commandHook.js";
 import { getPluginDisplayName } from "../ManagedSettingsSecurityDialog/utils.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TeamCreateTool/TeamCreateTool.ts
  * pieces: chunk-4ht4pcp0.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { rename } from "fs/promises";
 import { getAssistantTeamName } from "../../utils/swarm/sessionTeam.js";

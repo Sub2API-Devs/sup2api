@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useCanUseTool.tsx
  * pieces: chunk-czq1j3j2.js (11)
  * attribution: placement 2, sole-consumer 8, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   MAX_ZERO_WIDTH_RUN,

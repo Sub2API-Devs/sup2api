@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/keybindings.ts
  * pieces: chunk-ne2890fx.js (9), chunk-z0x4zh5m.js (1)
  * attribution: fingerprint 8, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   KEYBINDING_CONTEXTS,

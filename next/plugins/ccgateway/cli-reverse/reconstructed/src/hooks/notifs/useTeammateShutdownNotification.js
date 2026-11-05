@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useTeammateShutdownNotification.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (5)
  * attribution: fingerprint 3, file-local 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { keepaliveReasons } from "../../tasks/taskKinds.js";

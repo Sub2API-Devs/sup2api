@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-y2nrbm62.js (27)
  * attribution: placement 23, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstatSync, openSync, readSync, closeSync } from "fs";
 import { unlink } from "fs/promises";

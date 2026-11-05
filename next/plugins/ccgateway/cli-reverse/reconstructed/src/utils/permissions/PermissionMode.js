@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/PermissionMode.ts
  * pieces: chunk-ct61sn5h.js (2), chunk-z20c443b.js (11)
  * attribution: sole-consumer 1, fingerprint 4, callgraph-witnessed 1, layout 4, file-local 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PAUSE_GLYPH, FAST_FORWARD_GLYPH } from "../../constants/figures.js";
 import { parsePermissionMode } from "../../types/permissions.js";

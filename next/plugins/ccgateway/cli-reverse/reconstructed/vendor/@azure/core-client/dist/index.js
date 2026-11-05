@@ -4,6 +4,7 @@
  * third-party: @azure/core-client@1.9.2..1.10.0
  * pieces: chunk-b5df2wx1.js (13)
  * attribution: esm-layout 2, esm-fingerprint 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getOperationRequestInfo, getOperationArgumentValueFromParameter } from "./esm/operationHelpers.js";
 

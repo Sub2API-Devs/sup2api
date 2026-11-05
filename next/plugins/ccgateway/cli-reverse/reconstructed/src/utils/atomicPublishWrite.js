@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-n44f9pt7.js (56)
  * attribution: placement 45, affinity 2, layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 import * as fsPromisesModule from "fs/promises";

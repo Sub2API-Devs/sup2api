@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-a2dkh2en.js (2), chunk-t6khx287.js (5)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getHostState } from "../../utils/hostEnvironment.js";
 import {

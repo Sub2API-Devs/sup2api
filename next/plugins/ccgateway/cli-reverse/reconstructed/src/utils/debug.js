@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/debug.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-6hadbefe.js (36), chunk-af1hzzme.js (1), chunk-b9mhcvry.js (1)
  * attribution: callgraph-witnessed 1, placement 1, sole-consumer 6, affinity 1, fingerprint 3, layout 10, facade-exports 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, join, dirname, isAbsolute } from "path";
 import { stat, rename, unlink, mkdir, appendFile, symlink } from "fs/promises";

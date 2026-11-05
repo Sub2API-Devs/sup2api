@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/Feed.tsx
  * pieces: chunk-hnxhr3bs.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-hnxhr3bs.js:9047-9153 fingerprint (2.1.88 match: calculateFeedWidth, 0.334)

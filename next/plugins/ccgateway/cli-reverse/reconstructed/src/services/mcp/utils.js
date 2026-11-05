@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/utils.ts
  * pieces: chunk-5xgkngpb.js (33), chunk-6ezjwmcr.js (1), chunk-d1yj4cpy.js (2), chunk-hfc4cfnt.js (1), chunk-jjjp6yev.js (4), chunk-m2gb6h8m.js (1)
  * attribution: placement 14, fingerprint 14, file-local 3, layout 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { serverFilePresenceSlot } from "../remoteManagedSettings/seating.js";

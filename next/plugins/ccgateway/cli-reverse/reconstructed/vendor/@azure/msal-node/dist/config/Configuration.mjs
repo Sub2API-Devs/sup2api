@@ -4,6 +4,7 @@
  * third-party: @azure/msal-node@3.8.1
  * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Constants, ProtocolMode, AzureCloudInstance } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
 import { LogLevel } from "../../../msal-common/dist/logger/Logger.mjs";

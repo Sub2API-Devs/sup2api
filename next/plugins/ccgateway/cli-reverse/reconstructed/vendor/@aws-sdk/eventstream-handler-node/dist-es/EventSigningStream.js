@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/eventstream-handler-node@3.936.0
  * pieces: chunk-ayc8mk37.js (4)
  * attribution: esm-layout 2, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Transform } from "stream";
 import { __toESM } from "../../../../runtime/bun-runtime.js";

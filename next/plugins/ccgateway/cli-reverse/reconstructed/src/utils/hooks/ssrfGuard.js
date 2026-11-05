@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/ssrfGuard.ts
  * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 6, callgraph-witnessed 1, layout 2, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 import { isIP } from "net";

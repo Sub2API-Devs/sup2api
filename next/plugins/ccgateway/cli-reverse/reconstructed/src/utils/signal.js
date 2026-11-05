@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/signal.ts
  * pieces: chunk-ndkzc8d3.js (1), chunk-r4yj9pae.js (1)
  * attribution: callgraph-witnessed 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bindAsyncResource } from "./asyncResourceBind.js";
 

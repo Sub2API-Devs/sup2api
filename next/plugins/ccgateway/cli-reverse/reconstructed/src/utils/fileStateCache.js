@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fileStateCache.ts
  * pieces: chunk-mxsrzv5n.js (3), chunk-z20c443b.js (5)
  * attribution: fingerprint 1, layout 1, callgraph-fingerprint 1, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { managedPathCache } from "./settings/managedPath.js";
 import { asciiOnly } from "./settings/otelEndpointValidation.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/main.tsx
  * pieces: chunk-10j59z4a.js (1), chunk-405cd95w.js (1), chunk-5xgkngpb.js (1), chunk-80cq400a.js (8), chunk-9ys74nhz.js (2), chunk-h61dq9nz.js (17), chunk-hjswk319.js (5), chunk-nhaxap13.js (38)
  * attribution: placement 31, fingerprint 15, facade-majority 5, layout 15, sole-consumer 3, callgraph-witnessed 1, affinity 2, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, basename } from "path";
 import { realpath, opendir } from "fs/promises";

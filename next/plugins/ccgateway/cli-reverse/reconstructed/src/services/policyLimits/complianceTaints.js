@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0nvx3515.js (5), chunk-f3md3zsc.js (12), chunk-rn8k2fjf.js (6)
  * attribution: placement 23
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createSignal } from "../../utils/signal.js";
 import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";

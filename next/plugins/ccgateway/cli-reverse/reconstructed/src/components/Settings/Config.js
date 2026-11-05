@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Config.tsx
  * pieces: chunk-j6tt9nsa.js (20), chunk-vpdjbfty.js (1)
  * attribution: placement 15, layout 3, fingerprint 2, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { OUTPUT_STYLE_CONFIG, DEFAULT_2 } from "../../constants/outputStyles.js";
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../../services/analytics/safeMetadata.js";

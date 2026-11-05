@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/model.ts
  * pieces: chunk-5xgkngpb.js (2), chunk-exfmq47h.js (64), chunk-vn3g7zt8.js (1), chunk-wefvmrb3.js (1)
  * attribution: fingerprint 9, placement 57, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../env.js";
 import {

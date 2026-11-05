@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/events/click-event.ts
  * pieces: chunk-2avr6cej.js (2)
  * attribution: placement 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { InkEvent } from "./event.js";
 import { NO_MOUSE_MODS } from "../components/ErrorBoundary.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/extractMemories/prompts.ts
  * pieces: chunk-70rvh5wm.js (1), chunk-a2q0x549.js (2)
  * attribution: fingerprint 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join as join_2, sep as sep_2 } from "path";
 import {

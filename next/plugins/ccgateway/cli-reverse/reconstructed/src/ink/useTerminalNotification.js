@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/useTerminalNotification.ts
  * pieces: chunk-xd1cb3xs.js (3)
  * attribution: placement 1, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createContext, useContext, useCallback, useMemo } from "../../vendor/react/cjs/react.production.js";
 import { wrapForMultiplexer, osc, OSC, ITERM2_OSC9, PROGRESS } from "./termio/osc.js";

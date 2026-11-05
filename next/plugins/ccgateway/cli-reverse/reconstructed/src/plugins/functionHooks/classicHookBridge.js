@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (29)
  * attribution: placement 27, affinity 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_reject, pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { mergeHookAggregates_2 } from "../../entrypoints/sdk/coreSchemas.js";

@@ -4,6 +4,7 @@
  * third-party: chalk@5.6.0..5.6.2
  * pieces: chunk-h88kgep4.js (14)
  * attribution: esm-layout 5, esm-fingerprint 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { supportsColor_default, ansiStylesAlias } from "./vendor/supports-color/index.js";
 

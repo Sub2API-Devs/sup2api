@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/CompactBoundaryMessage.tsx
  * pieces: chunk-wjygkcr4.js (9)
  * attribution: placement 8, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { formatTokens, formatDuration } from "../../utils/format.js";
 import { extractTag } from "../../utils/messages.js";

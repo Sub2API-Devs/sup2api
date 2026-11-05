@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/tasks.ts
  * pieces: chunk-3xs5443t.js (49), chunk-5xgkngpb.js (1), chunk-h8f0wgnn.js (1), chunk-hnsp0svy.js (2), chunk-w3ch4xq2.js (2)
  * attribution: callgraph-fingerprint 5, affinity 1, fingerprint 10, layout 29, file-local 3, callgraph-witnessed 1, placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readFile, writeFile, readdir, unlink } from "fs/promises";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/screens/REPL.tsx
  * pieces: chunk-czq1j3j2.js (92)
  * attribution: placement 38, layout 7, fingerprint 4, sole-consumer 39, affinity 1, file-local 1, facade-exports 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve } from "path";
 import { randomUUID } from "crypto";

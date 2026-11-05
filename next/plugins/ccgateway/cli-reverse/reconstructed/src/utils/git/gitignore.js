@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git/gitignore.ts
  * pieces: chunk-5fn9rb8r.js (7)
  * attribution: fingerprint 3, layout 2, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, isAbsolute, dirname } from "path";
 import { homedir } from "os";

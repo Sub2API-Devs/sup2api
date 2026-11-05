@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/teammateViewHelpers.ts
  * pieces: chunk-01kgd7xg.js (5), chunk-5xgkngpb.js (8), chunk-czq1j3j2.js (1)
  * attribution: fingerprint 5, placement 4, sole-consumer 3, affinity 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { mainAgentId } from "../bootstrap/state.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0yw3taqg.js (12)
  * attribution: placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { addUsage_2 } from "../../../vendor/@anthropic-ai/sdk/lib/internal/tracing/response.mjs";
 import { EMPTY_USAGE } from "../../services/api/emptyUsage.js";

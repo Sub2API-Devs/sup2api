@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/structuredIO.ts
  * pieces: chunk-0fqk5atw.js (1), chunk-1m58gz0q.js (8), chunk-5xgkngpb.js (1), chunk-qyz2x025.js (1)
  * attribution: fingerprint 3, callgraph-witnessed 1, file-local 1, sole-consumer 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { getToolPermissionContext } from "../utils/permissions/toolPermissionContext.js";

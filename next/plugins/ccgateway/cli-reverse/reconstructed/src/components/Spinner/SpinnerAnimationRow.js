@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/SpinnerAnimationRow.tsx
  * pieces: chunk-3ne3bnw4.js (1), chunk-5xgkngpb.js (1), chunk-hzenv5c0.js (5)
  * attribution: fingerprint 4, callgraph-fingerprint 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";

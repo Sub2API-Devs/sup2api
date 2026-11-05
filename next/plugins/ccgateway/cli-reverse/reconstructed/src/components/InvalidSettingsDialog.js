@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/InvalidSettingsDialog.tsx
  * pieces: chunk-27bnjej4.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { isBlockingSettingsIssue } from "../utils/settings/validation.js";

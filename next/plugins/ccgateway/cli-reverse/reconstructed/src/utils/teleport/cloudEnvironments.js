@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { int32Schema, objectSchema, literal } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isCcpoolId } from "./environmentSelection.js";

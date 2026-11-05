@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/diagLogs.ts
  * pieces: chunk-23ta5myf.js (18)
  * attribution: placement 9, layout 6, callgraph-witnessed 1, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { dirname } from "path";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/awaySummary.ts
  * pieces: chunk-346rk45t.js (10)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEnvDefinedFalsy, isEnvTruthy } from "../utils/envUtils.js";
 import { getIsNonInteractiveSession } from "../bootstrap/state.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/generated/events_mono/common/v1/auth.ts
  * pieces: chunk-exfmq47h.js (5)
  * attribution: fingerprint 2, layout 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-exfmq47h.js:673205-673277 fingerprint (2.1.88 match: createBasePublicApiAuth, 1)

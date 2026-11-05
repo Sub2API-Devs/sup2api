@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-s1cmamfh.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { RULES_NOT_IN_FORCE, SETTINGS_STAY, formatHomeSeedLeftBehindLine } from "./planHomeSeed.js";
 import { SEED_UNAUTHORIZED_REASON } from "./writeHomeSettings.js";

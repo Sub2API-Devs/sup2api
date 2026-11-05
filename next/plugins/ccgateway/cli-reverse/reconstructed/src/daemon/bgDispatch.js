@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ergqq6hs.js (49)
  * attribution: placement 49
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stat, rename, unlink, mkdir, lstat, rm, readFile, readdir, access, writeFile } from "fs/promises";
 import { createWriteStream } from "fs";

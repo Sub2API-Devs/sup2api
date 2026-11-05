@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/credential-provider-ini@3.936.0..3.939.0
  * pieces: chunk-jghy7hde.js (12)
  * attribution: esm-layout 8, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";

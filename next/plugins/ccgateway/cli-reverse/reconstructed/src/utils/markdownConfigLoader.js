@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/markdownConfigLoader.ts
  * pieces: chunk-2k62t388.js (1), chunk-5xgkngpb.js (14), chunk-b08ck61p.js (1)
  * attribution: fingerprint 6, placement 9, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, sep, resolve as resolve_2, dirname } from "path";
 import { homedir } from "os";

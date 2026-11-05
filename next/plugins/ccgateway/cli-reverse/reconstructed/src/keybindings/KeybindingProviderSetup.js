@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/KeybindingProviderSetup.tsx
  * pieces: chunk-swe0kb5q.js (15)
  * attribution: placement 8, fingerprint 2, layout 4, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

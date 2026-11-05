@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h29vk4wn.js (8)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isTaggedSystemUserText } from "../utils/messages.js";
 import { EXTERNAL_MESSAGE_PREFIX } from "../utils/contextAttachments/externalMessages.js";

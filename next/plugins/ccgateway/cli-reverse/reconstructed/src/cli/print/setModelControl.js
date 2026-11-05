@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-aac6cgbf.js (2), chunk-nh1pvp1m.js (23)
  * attribution: placement 25
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/providers.js";
 import {

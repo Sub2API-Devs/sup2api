@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/debugFilter.ts
  * pieces: chunk-6hadbefe.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-6hadbefe.js:4494-4818 fingerprint (2.1.88 match: shouldShowDebugCategories, 1)

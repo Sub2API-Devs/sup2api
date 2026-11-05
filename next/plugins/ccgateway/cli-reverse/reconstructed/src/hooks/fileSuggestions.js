@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/fileSuggestions.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-dyt6bfca.js (35), chunk-f6syse64.js (1), chunk-mrcnh9sb.js (1)
  * attribution: fingerprint 9, sole-consumer 2, facade-exports 7, layout 14, callgraph-fingerprint 1, file-local 2, callgraph-witnessed 1, affinity 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { posix } from "path";

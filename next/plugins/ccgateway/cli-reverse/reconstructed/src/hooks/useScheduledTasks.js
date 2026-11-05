@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useScheduledTasks.ts
  * pieces: chunk-1wakzgxk.js (1), chunk-zdhbhsv3.js (9)
  * attribution: fingerprint 2, sole-consumer 7, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { effectiveSessionTimeZone } from "../utils/sessionTimeZone.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/RemoteSessionProgress.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (10), chunk-sp3m4m72.js (1)
  * attribution: fingerprint 5, placement 5, affinity 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { keepaliveReasons } from "../../tasks/taskKinds.js";
 import { currentUsageCreditState } from "../../services/usageCreditOffers.js";

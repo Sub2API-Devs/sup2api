@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sandbox-runtime@0.0.81
  * pieces: chunk-qg41pqt6.js (23)
  * attribution: esm-layout 3, esm-fingerprint 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sign, X509Certificate } from "crypto";
 import { rm } from "fs/promises";

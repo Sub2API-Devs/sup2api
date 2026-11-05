@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/prefix.ts
  * pieces: chunk-08q4d92p.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-08q4d92p.js:12036-12166 fingerprint (2.1.88 match: DANGEROUS_SHELL_PREFIXES, 0.646)

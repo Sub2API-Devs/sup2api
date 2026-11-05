@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useCanSwitchToExistingSubscription.tsx
  * pieces: chunk-hnxhr3bs.js (3)
  * attribution: fingerprint 2, file-last-pair 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isClaudeAISubscriber } from "../../utils/auth.js";
 import { getOauthProfileFromApiKey } from "../../services/oauth/getOauthProfile.js";

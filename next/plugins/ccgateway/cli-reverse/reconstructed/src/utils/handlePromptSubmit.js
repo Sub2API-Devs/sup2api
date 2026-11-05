@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/handlePromptSubmit.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (4)
  * attribution: placement 2, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { startQueryProfile, queryCheckpoint } from "./queryProfiler.js";

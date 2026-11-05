@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-fpa5emn1.js (6), chunk-hnxhr3bs.js (10)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { withHideWhile } from "../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../cli/handlers/util.js";

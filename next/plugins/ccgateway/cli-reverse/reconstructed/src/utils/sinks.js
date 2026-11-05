@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sinks.ts
  * pieces: chunk-gznp2f7a.js (1)
  * attribution: facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { initializeErrorLogSink } from "./errorLogSink.js";
 import { initializeAnalyticsSink } from "../services/analytics/sink.js";

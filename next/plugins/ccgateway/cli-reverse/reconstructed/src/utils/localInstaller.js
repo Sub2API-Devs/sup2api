@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/localInstaller.ts
  * pieces: chunk-wzyv38y8.js (8)
  * attribution: affinity 1, callgraph-fingerprint 1, fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { writeFile, chmod, access } from "fs/promises";

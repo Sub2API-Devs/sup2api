@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/caCerts.ts
  * pieces: chunk-355mdh7x.js (54)
  * attribution: placement 47, layout 6, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as tlsModule_2 from "tls";
 import { importMetaRequire } from "../../runtime/bun-runtime.js";

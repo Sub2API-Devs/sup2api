@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1zaj5c7m.js (1), chunk-sva49n74.js (42)
  * attribution: placement 37, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   ARTIFACT_CONTENT_AUTHORED_TAG,

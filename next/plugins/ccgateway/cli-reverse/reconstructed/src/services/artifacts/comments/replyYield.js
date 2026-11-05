@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-c0pq6qyx.js (14)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TMUX_LOCATION_RE } from "../../../utils/concurrentSessions.js";
 import { plural, sanitizeSessionTitle, truncateToLength, takeLastChars } from "../../../utils/stringUtils.js";

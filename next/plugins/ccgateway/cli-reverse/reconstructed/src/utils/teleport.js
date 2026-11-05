@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/teleport.tsx
  * pieces: chunk-5xgkngpb.js (67), chunk-czq1j3j2.js (1)
  * attribution: affinity 1, fingerprint 7, layout 41, facade-exports 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stripVTControlCharacters } from "util";
 import { randomUUID } from "crypto";

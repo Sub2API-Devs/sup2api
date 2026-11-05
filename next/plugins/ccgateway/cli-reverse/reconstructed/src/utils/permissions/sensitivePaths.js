@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-eswddw2z.js (1), chunk-n1e79taz.js (67), chunk-pjb5ptr5.js (4)
  * attribution: placement 71, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, isAbsolute, dirname, resolve, basename } from "path";
 import { realpath } from "fs/promises";

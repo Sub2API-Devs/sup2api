@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/useManageMCPConnections.ts
  * pieces: chunk-a8hqqf13.js (1), chunk-czq1j3j2.js (14)
  * attribution: fingerprint 3, placement 7, sole-consumer 2, affinity 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

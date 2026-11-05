@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/firstTokenDate.ts
  * pieces: chunk-de28gzhb.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";

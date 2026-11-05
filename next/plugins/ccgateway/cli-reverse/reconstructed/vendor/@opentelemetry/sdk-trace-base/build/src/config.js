@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
  * pieces: chunk-3wgj3rdg.js (6)
  * attribution: esm-layout 2, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_core_6, import_api_4 } from "../esm/Sampler.js";
 import { AlwaysOnSampler } from "../esm/sampler/AlwaysOnSampler.js";

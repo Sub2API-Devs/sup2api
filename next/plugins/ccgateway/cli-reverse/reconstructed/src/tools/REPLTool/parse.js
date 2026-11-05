@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-n51jggtb.js (17)
  * attribution: placement 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { require_acorn } from "../../../vendor/acorn/dist/acorn.js";
 import { ReplSyntaxError, tagError, instrumentSteps } from "./instrument.js";

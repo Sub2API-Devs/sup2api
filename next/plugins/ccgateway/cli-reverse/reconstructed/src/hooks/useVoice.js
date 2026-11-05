@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useVoice.ts
  * pieces: chunk-1vwpwerm.js (14), chunk-ndkzc8d3.js (2)
  * attribution: sole-consumer 7, affinity 1, fingerprint 4, layout 1, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";

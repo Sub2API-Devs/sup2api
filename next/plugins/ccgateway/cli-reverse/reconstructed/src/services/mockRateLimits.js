@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mockRateLimits.ts
  * pieces: chunk-0467wazv.js (1), chunk-1hnjmk23.js (1), chunk-7pwjpdkw.js (1), chunk-exfmq47h.js (1)
  * attribution: fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   maybeMockRateLimitHeaders,

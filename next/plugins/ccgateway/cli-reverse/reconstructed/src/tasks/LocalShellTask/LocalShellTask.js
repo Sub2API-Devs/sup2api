@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/LocalShellTask/LocalShellTask.tsx
  * pieces: chunk-5xgkngpb.js (32), chunk-fmnbrxwy.js (1), chunk-wrq65rh8.js (3)
  * attribution: fingerprint 8, placement 7, callgraph-fingerprint 2, layout 15, callgraph-witnessed 3, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   INTERACTIVE_PROMPT_PATTERNS,

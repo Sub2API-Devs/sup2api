@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/MessageSelector.tsx
  * pieces: chunk-c7hntn0y.js (1), chunk-czq1j3j2.js (15)
  * attribution: fingerprint 8, affinity 1, layout 3, file-local 1, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import * as pathModule from "path";

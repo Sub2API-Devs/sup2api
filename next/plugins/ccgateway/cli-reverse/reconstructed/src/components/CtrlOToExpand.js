@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CtrlOToExpand.tsx
  * pieces: chunk-81c4jqdt.js (1), chunk-hmaqgh0x.js (2), chunk-jnsr1ny1.js (3), chunk-my2nvh4x.js (6)
  * attribution: fingerprint 3, affinity 1, placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as vmModule from "vm";
 import { markUntrusted } from "../utils/untrustedValues.js";

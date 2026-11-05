@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/CollapsedReadSearchContent.tsx
  * pieces: chunk-wjygkcr4.js (11)
  * attribution: sole-consumer 1, placement 6, layout 2, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { stripPrefix, firstLineOf, getFirstLine, capitalize, plural } from "../../utils/stringUtils.js";

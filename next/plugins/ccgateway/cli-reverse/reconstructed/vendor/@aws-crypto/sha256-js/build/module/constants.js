@@ -4,6 +4,7 @@
  * third-party: @aws-crypto/sha256-js@5.2.0
  * pieces: chunk-er1d5ga0.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-er1d5ga0.js:273-1106 esm-fingerprint
 /**

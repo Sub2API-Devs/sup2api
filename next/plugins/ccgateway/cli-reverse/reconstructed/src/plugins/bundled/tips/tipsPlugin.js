@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-9mcfw5p8.js (28)
  * attribution: placement 27, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import { CC_PLUGIN_TIPS, loadTipRegistryModule, tipSeatSlots } from "../../../services/tips/orgTips.js";

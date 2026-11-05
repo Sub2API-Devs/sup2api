@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/toolName.ts
  * pieces: chunk-8yc04s9d.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-8yc04s9d.js:191-211 fingerprint (2.1.88 match: POWERSHELL_TOOL_NAME, 1)

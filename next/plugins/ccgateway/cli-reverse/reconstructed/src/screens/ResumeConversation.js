@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/screens/ResumeConversation.tsx
  * pieces: chunk-agvpb1pj.js (14), chunk-czq1j3j2.js (1)
  * attribution: sole-consumer 8, file-local 3, layout 2, fingerprint 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname } from "path";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";

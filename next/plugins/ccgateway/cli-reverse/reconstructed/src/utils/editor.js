@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/editor.ts
  * pieces: chunk-5hf2nd5s.js (13), chunk-5xgkngpb.js (1)
  * attribution: sole-consumer 2, affinity 1, fingerprint 5, file-local 1, layout 2, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { spawn, spawnSync } from "child_process";

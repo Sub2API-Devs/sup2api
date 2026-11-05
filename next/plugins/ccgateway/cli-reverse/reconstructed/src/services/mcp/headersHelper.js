@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/headersHelper.ts
  * pieces: chunk-b60e6mnx.js (1), chunk-ge66f009.js (15)
  * attribution: placement 11, layout 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute } from "path";
 import { logMCPDebug, logMCPError } from "../../utils/log.js";

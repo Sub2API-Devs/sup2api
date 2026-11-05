@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/systemPrompt.ts
  * pieces: chunk-5xgkngpb.js (2)
  * attribution: placement 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { setSharedMemoryServedViaTools } from "../memdir/memoryStoresPrompt.js";
 import { isCoordinatorMode_2 } from "../coordinator/coordinatorMode.js";

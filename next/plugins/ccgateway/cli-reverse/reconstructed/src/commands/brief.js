@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/brief.ts
  * pieces: chunk-zwntcvpn.js (3)
  * attribution: fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, booleanSchema } from "../../vendor/zod/v4/classic/schemas.js";

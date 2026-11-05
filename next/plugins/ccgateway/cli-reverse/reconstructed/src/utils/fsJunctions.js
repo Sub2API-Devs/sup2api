@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-za46rn2f.js (24)
  * attribution: placement 24
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpathSync, realpath, readlinkSync } from "fs";
 import { readlink } from "fs/promises";

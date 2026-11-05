@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/auth.ts
  * pieces: chunk-avdt1w7h.js (6), chunk-fmy4vc7c.js (10), chunk-ft6a2kja.js (45), chunk-ghww1f0b.js (56), chunk-r8hfaqgy.js (36)
  * attribution: placement 32, fingerprint 10, layout 48, sole-consumer 8, affinity 4, facade-exports 50, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash, randomUUID, randomBytes } from "crypto";
 import { createServer } from "http";

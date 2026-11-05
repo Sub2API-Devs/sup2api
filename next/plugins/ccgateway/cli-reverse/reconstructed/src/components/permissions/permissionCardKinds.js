@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-g4tsxwy3.js (59)
  * attribution: placement 57, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { fileURLToPath } from "url";
 import { isAbsolute, relative, posix, basename } from "path";

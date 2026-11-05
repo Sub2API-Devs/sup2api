@@ -4,6 +4,7 @@
  * third-party: _unknown/bedrockRuntimeConfig.js
  * pieces: chunk-ayc8mk37.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { EventStreamMarshaller } from "../@smithy/core/dist-cjs/submodules/event-streams/index.js";
 import { __toESM } from "../../runtime/bun-runtime.js";

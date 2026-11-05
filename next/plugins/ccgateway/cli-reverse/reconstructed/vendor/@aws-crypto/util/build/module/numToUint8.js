@@ -4,6 +4,7 @@
  * third-party: @aws-crypto/util@3.0.0..4.0.0
  * pieces: chunk-jcm8ph2a.js (3)
  * attribution: esm-layout 2, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-jcm8ph2a.js:588-671 esm-layout

@@ -58,6 +58,9 @@ import { renameWorker } from './worker-names.mjs';
 
 // the version being reconstructed and its Bun, from the official build (no edit needed for a new version)
 const VERSION = /VERSION:"([^"]+)"/.exec(fs.readFileSync('original/cli.js', 'utf8'))[1];
+// the copyright line every official chunk starts with, taken from the build itself
+const COPYRIGHT_NOTICE = /^\/\/ (\(c\) Anthropic PBC[^\n]*)$/m.exec(fs.readFileSync('original/cli.js', 'utf8'))?.[1]
+  ?? '(c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.';
 const BUN_VERSION = JSON.parse(fs.readFileSync('original/reconstruction.json', 'utf8')).bunVersion;
 const D = readJsonl('analysis/scan/decls.jsonl');
 const scanMods = JSON.parse(fs.readFileSync('analysis/scan/modules.json', 'utf8'));
@@ -787,6 +790,8 @@ for (const [file, info] of Object.entries(manifest)) {
     ` * attribution: ${Object.entries(info.methods).map(([k, n]) => `${k} ${n}`).join(', ')}`,
     ' */',
   ];
+  // the notice every official chunk carries (2856 of 2859; the three zstd resource blobs have none)
+  head.splice(head.length - 1, 0, ` * ${COPYRIGHT_NOTICE}`);
   const imp = [];
   for (const [spec, names] of [...externalImports, ...imports]) {
     const pairs = [...names.values()];

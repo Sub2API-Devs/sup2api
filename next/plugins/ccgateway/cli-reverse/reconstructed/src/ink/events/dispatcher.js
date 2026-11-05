@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/events/dispatcher.ts
  * pieces: chunk-2avr6cej.js (5)
  * attribution: fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HANDLER_FOR_EVENT } from "./event-handlers.js";
 import { logError } from "../../utils/log.js";

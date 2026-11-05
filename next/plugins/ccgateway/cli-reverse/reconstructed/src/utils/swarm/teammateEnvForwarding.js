@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5j7d17eb.js (6), chunk-pgmbxgj8.js (4)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { caCertEnvVars, caCertEnvVarList } from "../settings/managedSettingsKeys.js";
 import { TLS_CERT_ENV_VARS, getHostManagedProviderConflicts } from "../managedEnvConstants.js";

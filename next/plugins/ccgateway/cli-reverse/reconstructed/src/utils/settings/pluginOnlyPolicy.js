@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/pluginOnlyPolicy.ts
  * pieces: chunk-ybq8sbnv.js (3)
  * attribution: facade-exports 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSettingsForSource } from "./settings.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/systemTheme.ts
  * pieces: chunk-0fgj42c8.js (9)
  * attribution: callgraph-witnessed 1, layout 5, callgraph-fingerprint 1, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   getCustomThemeRegistry,

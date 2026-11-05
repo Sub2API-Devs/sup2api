@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FullscreenLayout.tsx
  * pieces: chunk-hnxhr3bs.js (65)
  * attribution: placement 42, sole-consumer 5, affinity 1, fingerprint 8, layout 7, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createStore } from "../state/store.js";
 import { setSliceField } from "../state/sliceHelpers.js";

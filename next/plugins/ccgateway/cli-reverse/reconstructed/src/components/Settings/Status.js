@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Status.tsx
  * pieces: chunk-j6tt9nsa.js (1), chunk-za745zwj.js (1), chunk-zpfg1kae.js (11)
  * attribution: fingerprint 7, placement 1, layout 4, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   jsxProd_default_2,

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserTextMessage.tsx
  * pieces: chunk-wjygkcr4.js (8)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { NO_CONTENT_MESSAGE } from "../../constants/messages.js";
 import { isPeerOrObserver } from "../../utils/messageProvenance.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/env.ts
  * pieces: chunk-08q4d92p.js (1), chunk-c4qa5qn0.js (1), chunk-exfmq47h.js (1), chunk-xjnnz630.js (38)
  * attribution: fingerprint 12, placement 4, facade-exports 8, layout 16, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, resolve, delimiter } from "path";
 import { homedir } from "os";

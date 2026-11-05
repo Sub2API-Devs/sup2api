@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/remote-setup/api.ts
  * pieces: chunk-a3r2kq46.js (2), chunk-kkdpfy3w.js (14)
  * attribution: placement 8, callgraph-witnessed 1, fingerprint 3, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { claudeCodeUserAgent } from "../../utils/http.js";
 import {

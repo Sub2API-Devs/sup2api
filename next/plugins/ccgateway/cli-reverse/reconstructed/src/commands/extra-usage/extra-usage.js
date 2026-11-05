@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/extra-usage/extra-usage.tsx
  * pieces: chunk-448az1sc.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { runExtraUsage } from "./extra-usage-core.js";
 import { getIsNonInteractiveSession } from "../../bootstrap/state.js";

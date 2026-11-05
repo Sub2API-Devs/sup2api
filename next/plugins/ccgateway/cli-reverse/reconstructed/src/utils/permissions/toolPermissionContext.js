@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-8899qs36.js (41)
  * attribution: placement 41
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeCaseForComparison_2 } from "./filesystem.js";
 import { isAutoClassifierActive } from "./autoModeState.js";

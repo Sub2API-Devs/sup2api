@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TeleportProgress.tsx
  * pieces: chunk-46vqpvpm.js (4), chunk-4vawgj1p.js (12)
  * attribution: placement 13, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stepDurationSuffix, setupHeadline } from "../services/cloudSessions/setupProgress.js";
 import { formatFileSize } from "../utils/format.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/filesystem.ts
  * pieces: chunk-1z3a1qn5.js (1), chunk-5xgkngpb.js (1), chunk-a2q0x549.js (190), chunk-cr1mmxrf.js (1), chunk-czq1j3j2.js (1), chunk-nrv8bm0w.js (1), chunk-qg41pqt6.js (4), chunk-vb7ng9fr.js (3), chunk-xea05003.js (1)
  * attribution: fingerprint 10, facade-majority 88, callgraph-witnessed 2, layout 86, file-local 4, sole-consumer 1, placement 9, affinity 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   sep as sep_2,

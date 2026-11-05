@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-asf5gh8x.js (1), chunk-b3g7z1sb.js (4)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SYSTEM_PROMPT_FILE_ARGS as SYSTEM_PROMPT_FILE_ARGS_2 } from "./childArgs.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

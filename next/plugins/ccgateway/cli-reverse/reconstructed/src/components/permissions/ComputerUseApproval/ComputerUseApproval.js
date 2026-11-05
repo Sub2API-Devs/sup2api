@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/ComputerUseApproval/ComputerUseApproval.tsx
  * pieces: chunk-czq1j3j2.js (18)
  * attribution: placement 4, sole-consumer 2, affinity 1, fingerprint 6, layout 4, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
 import { currentToolPermissionContext } from "../../../utils/permissions/currentPermissionContext.js";

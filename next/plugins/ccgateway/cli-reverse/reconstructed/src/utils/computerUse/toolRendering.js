@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/toolRendering.tsx
  * pieces: chunk-wjygkcr4.js (2), chunk-z20c443b.js (3)
  * attribution: fingerprint 2, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CLAUDEAI_SERVER_PREFIX } from "../../services/mcp/normalization.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "./common.js";

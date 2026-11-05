@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/QueryEngine.ts
  * pieces: chunk-0yw3taqg.js (71)
  * attribution: placement 55, layout 8, affinity 3, sole-consumer 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname } from "path";
 import { isDeepStrictEqual } from "util";

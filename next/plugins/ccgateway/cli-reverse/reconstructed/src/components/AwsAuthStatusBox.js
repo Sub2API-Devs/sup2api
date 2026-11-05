@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/AwsAuthStatusBox.tsx
  * pieces: chunk-8x8rp0fx.js (4)
  * attribution: placement 1, file-local 1, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import {

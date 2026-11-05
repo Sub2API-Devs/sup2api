@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/destructiveCommandWarning.ts
  * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 1, layout 1, callgraph-fingerprint 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-5xgkngpb.js:1266472-1268512 fingerprint (2.1.88 match: DESTRUCTIVE_PATTERNS, 0.676)

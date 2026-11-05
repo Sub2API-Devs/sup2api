@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2c3jp4kn.js (4), chunk-k0v80sg8.js (16)
  * attribution: placement 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   ANTHROPIC_REMOTETOOLEXECUTION,

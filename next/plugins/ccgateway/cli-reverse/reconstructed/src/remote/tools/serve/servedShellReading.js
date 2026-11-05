@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-6d2p9h2d.js (8)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ZSH_MODULE_NAME_WRITERS, isAssignmentNameUnsafeForSandbox } from "../../../utils/bash/ast.js";
 import { parseCommandRaw, PARSE_ABORTED } from "../../../utils/bash/parser.js";

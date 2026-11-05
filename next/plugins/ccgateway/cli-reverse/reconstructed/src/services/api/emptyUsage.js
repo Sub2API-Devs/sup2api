@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/emptyUsage.ts
  * pieces: chunk-0a7cfwp8.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-0a7cfwp8.js:263-628 fingerprint (2.1.88 match: EMPTY_USAGE, 0.906)

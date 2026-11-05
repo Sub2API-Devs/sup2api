@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterWorktreeTool/EnterWorktreeTool.ts
  * pieces: chunk-fmnbrxwy.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, resolve } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";

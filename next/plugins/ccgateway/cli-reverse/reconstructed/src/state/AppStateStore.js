@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/state/AppStateStore.ts
  * pieces: chunk-aq66mwq1.js (2), chunk-n75cktq8.js (1)
  * attribution: placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getInitialSettings } from "../utils/settings/settings.js";
 import { getEmptyToolPermissionContext } from "../Tool.js";

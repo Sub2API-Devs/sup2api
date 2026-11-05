@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/GlobalSearchDialog.tsx
  * pieces: chunk-fx2xa8vr.js (9), chunk-vb7ng9fr.js (1)
  * attribution: sole-consumer 8, callgraph-fingerprint 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep } from "path";
 import { MAX_POSIX_PATH_LENGTH } from "../utils/posixPaths.js";

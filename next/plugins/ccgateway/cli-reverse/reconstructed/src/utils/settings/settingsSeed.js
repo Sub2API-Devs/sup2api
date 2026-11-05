@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5fn9rb8r.js (15)
  * attribution: placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { MAX_SETTINGS_JSON_BYTES } from "./settings.js";

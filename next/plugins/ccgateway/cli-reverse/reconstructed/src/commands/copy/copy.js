@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/copy/copy.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (1), chunk-pnckc079.js (17)
  * attribution: fingerprint 10, sole-consumer 2, affinity 1, layout 5, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { mkdir } from "fs/promises";

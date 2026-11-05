@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hooksSettings.ts
  * pieces: chunk-5tpnqyt5.js (1), chunk-7jxyna5q.js (18), chunk-q1gbn2mn.js (1)
  * attribution: fingerprint 6, placement 5, layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve } from "path";
 import { defaultShellKind } from "../shell/shellToolUtils.js";

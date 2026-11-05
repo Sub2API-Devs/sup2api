@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-avy0g5d4.js (49)
  * attribution: placement 49
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { FLEET_KEY_ACTIONS, useFleetBindings, FLEET_EDITOR_SAFE_ACTIONS } from "./FleetList.js";
 import { getSingleKeyActionInContexts } from "../../keybindings/resolver.js";

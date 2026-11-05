@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/envDynamic.ts
  * pieces: chunk-exfmq47h.js (10), chunk-m1f5npav.js (1), chunk-wbfnm169.js (1), chunk-xjnnz630.js (1)
  * attribution: sole-consumer 2, affinity 1, fingerprint 6, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isDisklessEnvProbe, env, hasInternetAccess_2, isDockerenvPresent } from "./env.js";
 import { getFsImplementation } from "./fsOperations.js";

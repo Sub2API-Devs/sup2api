@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-p21mddyh.js (57)
  * attribution: placement 57
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { mkdir, unlink, readdir } from "fs/promises";
 import { join, basename } from "path";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-rkbsrtg1.js (54)
  * attribution: placement 54
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { repeatString, stripSuffix, countCharInString } from "../../../utils/stringUtils.js";

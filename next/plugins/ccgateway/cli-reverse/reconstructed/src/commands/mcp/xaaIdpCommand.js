@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/mcp/xaaIdpCommand.ts
  * pieces: chunk-yzwxxgws.js (2)
  * attribution: affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { cliError, cliOk } from "../../cli/exit.js";
 import { parseIntLoose } from "../../utils/envUtils.js";

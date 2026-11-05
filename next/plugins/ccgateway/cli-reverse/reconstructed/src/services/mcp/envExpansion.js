@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/envExpansion.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-qjh8ew63.js (5)
  * attribution: fingerprint 1, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { expandServerConfigEnvVars } from "./config.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

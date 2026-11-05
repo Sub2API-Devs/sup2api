@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/user.ts
  * pieces: chunk-5xgkngpb.js (2), chunk-a28agxjs.js (1), chunk-exfmq47h.js (1)
  * attribution: fingerprint 2, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { memoizeAlias } from "../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { getOrCreateUserID, getGlobalConfig } from "./config.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/validatePlugin.ts
  * pieces: chunk-0fqk5atw.js (1), chunk-bfqsgtvj.js (73)
  * attribution: fingerprint 11, placement 15, layout 41, callgraph-fingerprint 1, affinity 2, sole-consumer 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { resolve, relative, isAbsolute, sep } from "path";

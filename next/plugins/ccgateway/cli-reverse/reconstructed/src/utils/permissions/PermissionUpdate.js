@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/PermissionUpdate.ts
  * pieces: chunk-a2q0x549.js (35), chunk-y5p93xet.js (1)
  * attribution: placement 25, layout 7, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { posix } from "path";
 import {

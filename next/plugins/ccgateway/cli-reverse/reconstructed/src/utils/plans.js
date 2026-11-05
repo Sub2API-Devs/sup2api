@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plans.ts
  * pieces: chunk-5fn9rb8r.js (1), chunk-5xgkngpb.js (5), chunk-a2q0x549.js (50)
  * attribution: fingerprint 6, placement 4, affinity 2, layout 21, facade-exports 21, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   resolve,

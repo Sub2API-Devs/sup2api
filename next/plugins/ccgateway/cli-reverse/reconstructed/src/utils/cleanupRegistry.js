@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cleanupRegistry.ts
  * pieces: chunk-6hadbefe.js (16)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "./debug.js";
 import { HostScoped } from "./hostScoped.js";

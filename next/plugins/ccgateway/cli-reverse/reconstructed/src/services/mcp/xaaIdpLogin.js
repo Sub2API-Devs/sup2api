@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/xaaIdpLogin.ts
  * pieces: chunk-5rg2vws1.js (14), chunk-ebh35d1r.js (14), chunk-fmy4vc7c.js (2), chunk-hfc4cfnt.js (2)
  * attribution: affinity 2, facade-exports 18, fingerprint 6, layout 5, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { posix } from "path";
 import { createServer } from "http";

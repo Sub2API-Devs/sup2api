@@ -4,6 +4,7 @@
  * third-party: shebang-command@2.0.0
  * pieces: chunk-t889g22j.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_shebang_regex } from "../shebang-regex/index.js";

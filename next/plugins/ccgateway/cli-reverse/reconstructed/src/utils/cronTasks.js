@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronTasks.ts
  * pieces: chunk-5xgkngpb.js (4), chunk-78ymyfsy.js (1), chunk-mk7xxmed.js (22)
  * attribution: placement 9, fingerprint 8, layout 7, callgraph-fingerprint 1, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { mkdir } from "fs/promises";

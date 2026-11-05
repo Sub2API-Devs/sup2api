@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionStoragePortable.ts
  * pieces: chunk-5xgkngpb.js (2), chunk-80bdkzt1.js (86), chunk-jndyh8cy.js (2)
  * attribution: fingerprint 11, placement 77, layout 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createWriteStream, constants } from "fs";
 import { once } from "events";

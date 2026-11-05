@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-cjaaaha5.js (1), chunk-hmqfvhkd.js (2), chunk-qzkfqg75.js (2)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lookupPathTable } from "../../utils/pathTable.js";
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";

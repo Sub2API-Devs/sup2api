@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-gdkqhwa0.js (3), chunk-hnxhr3bs.js (8)
  * attribution: placement 10, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { isAnthropicAuthEnabled, getClaudeAIOAuthTokens } from "../../utils/auth.js";

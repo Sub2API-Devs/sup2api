@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-z4r73bkw.js (5), chunk-zn00h5j5.js (4)
  * attribution: placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, _enum, record, stringSchema, unknown } from "../../vendor/zod/v4/classic/schemas.js";

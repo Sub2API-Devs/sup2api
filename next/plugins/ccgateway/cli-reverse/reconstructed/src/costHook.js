@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/costHook.ts
  * pieces: chunk-e5z7dpjd.js (2)
  * attribution: affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { tryAcquireLock } from "./utils/nativeInstaller/pidLock.js";
 

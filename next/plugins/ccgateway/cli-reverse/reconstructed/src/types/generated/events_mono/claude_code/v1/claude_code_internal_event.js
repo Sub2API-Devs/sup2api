@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/generated/events_mono/claude_code/v1/claude_code_internal_event.ts
  * pieces: chunk-exfmq47h.js (11)
  * attribution: fingerprint 10, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PublicApiAuth, PublicApiAuth_2 } from "../../common/v1/auth.js";
 import { Timestamp } from "../../../google/protobuf/timestamp.js";

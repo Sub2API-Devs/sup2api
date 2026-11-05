@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/init.ts
  * pieces: chunk-exfmq47h.js (1), chunk-f798ahhj.js (1), chunk-fxk1e28j.js (19)
  * attribution: placement 8, affinity 1, fingerprint 2, layout 5, facade-exports 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { pendingVerificationState } from "../services/api/verificationRequired.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/FileWritePermissionRequest/FileWriteToolDiff.tsx
  * pieces: chunk-czq1j3j2.js (5)
  * attribution: placement 1, sole-consumer 2, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { stripUnsafeChars } from "../../../utils/permissions/approvalPayloadSerialization.js";

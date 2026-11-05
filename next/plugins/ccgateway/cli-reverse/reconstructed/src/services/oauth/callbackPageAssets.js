@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-6ba0wca3.js (10)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/anthropicSans400.woff2.asset" with { type: "file" };
 import __cc_resource_1 from "../../../assets/anthropicSerif400.woff2.asset" with { type: "file" };

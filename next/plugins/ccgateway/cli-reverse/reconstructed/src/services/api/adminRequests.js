@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/adminRequests.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-7jxyna5q.js (2), chunk-ph8hmbrf.js (9)
  * attribution: fingerprint 2, affinity 1, placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { getOauthConfig } from "../../constants/oauth.js";

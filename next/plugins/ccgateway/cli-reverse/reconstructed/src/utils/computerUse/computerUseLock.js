@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/computerUseLock.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-e5z7dpjd.js (2)
  * attribution: fingerprint 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { transcriptVersion, CLI_VERSION } from "../sessionStorage.js";
 import { getFsImplementation } from "../fsOperations.js";

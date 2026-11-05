@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundledSkills.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-ndr12bqk.js (1), chunk-xc4g26h5.js (15), chunk-xrwmcqkn.js (1)
  * attribution: fingerprint 4, placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { constants } from "fs";
 import { open, mkdir, lstat } from "fs/promises";

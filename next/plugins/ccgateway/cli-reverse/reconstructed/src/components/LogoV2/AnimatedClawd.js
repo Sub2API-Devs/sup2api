@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/AnimatedClawd.tsx
  * pieces: chunk-hnxhr3bs.js (14)
  * attribution: fingerprint 2, layout 11, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPoseSpec, normalizePose, Clawd, notAppleTerminal } from "./Clawd.js";
 import { antEnv } from "../../utils/env.js";

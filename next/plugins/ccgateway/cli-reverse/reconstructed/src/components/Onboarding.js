@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Onboarding.tsx
  * pieces: chunk-f284hj51.js (1), chunk-s0v4e2v6.js (10)
  * attribution: fingerprint 2, placement 6, sole-consumer 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resetStateForTests, resetStateLogPrefix } from "../cli/handlers/pluginTest/engineShim.js";
 import {

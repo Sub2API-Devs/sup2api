@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/advisor.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-m1f2a43e.js (8)
  * attribution: fingerprint 2, sole-consumer 4, placement 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   getValidAdvisorAliases,

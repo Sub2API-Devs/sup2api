@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/background/remote/preconditions.ts
  * pieces: chunk-7jxyna5q.js (12)
  * attribution: fingerprint 4, layout 4, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getIsClean, findGitRoot, gitExe } from "../../git.js";
 import { fetchEnvironments } from "../../teleport/environments.js";

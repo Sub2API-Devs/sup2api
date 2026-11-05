@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/core@2.0.0
  * pieces: chunk-ft6a2kja.js (1), chunk-ghww1f0b.js (1), chunk-qq5knpkd.js (2)
  * attribution: esm-fingerprint 2, esm-layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { schemaProxyHandlers } from "../../../@babel/runtime/helpers/esm/importDeferProxy.js";
 import {

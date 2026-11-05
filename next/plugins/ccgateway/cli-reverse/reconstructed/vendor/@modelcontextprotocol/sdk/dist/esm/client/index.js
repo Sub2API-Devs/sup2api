@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/sdk@1.29.0
  * pieces: chunk-h44h5gdv.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Protocol } from "../shared/protocol.js";
 import { AjvJsonSchemaValidator, mergeCapabilities } from "../../cjs/validation/ajv-provider.js";

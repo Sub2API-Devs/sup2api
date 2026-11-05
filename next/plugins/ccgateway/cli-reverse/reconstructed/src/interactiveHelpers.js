@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/interactiveHelpers.tsx
  * pieces: chunk-0b83n7d5.js (1), chunk-ezx72dpn.js (6), chunk-yq5f910z.js (27)
  * attribution: fingerprint 1, placement 6, sole-consumer 3, affinity 2, facade-exports 13, layout 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { openSync, writeSync } from "fs";

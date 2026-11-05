@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2hnqerf5.js (20)
  * attribution: sole-consumer 7, affinity 1, placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../../assets/band.tsx-1v7nt0yx.txt" with { type: "text" };
 import __cc_resource_1 from "../../../../assets/band-state.d.ts-jt01vrsc.txt" with { type: "text" };

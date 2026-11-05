@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
  * pieces: chunk-1vqm62xf.js (1), chunk-b8zxeazh.js (1), chunk-f7kbssbx.js (1), chunk-mgs2qfsy.js (1)
  * attribution: esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-b8zxeazh.js:8101-8288 esm-fingerprint

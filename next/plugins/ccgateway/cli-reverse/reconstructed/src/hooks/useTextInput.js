@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTextInput.ts
  * pieces: chunk-42wa4pww.js (20)
  * attribution: placement 18, file-local 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { claimOnce } from "../services/api/verificationRequired.js";
 import { logError } from "../utils/log.js";

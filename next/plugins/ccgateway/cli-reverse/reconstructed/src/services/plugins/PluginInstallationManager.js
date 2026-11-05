@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/plugins/PluginInstallationManager.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (3)
  * attribution: callgraph-fingerprint 1, placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import {

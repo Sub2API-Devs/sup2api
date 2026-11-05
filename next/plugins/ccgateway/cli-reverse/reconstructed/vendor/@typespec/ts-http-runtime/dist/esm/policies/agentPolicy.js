@@ -4,6 +4,7 @@
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
  * pieces: chunk-b5df2wx1.js (5)
  * attribution: esm-layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { NodeHttpClient } from "../nodeHttpClient.js";
 import { createEmptyPipeline_2 } from "../pipeline.js";

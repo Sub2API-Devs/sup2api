@@ -4,6 +4,7 @@
  * third-party: turndown@7.2.0
  * pieces: chunk-w04z664w.js (60)
  * attribution: esm-layout 13, esm-fingerprint 47
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { require_domino } from "../../@mixmark-io/domino/lib/index.js";
 

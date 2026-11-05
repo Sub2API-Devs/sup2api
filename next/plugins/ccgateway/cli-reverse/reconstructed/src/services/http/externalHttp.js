@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7kayq7nc.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAxiosError, axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { isAnthropicHost } from "../../utils/anthropicHosts.js";

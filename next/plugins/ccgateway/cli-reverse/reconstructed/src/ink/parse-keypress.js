@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/parse-keypress.ts
  * pieces: chunk-2avr6cej.js (39)
  * attribution: placement 16, fingerprint 11, file-local 1, layout 10, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Buffer as wc } from "buffer";
 import { csi, PASTE_START, PASTE_END, FOCUS_OUT, FOCUS_IN } from "./termio/csi.js";

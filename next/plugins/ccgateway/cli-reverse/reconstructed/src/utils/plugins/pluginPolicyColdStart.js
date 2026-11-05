@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-7zw1900d.js (2), chunk-h61dq9nz.js (4)
  * attribution: placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { initBuiltinPlugins as initBuiltinPlugins_2 } from "../../plugins/builtinPlugins.js";
 import { getPolicyMemoryFingerprint } from "../../main.js";

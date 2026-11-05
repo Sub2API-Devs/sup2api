@@ -4,6 +4,7 @@
  * third-party: diff@9.0.0
  * pieces: chunk-9dtasr5y.js (5)
  * attribution: esm-fingerprint 4, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Diff } from "../../libcjs/diff/base.js";
 import {

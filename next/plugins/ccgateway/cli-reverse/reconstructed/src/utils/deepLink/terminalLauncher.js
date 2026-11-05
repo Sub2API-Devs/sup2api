@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/terminalLauncher.ts
  * pieces: chunk-r63rf7sw.js (16)
  * attribution: fingerprint 10, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { spawn } from "child_process";

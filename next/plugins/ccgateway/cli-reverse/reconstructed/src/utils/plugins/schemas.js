@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/schemas.ts
  * pieces: chunk-6sf70a86.js (1), chunk-90nja2dk.js (1), chunk-z20c443b.js (111)
  * attribution: fingerprint 16, placement 2, layout 91, callgraph-witnessed 2, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { posix, win32 } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";

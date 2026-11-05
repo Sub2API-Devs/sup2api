@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/chrome/chrome.tsx
  * pieces: chunk-7bp1kqcq.js (8), chunk-7jxyna5q.js (1), chunk-9kwkaaet.js (1), chunk-czq1j3j2.js (1)
  * attribution: sole-consumer 5, affinity 1, fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useIdeConnectionStatus } from "../../hooks/useIdeConnectionStatus.js";
 import {

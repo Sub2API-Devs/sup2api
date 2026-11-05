@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionRestore.ts
  * pieces: chunk-2snqx25v.js (46), chunk-xpe0pbqz.js (4)
  * attribution: placement 49, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, win32, dirname } from "path";
 import { realpathSync, statSync } from "fs";

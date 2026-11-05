@@ -4,6 +4,7 @@
  * third-party: @azure/msal-node@3.8.1
  * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HttpStatus } from "../../../msal-common/lib/index-node-DhUjlPuB.js";
 import { ExponentialRetryStrategy } from "../../lib/msal-node.cjs";

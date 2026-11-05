@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/workloadContext.ts
  * pieces: chunk-exfmq47h.js (6)
  * attribution: fingerprint 3, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { withWorkloadStorage } from "./http.js";

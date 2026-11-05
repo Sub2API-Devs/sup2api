@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Feedback.tsx
  * pieces: chunk-asf5gh8x.js (1), chunk-hmaqgh0x.js (1), chunk-pwdsqzsj.js (2), chunk-vn3g7zt8.js (1), chunk-y656fhcx.js (13)
  * attribution: fingerprint 8, sole-consumer 2, placement 5, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { describeThrownValue, createSealedError } from "../plugins/functionHooks/vm/vmRealm.js";
 import { jsonStringify } from "../utils/slowOperations.js";

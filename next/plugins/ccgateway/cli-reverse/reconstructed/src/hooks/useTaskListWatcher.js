@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTaskListWatcher.ts
  * pieces: chunk-gjfaq3rj.js (2), chunk-hnxhr3bs.js (1)
  * attribution: fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-hnxhr3bs.js:153328-153482 fingerprint (2.1.88 match: useTaskListWatcher, 0.387)

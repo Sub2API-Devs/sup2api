@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1bsktt7r.js (1), chunk-z20c443b.js (4)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stripVTControlCharacters } from "util";
 import { toWellFormedString } from "../stringUtils.js";

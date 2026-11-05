@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/git.ts
  * pieces: chunk-5xgkngpb.js (19), chunk-85eyj5gy.js (60), chunk-c7hntn0y.js (1), chunk-deax24jz.js (4), chunk-hma1b5gv.js (1), chunk-nh1pvp1m.js (1), chunk-s4mtq5zk.js (1)
  * attribution: affinity 1, fingerprint 11, placement 14, layout 16, facade-exports 44, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, sep, join, dirname, basename, isAbsolute, relative } from "path";
 import { lstat, realpath } from "fs/promises";

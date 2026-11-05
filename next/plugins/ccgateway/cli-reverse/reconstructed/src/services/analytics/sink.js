@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/sink.ts
  * pieces: chunk-amrgca9v.js (13), chunk-dhvhhb5r.js (1)
  * attribution: callgraph-fingerprint 1, fingerprint 3, layout 8, facade-exports 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   maskModelIdForTelemetry,

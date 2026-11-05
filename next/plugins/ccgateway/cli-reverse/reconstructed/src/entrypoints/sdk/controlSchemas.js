@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/entrypoints/sdk/controlSchemas.ts
  * pieces: chunk-0h9p4sxp.js (2), chunk-0tcpyvr1.js (1), chunk-0yw3taqg.js (2), chunk-1kk50rk6.js (1), chunk-5dqwe9kx.js (1), chunk-5xgkngpb.js (1), chunk-7kayq7nc.js (4), chunk-asf5gh8x.js (2), chunk-ck4jrdtf.js (1), chunk-czq1j3j2.js (4), chunk-h29vk4wn.js (1), chunk-hjswk319.js (1)
  * attribution: affinity 2, fingerprint 14, placement 4, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {

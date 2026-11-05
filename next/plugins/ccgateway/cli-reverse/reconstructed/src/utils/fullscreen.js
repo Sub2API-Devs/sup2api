@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fullscreen.ts
  * pieces: chunk-7jxyna5q.js (2), chunk-yenb1r87.js (36)
  * attribution: placement 14, sole-consumer 1, affinity 1, fingerprint 4, layout 17, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { spawnSync } from "child_process";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";

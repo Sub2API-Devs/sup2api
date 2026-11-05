@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/client@2.0.0
  * pieces: chunk-fra0jg2y.js (2), chunk-z20c443b.js (1)
  * attribution: esm-layout 1, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { validationMetaSchema, simpleTypes, require_ajv } from "./ajvProvider-BIwGVY6G.mjs";
 import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/cost/cost.ts
  * pieces: chunk-z03ry4rj.js (6)
  * attribution: sole-consumer 5, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { UsageReportSchema } from "../../entrypoints/sdk/coreSchemas.js";
 import { logForDebugging } from "../../utils/debug.js";

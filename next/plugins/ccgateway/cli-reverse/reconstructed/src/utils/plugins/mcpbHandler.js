@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/mcpbHandler.ts
  * pieces: chunk-6vxyfwtv.js (1), chunk-pzdhtgn4.js (18)
  * attribution: fingerprint 13, sole-consumer 1, layout 4, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { createHash } from "crypto";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vafj8wka.js (6)
  * attribution: affinity 1, placement 2, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { END_CONVERSATION_TOOL_NAME } from "./constants.js";

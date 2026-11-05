@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/UserToolResultMessage/utils.tsx
  * pieces: chunk-wjygkcr4.js (2)
  * attribution: sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BRIEF_TOOL_NAME } from "../../../tools/BriefTool/prompt.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";

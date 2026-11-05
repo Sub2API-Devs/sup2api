@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vb7ng9fr.js (60)
  * attribution: placement 58, sole-consumer 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { win32, relative, sep, extname, resolve, dirname, join, posix } from "path";
 import { realpath, readlink, lstat, stat, readdir } from "fs/promises";

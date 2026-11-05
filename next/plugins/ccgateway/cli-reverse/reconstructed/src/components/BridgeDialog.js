@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/BridgeDialog.tsx
  * pieces: chunk-163scjsz.js (3), chunk-czq1j3j2.js (20), chunk-w7hwdb2a.js (1)
  * attribution: fingerprint 7, layout 8, sole-consumer 6, affinity 1, callgraph-fingerprint 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";

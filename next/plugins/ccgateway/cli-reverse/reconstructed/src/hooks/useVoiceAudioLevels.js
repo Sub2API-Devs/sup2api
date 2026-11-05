@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-42wa4pww.js (1), chunk-77bb8s6j.js (1)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useVoiceStore } from "../context/voice.js";
 import { useAppState, useAppState_2 } from "../state/AppState.js";

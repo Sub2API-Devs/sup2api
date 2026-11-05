@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-m2gb6h8m.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getAccessTokenWithCcrFallback } from "../../utils/teleport/api.js";
 import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";

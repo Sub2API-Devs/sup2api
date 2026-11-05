@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tools/toolHooks.ts
  * pieces: chunk-5xgkngpb.js (37), chunk-7jxyna5q.js (1)
  * attribution: placement 30, affinity 1, fingerprint 4, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   EVENT_TOOL_SITE_NAMES,

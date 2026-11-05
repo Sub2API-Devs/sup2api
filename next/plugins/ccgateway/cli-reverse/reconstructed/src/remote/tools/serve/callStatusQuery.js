@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-6d2p9h2d.js (11)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { clipText, ANTHROPIC_REMOTETOOLEXECUTION } from "../protocolSchemas.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";

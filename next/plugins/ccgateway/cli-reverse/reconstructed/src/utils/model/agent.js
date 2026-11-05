@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/agent.ts
  * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 6, callgraph-witnessed 1, fingerprint 1, layout 2, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { EXPLORE_AGENT } from "../../tools/AgentTool/built-in/exploreAgent.js";
 import { modelIdsAreOpaque, getProviderForModel, modelFamilyOf } from "./providers.js";

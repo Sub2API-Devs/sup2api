@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
  * pieces: chunk-7kayq7nc.js (3), chunk-qg41pqt6.js (3)
  * attribution: cjs-fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_SemanticAttributes } from "../../../@opentelemetry/semantic-conventions/build/src/trace/SemanticAttributes.js";

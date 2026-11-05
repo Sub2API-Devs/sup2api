@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-sva49n74.js (11)
  * attribution: placement 8, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { codeModeAccepted } from "../../utils/codeMode/accepted.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

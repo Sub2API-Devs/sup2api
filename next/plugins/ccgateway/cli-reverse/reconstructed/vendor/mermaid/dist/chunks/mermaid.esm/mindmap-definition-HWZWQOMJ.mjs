@@ -4,6 +4,7 @@
  * third-party: mermaid@11.12.3
  * pieces: chunk-b5df2wx1.js (7)
  * attribution: esm-fingerprint 3, esm-layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID, randomFillSync } from "crypto";
 

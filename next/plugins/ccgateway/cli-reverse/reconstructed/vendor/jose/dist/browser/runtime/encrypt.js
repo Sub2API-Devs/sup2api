@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-pd6th42n.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { keyMustBeTypeError, noop } from "../../node/esm/lib/invalid_key_input.js";
 import { cryptoModule, isCryptoKey, init_buffer_utils } from "../../webapi/lib/buffer_utils.js";

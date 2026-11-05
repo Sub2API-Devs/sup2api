@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/parseArgs.ts
  * pieces: chunk-agxasdfa.js (5)
  * attribution: fingerprint 1, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lanternPrismEnabled, isPluginDirectoryModeOn } from "../../utils/plugins/pluginGates.js";
 

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-cm73gsrm.js (51), chunk-xjnnz630.js (1)
  * attribution: placement 51, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, parse, join, basename, resolve } from "path";
 import { stat, lstat, readdir, open } from "fs/promises";

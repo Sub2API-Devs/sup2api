@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskStopTool/prompt.ts
  * pieces: chunk-f5f3fs7w.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-f5f3fs7w.js:560-978 fingerprint (2.1.88 match: TASK_STOP_TOOL_NAME, 0.364)
 /**

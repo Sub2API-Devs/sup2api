@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1p0bwqzj.js (16), chunk-z20c443b.js (11)
  * attribution: placement 27
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { RESTRICTION_KEYS, SEC_DEFAULT_PLUGIN_ID } from "../settings/managedRestrictionKeys.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeCodeHints.ts
  * pieces: chunk-5xgkngpb.js (4), chunk-wrq65rh8.js (11)
  * attribution: placement 4, callgraph-fingerprint 3, fingerprint 1, layout 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "./debug.js";
 import { isFirstPartyTelemetryBlocked } from "./hostEnvironment.js";

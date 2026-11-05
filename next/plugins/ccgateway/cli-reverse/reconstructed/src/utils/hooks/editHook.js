@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-x30dhg5a.js (22)
  * attribution: placement 22
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HookCommandSchema } from "../../schemas/hooks.js";
 import { EDITABLE_SETTING_SOURCES, isSettingSourceEnabled } from "../settings/constants.js";

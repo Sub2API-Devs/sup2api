@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/history.ts
  * pieces: chunk-1xrdahqv.js (1), chunk-3n0n2sf6.js (2), chunk-5xgkngpb.js (14), chunk-75v47sk5.js (1), chunk-7jxyna5q.js (60), chunk-cwkrfaxh.js (2), chunk-h44h5gdv.js (1), chunk-sywnjtqb.js (1), chunk-w3ch4xq2.js (5)
  * attribution: fingerprint 10, placement 45, callgraph-fingerprint 1, file-local 2, layout 28, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readdir } from "fs/promises";

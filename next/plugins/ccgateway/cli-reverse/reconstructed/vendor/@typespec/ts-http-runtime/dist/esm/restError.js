@@ -4,6 +4,7 @@
  * third-party: @typespec/ts-http-runtime@0.2.3..0.3.0
  * pieces: chunk-b5df2wx1.js (6)
  * attribution: esm-layout 2, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Sanitizer, custom } from "./util/sanitizer.js";
 import { isError } from "./util/error.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-3j1p954m.js (1), chunk-64z32qvd.js (10)
  * attribution: placement 10, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { openSync, constants, readSync, closeSync } from "fs";
 import { READ_LIMITS } from "./fsBoundRead.js";

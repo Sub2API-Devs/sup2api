@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/sdk@1.29.0
  * pieces: chunk-h44h5gdv.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createFetchWithDefaults, headersToObject } from "../../../../../../src/utils/fetchWithDefaults.js";
 import { UnauthorizedError, auth, extractWWWAuthenticateParams } from "./auth.js";

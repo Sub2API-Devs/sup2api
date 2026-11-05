@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/claude-agent-sdk/transcriptMirror.js
  * pieces: chunk-tp1gh0pb.js (11)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { randomUUID as randomUUID_2 } from "crypto";

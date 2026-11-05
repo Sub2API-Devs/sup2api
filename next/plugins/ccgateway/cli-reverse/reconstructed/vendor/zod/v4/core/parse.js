@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-m4y44r15.js (15)
  * attribution: esm-fingerprint 12, esm-layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { $ZodAsyncError, config } from "./core.js";
 import { finalizeIssue, captureStackTrace } from "./util.js";

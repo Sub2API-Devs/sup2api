@@ -4,6 +4,7 @@
  * third-party: parse5@7.2.0..7.2.1
  * pieces: chunk-p9ac6cnb.js (5)
  * attribution: esm-layout 2, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TAG_NAMES, NAMESPACES } from "../../lib/common/html.js";
 

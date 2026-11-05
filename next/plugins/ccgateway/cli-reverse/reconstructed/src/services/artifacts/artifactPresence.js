@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-tsrpnscb.js (35)
  * attribution: placement 35
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { addWithLimit, MAX_CRON_OWNERSHIP_KEYS } from "../../utils/cronTasks.js";
 import { getLiveState, currentPresence } from "../liveReplica/liveReplica.js";

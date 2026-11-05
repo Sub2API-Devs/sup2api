@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginIdentifier.ts
  * pieces: chunk-z20c443b.js (42)
  * attribution: placement 33, fingerprint 3, callgraph-witnessed 2, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { INLINE_PLUGIN_MARKETPLACE, SKILLS_DIR, SYNCED, BUILTIN } from "../telemetry/pluginTelemetry.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcp/elicitationValidation.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (24)
  * attribution: fingerprint 11, affinity 1, layout 2, file-local 2, placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { modelSupportsStructuredOutputs, BETA_STRUCTURED_OUTPUTS } from "../betas.js";
 import { isStructuredOutputsUnsupportedClaude } from "../../services/api/claude.js";

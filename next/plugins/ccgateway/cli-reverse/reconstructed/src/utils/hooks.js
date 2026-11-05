@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks.ts
  * pieces: chunk-5xgkngpb.js (291), chunk-am4n5h4j.js (1), chunk-e698sy23.js (29), chunk-sr7jp7gh.js (2), chunk-v6cve82g.js (1)
  * attribution: sole-consumer 22, affinity 8, fingerprint 26, layout 157, placement 32, facade-exports 79
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { isAbsolute, resolve as resolve_2, basename, win32 } from "path";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/errorLogSink.ts
  * pieces: chunk-50ktwjzn.js (1), chunk-5qsfbz2c.js (1), chunk-p13f9wk2.js (11), chunk-pcv9zvvv.js (1)
  * attribution: fingerprint 7, callgraph-witnessed 2, layout 2, sole-consumer 1, affinity 1, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { storageNameSpellings } from "./storage/storageSpaces.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginFlagging.ts
  * pieces: chunk-w8hpkj60.js (12)
  * attribution: fingerprint 5, layout 4, callgraph-witnessed 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readFile } from "fs/promises";

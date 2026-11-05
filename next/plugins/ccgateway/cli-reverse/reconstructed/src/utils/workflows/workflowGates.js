@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-sm7j62wg.js (25)
  * attribution: placement 24, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { mergedCommandNames } from "../settings/commandSyncNames.js";
 import { env } from "../env.js";

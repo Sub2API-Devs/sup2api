@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/terminal.ts
  * pieces: chunk-81c4jqdt.js (4), chunk-wjygkcr4.js (1)
  * attribution: affinity 1, fingerprint 2, layout 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { sequential } from "./sequential.js";

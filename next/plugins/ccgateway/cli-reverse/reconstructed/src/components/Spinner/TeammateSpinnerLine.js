@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/TeammateSpinnerLine.tsx
  * pieces: chunk-ayc8mk37.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ToolInputSchema } from "../../../vendor/@aws-sdk/client-bedrock-runtime/dist-cjs/index.js";
 import { beginDeferredInits } from "../../../runtime/deferred-init.js";

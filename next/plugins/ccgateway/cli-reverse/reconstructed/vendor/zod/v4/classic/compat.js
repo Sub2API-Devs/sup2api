@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-pgdjm7py.js (6)
  * attribution: esm-fingerprint 1, esm-layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { _coercedString, _coercedNumber, _coercedBoolean } from "../core/api.js";
 import { ZodString, ZodNumber, ZodBoolean } from "./schemas.js";

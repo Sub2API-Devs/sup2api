@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-mrcnh9sb.js (4)
  * attribution: placement 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { pathListSignature } from "../hooks/fileSuggestions.js";
 import { matchRuleSegments } from "./permissions/permissionRuleParser.js";

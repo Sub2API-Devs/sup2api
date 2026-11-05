@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ResumeTask.tsx
  * pieces: chunk-1c4mt1y2.js (4), chunk-3msz77wt.js (1)
  * attribution: fingerprint 4, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { probeModelAccess } from "./ModelPinWizard.js";
 import { testBedrockRequest, isAwsTimeoutError } from "./providerSetup/bedrock/bedrockVerify.js";

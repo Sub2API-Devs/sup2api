@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0p9n1dy7.js (34)
  * attribution: placement 34
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { RateLimitInfoSchema } from "../entrypoints/sdk/coreSchemas.js";
 import { pickByHelper } from "../utils/git/gitSafeEnv.js";

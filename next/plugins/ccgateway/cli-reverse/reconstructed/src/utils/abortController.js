@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/abortController.ts
  * pieces: chunk-w10mwqe3.js (44)
  * attribution: placement 42, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { setMaxListeners } from "events";
 import { raceWithAbortSignal } from "./sleep.js";

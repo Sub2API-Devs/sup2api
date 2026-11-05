@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/plugins/pluginOperations.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-ck4jrdtf.js (1), chunk-md9fmgw9.js (114), chunk-n0gp41wj.js (1)
  * attribution: fingerprint 9, placement 39, callgraph-fingerprint 3, file-local 2, layout 63, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname, relative, resolve, sep } from "path";
 import {

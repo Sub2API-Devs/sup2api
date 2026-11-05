@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/commands.ts
  * pieces: chunk-5xgkngpb.js (2), chunk-9jzjcqxe.js (36), chunk-nzz6y5xm.js (1)
  * attribution: fingerprint 3, placement 36
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   BACKSLASH_ESCAPED_SPACE_RE,

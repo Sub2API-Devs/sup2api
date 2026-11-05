@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/BriefTool.ts
  * pieces: chunk-8erkng7v.js (6), chunk-fmnbrxwy.js (3)
  * attribution: affinity 1, facade-exports 4, layout 2, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../../utils/env.js";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-node-to-output.ts
  * pieces: chunk-2avr6cej.js (49)
  * attribution: fingerprint 11, placement 8, layout 18, file-local 1, sole-consumer 10, shared-adjacent 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { walkTabbable } from "./focus.js";
 import { ESC } from "./termio/ansi.js";

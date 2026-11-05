@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-png42f8p.js (9)
  * attribution: placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isHipaaOrg, areExperimentalBetasDisabled } from "./betas.js";
 import { getAPIProvider } from "./model/providers.js";

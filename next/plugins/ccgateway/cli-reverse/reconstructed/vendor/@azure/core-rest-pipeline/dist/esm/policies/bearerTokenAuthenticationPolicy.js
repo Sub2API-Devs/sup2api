@@ -4,6 +4,7 @@
  * third-party: @azure/core-rest-pipeline@1.21.0
  * pieces: chunk-b5df2wx1.js (8)
  * attribution: esm-fingerprint 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createSpan } from "./tracingPolicy.js";
 import { coreRestPipelineLogger } from "../../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";

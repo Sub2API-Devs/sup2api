@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/officialMarketplaceGcs.ts
  * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve as resolve_2, sep, join, dirname } from "path";
 import { readFile, rm, mkdir, writeFile, chmod, rename } from "fs/promises";

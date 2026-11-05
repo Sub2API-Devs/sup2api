@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-rmd7n4gq.js (20)
  * attribution: placement 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, rm, readFile, rename, mkdir } from "fs/promises";
 import { dirname } from "path";

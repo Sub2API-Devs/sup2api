@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/types/permissions.ts
  * pieces: chunk-9q0d7bhm.js (1), chunk-jjgqpk90.js (34)
  * attribution: fingerprint 1, placement 34
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { canCycleToBypassPermissions, canCycleToAuto } from "../utils/permissions/getNextPermissionMode.js";
 import { deferInit } from "../../runtime/deferred-init.js";

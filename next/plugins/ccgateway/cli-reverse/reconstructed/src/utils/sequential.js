@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sequential.ts
  * pieces: chunk-h88kgep4.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { chalkLevel, colorSupport } from "../ink/colorize.js";
 import { deferInit } from "../../runtime/deferred-init.js";

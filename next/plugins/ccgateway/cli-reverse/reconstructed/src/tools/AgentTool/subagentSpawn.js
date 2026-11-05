@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-wms6svby.js (16)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { agentProvider } from "../../plugins/functionHooks/providerTiers.js";
 import { hasModuleHookingSite } from "../../plugins/hooksModules/loadedModuleFilters.js";

@@ -4,6 +4,7 @@
  * third-party: bun-resource (resource)
  * pieces: chunk-5xgkngpb.js (3), chunk-6hqkes0x.js (6)
  * attribution: resource-wrapper 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0_6 from "../../assets/simple_plan-s5yyk7xh.txt" with { type: "text" };
 import __cc_resource_1_2 from "../../assets/visual_plan-9bza2qe2.txt" with { type: "text" };

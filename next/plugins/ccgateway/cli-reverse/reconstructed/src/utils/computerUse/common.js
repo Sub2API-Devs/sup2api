@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/common.ts
  * pieces: chunk-wjygkcr4.js (1), chunk-z20c443b.js (3)
  * attribution: fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../env.js";
 import { CFC_TOOL_PREFIX } from "../claudeInChrome/common.js";

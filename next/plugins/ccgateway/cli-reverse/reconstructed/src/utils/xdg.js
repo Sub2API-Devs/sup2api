@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/xdg.ts
  * pieces: chunk-5jjtf7jy.js (6)
  * attribution: fingerprint 5, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { join } from "path";

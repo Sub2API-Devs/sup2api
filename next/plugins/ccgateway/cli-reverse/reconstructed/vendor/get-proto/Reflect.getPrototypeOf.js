@@ -4,6 +4,7 @@
  * third-party: get-proto@1.0.1
  * pieces: chunk-ww9agm6g.js (2)
  * attribution: cjs-require-graph 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_es_object_atoms } from "../es-object-atoms/index.js";

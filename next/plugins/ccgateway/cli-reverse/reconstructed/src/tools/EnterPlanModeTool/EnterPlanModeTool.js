@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterPlanModeTool/EnterPlanModeTool.ts
  * pieces: chunk-6kmb8me5.js (2)
  * attribution: sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { enterPlanModeToolPrompt } from "./prompt.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";

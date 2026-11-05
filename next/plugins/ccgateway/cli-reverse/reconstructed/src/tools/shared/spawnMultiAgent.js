@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/shared/spawnMultiAgent.ts
  * pieces: chunk-5j7d17eb.js (13), chunk-5xgkngpb.js (1), chunk-pgmbxgj8.js (3)
  * attribution: fingerprint 9, placement 4, layout 1, affinity 1, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { withHostOwnedEnv } from "../../utils/settings/hostEnvWrites.js";
 import { processWrapperError } from "../../utils/processWrapper.js";

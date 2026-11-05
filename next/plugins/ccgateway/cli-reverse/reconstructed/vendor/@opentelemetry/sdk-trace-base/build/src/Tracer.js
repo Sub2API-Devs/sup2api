@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
  * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { mergeConfig } from "../esm/utility.js";
 import { RandomIdGenerator } from "../esm/platform/node/RandomIdGenerator.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/setup.ts
  * pieces: chunk-ag1kt2k5.js (15)
  * attribution: placement 5, sole-consumer 9, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath } from "fs/promises";
 import { resolve, basename } from "path";

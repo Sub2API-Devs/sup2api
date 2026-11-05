@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/shouldUseSandbox.ts
  * pieces: chunk-5xgkngpb.js (19), chunk-n51jggtb.js (1)
  * attribution: placement 18, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isDockerSafe,

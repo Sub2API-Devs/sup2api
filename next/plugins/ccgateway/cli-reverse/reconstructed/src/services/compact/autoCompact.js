@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/compact/autoCompact.ts
  * pieces: chunk-5xgkngpb.js (38), chunk-za6ana42.js (5)
  * attribution: placement 26, layout 11, callgraph-witnessed 1, sole-consumer 1, callgraph-fingerprint 1, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { isEnvTruthy, parseIntLoose } from "../../utils/envUtils.js";

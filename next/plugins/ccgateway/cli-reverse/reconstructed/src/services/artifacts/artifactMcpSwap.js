@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-70g559f4.js (1), chunk-v7crmwhb.js (14)
  * attribution: placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { isRunnerDynamicServer } from "../analytics/metadata.js";

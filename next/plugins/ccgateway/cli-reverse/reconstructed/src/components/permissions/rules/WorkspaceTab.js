@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/WorkspaceTab.tsx
  * pieces: chunk-h5wy8vq5.js (6)
  * attribution: placement 1, layout 2, fingerprint 2, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useEffect } from "../../../../vendor/react/cjs/react.production.js";
 import { stripInvisibleChars } from "../../../utils/invisibleChars.js";

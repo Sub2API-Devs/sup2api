@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/compact/compact.ts
  * pieces: chunk-5xgkngpb.js (82), chunk-bvz8t570.js (1), chunk-hnxhr3bs.js (1)
  * attribution: placement 36, sole-consumer 1, fingerprint 19, layout 28
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import { logFeatureSad, logFeatureOk, logFeatureBad } from "../analytics/featureTelemetry.js";

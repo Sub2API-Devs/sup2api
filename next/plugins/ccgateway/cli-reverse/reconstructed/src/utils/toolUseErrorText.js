@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-a99d5w8y.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-a99d5w8y.js:227-314 placement
 var TOOL_USE_ERROR_WRAPPER_RE = /^\s*<tool_use_error>([\s\S]*)<\/tool_use_error>\s*$/i;

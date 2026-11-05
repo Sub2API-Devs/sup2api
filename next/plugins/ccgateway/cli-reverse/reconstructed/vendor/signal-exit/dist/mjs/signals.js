@@ -4,6 +4,7 @@
  * third-party: signal-exit@4.1.0
  * pieces: chunk-t889g22j.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-t889g22j.js:16280-16289 esm-layout

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/focus.ts
  * pieces: chunk-2avr6cej.js (13)
  * attribution: fingerprint 4, placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { FocusEvent } from "./events/focus-event.js";
 import { collectTabbable } from "./render-node-to-output.js";

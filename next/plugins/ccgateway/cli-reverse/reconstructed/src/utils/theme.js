@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/theme.ts
  * pieces: chunk-hhr6kfwg.js (15)
  * attribution: placement 11, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { levelGeneration } from "../ink/colorize.js";
 import { sequential } from "./sequential.js";

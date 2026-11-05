@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-bmmd67jf.js (16)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { identity } from "../../utils/identity.js";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";

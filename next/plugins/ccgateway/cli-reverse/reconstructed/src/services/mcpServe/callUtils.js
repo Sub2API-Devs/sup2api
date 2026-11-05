@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-9gx98mbf.js (2), chunk-xrwmcqkn.js (2)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEmpty_2 } from "../../../vendor/lodash-es/isEmpty.js";
 

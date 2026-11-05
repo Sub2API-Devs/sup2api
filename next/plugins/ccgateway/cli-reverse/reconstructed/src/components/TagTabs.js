@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/TagTabs.tsx
  * pieces: chunk-ap4nnw1y.js (1), chunk-c07v1qz9.js (1), chunk-s4mtq5zk.js (1)
  * attribution: fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default_2 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";

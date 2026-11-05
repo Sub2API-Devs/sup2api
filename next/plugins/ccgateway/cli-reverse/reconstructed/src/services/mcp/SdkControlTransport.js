@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/SdkControlTransport.ts
  * pieces: chunk-0cf4tfjz.js (5)
  * attribution: placement 1, fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SWALLOW_SYMBOL } from "./client.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";

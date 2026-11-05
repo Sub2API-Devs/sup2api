@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/Task.ts
  * pieces: chunk-j8qkeqz1.js (4), chunk-wjygkcr4.js (1)
  * attribution: fingerprint 2, placement 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 import { currentProgramUseCaseId } from "./services/mcp/ccrTurnId.js";

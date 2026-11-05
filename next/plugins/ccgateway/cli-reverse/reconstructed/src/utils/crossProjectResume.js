@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/crossProjectResume.ts
  * pieces: chunk-y1bp9wp9.js (3)
  * attribution: placement 1, callgraph-fingerprint 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, win32, posix } from "path";
 import { lstat } from "fs/promises";

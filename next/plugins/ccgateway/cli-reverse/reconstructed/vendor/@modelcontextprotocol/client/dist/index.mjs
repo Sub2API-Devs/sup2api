@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/client@2.0.0
  * pieces: chunk-1hnjmk23.js (1), chunk-ft6a2kja.js (1), chunk-ghww1f0b.js (1), chunk-qq5knpkd.js (87)
  * attribution: esm-fingerprint 82, esm-layout 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   brandedHasInstance,

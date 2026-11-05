@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-vsk3y6b4.js (62)
  * attribution: esm-fingerprint 54, esm-layout 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { globalConfig } from "./core.js";
 import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-60gvymh4.js (1), chunk-8prszgkd.js (27)
  * attribution: placement 28
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isRuleRoundTripStable } from "../../utils/permissions/PermissionUpdate.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";

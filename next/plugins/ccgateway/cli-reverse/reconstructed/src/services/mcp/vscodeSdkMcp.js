@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/vscodeSdkMcp.ts
  * pieces: chunk-0yw3taqg.js (5)
  * attribution: fingerprint 2, file-local 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,

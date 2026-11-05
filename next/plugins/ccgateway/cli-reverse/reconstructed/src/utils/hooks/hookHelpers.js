@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/hookHelpers.ts
  * pieces: chunk-5xgkngpb.js (4)
  * attribution: placement 2, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createAttachmentMessage_2 } from "../debug.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-8nfjhq0y.js (47), chunk-z68qgrbt.js (1)
  * attribution: placement 48
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { constants } from "fs";
 import { realpath, lstat, open, stat, readlink } from "fs/promises";

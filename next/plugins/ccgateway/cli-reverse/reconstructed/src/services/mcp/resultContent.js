@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-kq89f1h5.js (10)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isFirstPartyAnthropicHost } from "../../utils/model/providers.js";
 import { DOCS_MCP_PATH } from "./firstPartyServerIds.js";

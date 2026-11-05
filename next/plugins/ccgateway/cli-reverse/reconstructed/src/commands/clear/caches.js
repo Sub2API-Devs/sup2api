@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/clear/caches.ts
  * pieces: chunk-abba4dz7.js (1)
  * attribution: facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { clearSessionContextCaches } from "../../context.js";
 import { clearIsGitMemoFor } from "../../utils/git.js";

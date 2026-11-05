@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/withRetry.ts
  * pieces: chunk-5xgkngpb.js (69), chunk-exfmq47h.js (3), chunk-hb44av3w.js (1), chunk-k1t1w9mg.js (9)
  * attribution: fingerprint 15, layout 48, file-local 1, placement 15, callgraph-witnessed 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { backoffDelayMs, systemClock, sleep } from "../../utils/sleep.js";
 import {

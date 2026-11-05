@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/words.ts
  * pieces: chunk-7kayq7nc.js (10)
  * attribution: fingerprint 2, file-local 1, layout 1, placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memoryScan.ts
  * pieces: chunk-7jxyna5q.js (20)
  * attribution: placement 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, sep, resolve, basename, relative, isAbsolute } from "path";
 import { lstat as lstat_2, readdir } from "fs/promises";

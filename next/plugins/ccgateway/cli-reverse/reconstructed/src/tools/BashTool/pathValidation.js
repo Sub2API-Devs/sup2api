@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/pathValidation.ts
  * pieces: chunk-5xgkngpb.js (55)
  * attribution: fingerprint 12, file-local 3, layout 21, sole-consumer 3, placement 13, affinity 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, resolve as resolve_2, normalize, sep, posix, basename, relative, dirname } from "path";
 import { homedir } from "os";

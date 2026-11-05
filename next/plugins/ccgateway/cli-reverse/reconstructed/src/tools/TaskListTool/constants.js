@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/TaskListTool/constants.ts
  * pieces: chunk-wjqqrdrf.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-wjqqrdrf.js:191-209 fingerprint (2.1.88 match: TASK_LIST_TOOL_NAME, 1)

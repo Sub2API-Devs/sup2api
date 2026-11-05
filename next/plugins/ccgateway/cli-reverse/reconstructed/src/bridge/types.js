@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/types.ts
  * pieces: chunk-haf3j06y.js (1)
  * attribution: facade-majority 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-haf3j06y.js:191-1518 facade-majority (2.1.88 match: BRIDGE_LOGIN_INSTRUCTION, 0.139)
 /**

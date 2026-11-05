@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/privacyLevel.ts
  * pieces: chunk-my2r02mp.js (4)
  * attribution: fingerprint 3, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isEnvTruthy } from "./envUtils.js";
 

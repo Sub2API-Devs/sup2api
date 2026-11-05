@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/sdk@1.29.0
  * pieces: chunk-4bemhbkv.js (3)
  * attribution: esm-fingerprint 1, esm-layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { JSONRPCMessageSchema } from "../types.js";
 

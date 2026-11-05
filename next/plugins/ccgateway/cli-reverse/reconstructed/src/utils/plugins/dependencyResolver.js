@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/dependencyResolver.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-r7hswen6.js (39)
  * attribution: fingerprint 5, placement 16, callgraph-witnessed 1, layout 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { win32 } from "path";
 import { __toESM } from "../../../runtime/bun-runtime.js";

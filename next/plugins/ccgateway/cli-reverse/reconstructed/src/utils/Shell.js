@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/Shell.ts
  * pieces: chunk-5d1nwe9e.js (6), chunk-5xgkngpb.js (40)
  * attribution: fingerprint 4, placement 42
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { accessSync, constants, closeSync } from "fs";
 import { isAbsolute, join, resolve as resolve_2, dirname, delimiter } from "path";

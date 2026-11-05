@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/ast.ts
  * pieces: chunk-5xgkngpb.js (6), chunk-9jzjcqxe.js (1), chunk-nzz6y5xm.js (148)
  * attribution: fingerprint 20, placement 15, layout 71, facade-majority 36, file-local 3, callgraph-fingerprint 1, sole-consumer 8, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { isDeepStrictEqual } from "util";

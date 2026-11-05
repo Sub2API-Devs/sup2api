@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/PermissionRuleList.tsx
  * pieces: chunk-h5wy8vq5.js (37)
  * attribution: sole-consumer 13, file-local 2, layout 15, fingerprint 6, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 import { mkdirSync, openSync, constants, writeSync, closeSync } from "fs";

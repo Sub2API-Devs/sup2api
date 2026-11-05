@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissions.ts
  * pieces: chunk-01b7fqej.js (1), chunk-1dbza2qv.js (1), chunk-5xgkngpb.js (207), chunk-70rvh5wm.js (1), chunk-7p76mrq7.js (2), chunk-9m8gfd36.js (1), chunk-bhrstd6k.js (1), chunk-czq1j3j2.js (1), chunk-frs14hy1.js (1), chunk-gg17c06d.js (45), chunk-nt9amew5.js (14), chunk-xzmy9dn4.js (1)
  * attribution: fingerprint 14, placement 208, layout 49, callgraph-witnessed 2, affinity 1, facade-majority 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";

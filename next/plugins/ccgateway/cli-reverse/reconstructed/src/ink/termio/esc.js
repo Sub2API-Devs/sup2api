@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/esc.ts
  * pieces: chunk-emhzq435.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-emhzq435.js:7856-8347 fingerprint (2.1.88 match: parseEsc, 0.67)

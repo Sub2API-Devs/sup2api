@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cron.ts
  * pieces: chunk-mk7xxmed.js (10)
  * attribution: file-local 2, fingerprint 6, layout 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-mk7xxmed.js:740-822 file-local

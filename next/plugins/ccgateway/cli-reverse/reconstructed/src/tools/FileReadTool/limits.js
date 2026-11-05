@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileReadTool/limits.ts
  * pieces: chunk-cz93r0jz.js (7)
  * attribution: placement 5, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { READ, ALLOW_LARGE_PARAM } from "./constants.js";
 import { env } from "../../utils/env.js";

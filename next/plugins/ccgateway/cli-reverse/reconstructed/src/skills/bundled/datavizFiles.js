@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2fan6wbz.js (11)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/anti-patterns-evn314kn.md" with { type: "text" };
 import __cc_resource_1 from "../../../assets/choosing-a-form-tgtb06w1.md" with { type: "text" };

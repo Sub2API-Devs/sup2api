@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/rename/rename.ts
  * pieces: chunk-gkp5zkjf.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { escapeXmlText } from "../../utils/sanitization.js";
 import { wrapInSystemReminder } from "../../utils/messages.js";

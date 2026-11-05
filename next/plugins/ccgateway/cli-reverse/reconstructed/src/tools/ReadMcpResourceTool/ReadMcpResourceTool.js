@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ReadMcpResourceTool/ReadMcpResourceTool.ts
  * pieces: chunk-zmp9ej5f.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";

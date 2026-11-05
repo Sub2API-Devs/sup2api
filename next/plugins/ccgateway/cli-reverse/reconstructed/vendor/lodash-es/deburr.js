@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-47b8txen.js (2)
  * attribution: esm-fingerprint 1, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { toStringExport } from "./toString.js";
 import { import_deburrLetter } from "./_deburrLetter.js";

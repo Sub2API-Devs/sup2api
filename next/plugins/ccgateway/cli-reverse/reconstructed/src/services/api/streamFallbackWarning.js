@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (4), chunk-g8sg6xj8.js (9)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LRUCache } from "../../../vendor/lru-cache/dist/esm/index.min.js";
 import { createKeyedQueue } from "../../utils/promiseQueue.js";

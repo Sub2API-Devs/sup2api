@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-6m4wm5e2.js (43)
  * attribution: placement 43
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, readdir, stat, unlink, mkdir, realpath, chmod, rename } from "fs/promises";
 import { posix } from "path";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fileHistory.ts
  * pieces: chunk-5xgkngpb.js (51)
  * attribution: facade-exports 12, layout 26, fingerprint 7, file-local 2, callgraph-fingerprint 2, sole-consumer 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { unlink, stat, lstat, copyFile, mkdir, chmod, realpath, open, readlink, link } from "fs/promises";
 import { createHash } from "crypto";

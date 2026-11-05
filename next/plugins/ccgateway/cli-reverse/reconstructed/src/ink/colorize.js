@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/colorize.ts
  * pieces: chunk-h88kgep4.js (14), chunk-hhr6kfwg.js (2), chunk-td0w5pj1.js (1)
  * attribution: placement 10, fingerprint 5, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { chalk } from "../../vendor/chalk/source/index.js";
 import { env as env_2 } from "../utils/env.js";

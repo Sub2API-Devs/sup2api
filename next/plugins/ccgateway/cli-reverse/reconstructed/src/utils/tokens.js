@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/tokens.ts
  * pieces: chunk-5xgkngpb.js (16)
  * attribution: placement 3, fingerprint 3, layout 6, file-local 2, callgraph-witnessed 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SYNTHETIC_MESSAGES, SYNTHETIC_MODEL, signatureTokenEstimate } from "./messages.js";
 import { totalTokensOf, getTokenCountFromUsage_2 } from "./messages/usageAndStopReason.js";

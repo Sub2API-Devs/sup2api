@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebSearchTool/UI.tsx
  * pieces: chunk-fmnbrxwy.js (5), chunk-wjygkcr4.js (4)
  * attribution: placement 4, callgraph-fingerprint 1, affinity 1, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { UNTRUSTED_WIDGET_STATE, RESERVED_XML_TAGS } from "../../constants/xml.js";
 import { OUTPUT_SIZE_LIMITS } from "../../constants/outputLimits.js";

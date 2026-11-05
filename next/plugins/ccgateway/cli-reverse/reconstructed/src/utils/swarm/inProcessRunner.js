@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/inProcessRunner.ts
  * pieces: chunk-2dv3kn8z.js (1), chunk-gjfaq3rj.js (10)
  * attribution: placement 1, affinity 1, fingerprint 5, layout 2, sole-consumer 1, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { appendBounded, MAX_APPENDED_ENTRIES, appendReplacingUuid } from "../../tasks/taskKinds.js";
 import {

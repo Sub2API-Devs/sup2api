@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/QueuedMessageContext.tsx
  * pieces: chunk-9j5p8sjh.js (6), chunk-cj5by3ed.js (4)
  * attribution: placement 9, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, createContext, useContext } from "../../vendor/react/cjs/react.production.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";

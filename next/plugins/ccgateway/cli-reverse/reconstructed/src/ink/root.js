@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/root.ts
  * pieces: chunk-emhzq435.js (6)
  * attribution: sole-consumer 2, affinity 1, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Stream } from "stream";
 import { getSecondRootError, setTerminalHooks } from "./terminal.js";

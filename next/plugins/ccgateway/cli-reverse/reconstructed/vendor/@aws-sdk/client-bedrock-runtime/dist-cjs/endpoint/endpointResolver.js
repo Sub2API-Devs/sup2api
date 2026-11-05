@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-bedrock-runtime@3.936.0..3.938.0
  * pieces: chunk-ayc8mk37.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_index_browser, import_util_endpoints } from "../../../../_unknown/bedrockRuntimeConfig.js";
 import { ruleSet } from "./ruleset.js";

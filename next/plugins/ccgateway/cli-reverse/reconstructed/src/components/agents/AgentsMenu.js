@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/AgentsMenu.tsx
  * pieces: chunk-a2q0x549.js (1), chunk-czq1j3j2.js (2), chunk-h5wy8vq5.js (5)
  * attribution: fingerprint 3, placement 4, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { permissionModeSignal } from "../../utils/permissions/permissionSetup.js";
 import {

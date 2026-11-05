@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PermissionDecisionDebugInfo.tsx
  * pieces: chunk-5xgkngpb.js (7), chunk-czq1j3j2.js (1), chunk-w3ch4xq2.js (1)
  * attribution: fingerprint 5, placement 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   normalizePermissionModeAlias,

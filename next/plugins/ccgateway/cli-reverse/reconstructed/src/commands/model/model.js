@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/model/model.tsx
  * pieces: chunk-czq1j3j2.js (1), chunk-ny1a8wws.js (36), chunk-wefvmrb3.js (7)
  * attribution: fingerprint 5, sole-consumer 8, affinity 1, callgraph-fingerprint 2, file-local 2, layout 21, placement 4, shared-adjacent 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   renderDefaultModelSetting as renderDefaultModelSetting_2,

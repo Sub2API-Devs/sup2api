@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/BashTool.tsx
  * pieces: chunk-5xgkngpb.js (58)
  * attribution: placement 28, fingerprint 9, sole-consumer 3, affinity 3, layout 11, file-local 3, facade-exports 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, basename, relative } from "path";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";

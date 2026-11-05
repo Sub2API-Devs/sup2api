@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/autoDream/autoDream.ts
  * pieces: chunk-arvn22xd.js (9)
  * attribution: sole-consumer 1, fingerprint 4, layout 3, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { emitTaskNotification } from "../../utils/task/taskNotifications.js";

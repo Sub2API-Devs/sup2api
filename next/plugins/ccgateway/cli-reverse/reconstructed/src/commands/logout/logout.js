@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/logout/logout.tsx
  * pieces: chunk-fmp5a427.js (1), chunk-raxstmkp.js (1), chunk-wqfxt05n.js (5)
  * attribution: fingerprint 1, placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { flushReplicasBeforeLogout } from "../../services/liveReplica/liveReplica.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";

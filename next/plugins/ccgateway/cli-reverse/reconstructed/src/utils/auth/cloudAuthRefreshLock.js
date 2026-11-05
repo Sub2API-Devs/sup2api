@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-exfmq47h.js (48)
  * attribution: placement 48
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { lstat, unlink, rmdir, rename, open } from "fs/promises";
 import { randomUUID } from "crypto";

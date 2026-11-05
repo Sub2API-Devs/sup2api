@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-3tew89vt.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getProgramUseCaseChoices, getProgramUseCaseChoiceMode } from "../../bootstrap/state.js";
 import { hostProgramUseCaseId, programUseCaseIdForWire } from "../../utils/programUseCase.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ScrollKeybindingHandler.tsx
  * pieces: chunk-18rrbwq1.js (6), chunk-czq1j3j2.js (22), chunk-xd1cb3xs.js (2)
  * attribution: fingerprint 12, placement 6, affinity 1, layout 6, callgraph-fingerprint 1, sole-consumer 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../utils/env.js";
 import { clearKeptClawdPose } from "./LogoV2/Clawd.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/clear/conversation.ts
  * pieces: chunk-sj6t0nqg.js (9)
  * attribution: affinity 1, facade-exports 2, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { resetObserverPairings } from "../../services/agentObserver/agentObserver.js";

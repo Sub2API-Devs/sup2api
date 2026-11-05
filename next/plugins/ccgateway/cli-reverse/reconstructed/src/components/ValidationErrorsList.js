@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ValidationErrorsList.tsx
  * pieces: chunk-27bnjej4.js (5), chunk-9a7hrf78.js (2)
  * attribution: fingerprint 4, file-local 1, layout 1, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHyperlink } from "../utils/hyperlink.js";
 import { OSC8_PREFIX } from "../ink/screen.js";

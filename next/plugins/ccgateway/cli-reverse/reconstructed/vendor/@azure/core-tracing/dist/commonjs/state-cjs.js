@@ -4,6 +4,7 @@
  * third-party: @azure/core-tracing@1.2.0..1.3.1
  * pieces: chunk-b5df2wx1.js (2)
  * attribution: cjs-fingerprint 1, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, __toESM } from "../../../../../runtime/bun-runtime.js";
 

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/voice.ts
  * pieces: chunk-empn5226.js (18), chunk-gw6tgnv9.js (1), chunk-hb44av3w.js (1)
  * attribution: sole-consumer 4, affinity 2, fingerprint 13, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { homedir } from "os";

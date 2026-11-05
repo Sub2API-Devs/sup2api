@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/promptCategory.ts
  * pieces: chunk-w3zvfmad.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSettings_DEPRECATED } from "./settings/settings.js";
 import { DEFAULT_2, OUTPUT_STYLE_CONFIG } from "../constants/outputStyles.js";

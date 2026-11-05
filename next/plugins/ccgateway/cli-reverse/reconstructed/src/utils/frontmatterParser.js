@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/frontmatterParser.ts
  * pieces: chunk-a2q0x549.js (25)
  * attribution: placement 8, layout 12, fingerprint 3, callgraph-witnessed 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeKeyIndex, normalizeKey } from "./objectUtils.js";
 import { parseYaml } from "./yaml.js";

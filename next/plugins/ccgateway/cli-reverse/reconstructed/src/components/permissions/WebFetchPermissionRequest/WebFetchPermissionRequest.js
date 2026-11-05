@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/WebFetchPermissionRequest/WebFetchPermissionRequest.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (5)
  * attribution: fingerprint 2, placement 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { WebFetchTool } from "../../../tools/WebFetchTool/WebFetchTool.js";
 import { isConsentRow, parseConsentSuggestions } from "../consentRows.js";

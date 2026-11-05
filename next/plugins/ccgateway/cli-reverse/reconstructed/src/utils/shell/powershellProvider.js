@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/powershellProvider.ts
  * pieces: chunk-5xgkngpb.js (8)
  * attribution: fingerprint 2, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { join as join_38 } from "path/posix";

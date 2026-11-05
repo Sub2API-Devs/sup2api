@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/zipCache.ts
  * pieces: chunk-5xgkngpb.js (29)
  * attribution: fingerprint 10, layout 7, placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname, sep } from "path";
 import { rm, readdir, stat, lstat, readFile, writeFile, chmod, open, mkdir } from "fs/promises";

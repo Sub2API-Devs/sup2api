@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-d7jrrm3a.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { REMOTE_TOOL_PROTOCOL_VERSION, SERVER_VERDICT_KEY } from "./protocolConstants.js";
 import { clampToMaxPageSize } from "./callResults.js";

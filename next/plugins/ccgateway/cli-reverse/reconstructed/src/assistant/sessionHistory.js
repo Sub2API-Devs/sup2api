@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/assistant/sessionHistory.ts
  * pieces: chunk-h29vk4wn.js (2), chunk-jc4qbkj6.js (1), chunk-keyy05re.js (2)
  * attribution: fingerprint 4, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { toInfraSessionId, toCompatSessionId } from "../bridge/sessionIdCompat.js";
 import { oauthHeaders } from "../bridge/codeSessionApi.js";

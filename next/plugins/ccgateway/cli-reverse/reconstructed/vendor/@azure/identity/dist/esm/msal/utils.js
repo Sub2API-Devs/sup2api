@@ -4,6 +4,7 @@
  * third-party: @azure/identity@4.10.1
  * pieces: chunk-b5df2wx1.js (10)
  * attribution: esm-fingerprint 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { credentialLogger, formatError } from "../util/logging.js";
 import { AuthenticationRequiredError, CredentialUnavailableError } from "../../index.js";

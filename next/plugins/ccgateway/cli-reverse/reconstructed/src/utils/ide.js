@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ide.ts
  * pieces: chunk-5xgkngpb.js (53), chunk-7jxyna5q.js (2), chunk-qg41pqt6.js (1)
  * attribution: placement 8, affinity 2, callgraph-witnessed 3, fingerprint 30, layout 12, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, basename, sep, resolve as resolve_2, isAbsolute } from "path";
 import "os";

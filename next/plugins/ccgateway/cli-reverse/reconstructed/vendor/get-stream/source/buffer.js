@@ -4,6 +4,7 @@
  * third-party: get-stream@8.0.1
  * pieces: chunk-t889g22j.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getStreamAsBuffer } from "./array-buffer.js";
 

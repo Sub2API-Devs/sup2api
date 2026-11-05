@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FilePathLink.tsx
  * pieces: chunk-e2r2f340.js (3)
  * attribution: callgraph-witnessed 1, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, sep } from "path";
 import { homedir } from "os";

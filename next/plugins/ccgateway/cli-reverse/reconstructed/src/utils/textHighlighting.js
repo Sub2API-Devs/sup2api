@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/textHighlighting.ts
  * pieces: chunk-5xgkngpb.js (3)
  * attribution: callgraph-witnessed 1, file-last-pair 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { tokenize } from "../../vendor/@alcalzone/ansi-tokenize/build/tokenize.js";
 import { activeAnsiCodes } from "../components/PromptInput/inputDecorations.js";

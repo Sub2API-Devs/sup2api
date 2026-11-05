@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/formatBriefTimestamp.ts
  * pieces: chunk-6s14nyc9.js (2), chunk-czq1j3j2.js (1), chunk-pnx1prpt.js (4)
  * attribution: affinity 1, fingerprint 3, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "./env.js";
 import {

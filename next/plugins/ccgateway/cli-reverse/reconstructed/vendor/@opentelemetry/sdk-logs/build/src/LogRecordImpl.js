@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/sdk-logs@0.208.0
  * pieces: chunk-exfmq47h.js (4)
  * attribution: esm-layout 3, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_resources } from "../../../resources/build/src/index.js";

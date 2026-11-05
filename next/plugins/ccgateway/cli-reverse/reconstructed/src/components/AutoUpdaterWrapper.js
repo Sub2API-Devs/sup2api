@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/AutoUpdaterWrapper.tsx
  * pieces: chunk-18rrbwq1.js (3)
  * attribution: sole-consumer 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";

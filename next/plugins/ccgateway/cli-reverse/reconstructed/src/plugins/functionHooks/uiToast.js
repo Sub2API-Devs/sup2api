@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (34)
  * attribution: placement 34
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ENGINE } from "./dispatch/chain.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";

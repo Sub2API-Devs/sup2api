@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
  * pieces: chunk-67qh5zdp.js (1)
  * attribution: cjs-require-graph 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../../core/dist-cjs/index.js";

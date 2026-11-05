@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sanitization.ts
  * pieces: chunk-2jb250pa.js (32), chunk-3gbv0jkm.js (27)
  * attribution: placement 58, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { truncateToLength, toWellFormedString, collapseWhitespace } from "./stringUtils.js";
 import { stripAnsi } from "./stripAnsi.js";

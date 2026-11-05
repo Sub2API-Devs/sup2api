@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/exampleCommands.ts
  * pieces: chunk-9knfmvrf.js (1), chunk-hjswk319.js (7)
  * attribution: fingerprint 4, affinity 1, file-local 1, callgraph-fingerprint 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "./env.js";
 import { getIsGit, gitExe } from "./git.js";

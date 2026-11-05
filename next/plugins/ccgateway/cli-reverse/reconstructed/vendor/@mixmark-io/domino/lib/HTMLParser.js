@@ -4,6 +4,7 @@
  * third-party: @mixmark-io/domino@2.2.0
  * pieces: chunk-nzh56fv5.js (1), chunk-w04z664w.js (1)
  * attribution: esm-fingerprint 1, cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TokenizerMode } from "../../../parse5/dist/tokenizer/index.js";
 import { __commonJS } from "../../../../runtime/bun-runtime.js";

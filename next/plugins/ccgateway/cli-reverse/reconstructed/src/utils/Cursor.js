@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/Cursor.ts
  * pieces: chunk-18rrbwq1.js (11), chunk-42wa4pww.js (8), chunk-880p06ha.js (6), chunk-j8f885h1.js (1)
  * attribution: placement 19, fingerprint 4, layout 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getGraphemeSegmenter, firstGrapheme, getWordSegmenter } from "./intl.js";
 import { bunStringWidth } from "../ink/stringWidth.js";

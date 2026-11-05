@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-b60e6mnx.js (4), chunk-pyd7te4t.js (7)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
 import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";

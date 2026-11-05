@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (11)
  * attribution: placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { alwaysFalse as alwaysFalse_2 } from "../../Tool.js";
 import { cycleAllTeammateModes } from "../../components/teams/TeamsDialog.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/parser.ts
  * pieces: chunk-m2f3rb0f.js (8)
  * attribution: fingerprint 6, file-local 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-m2f3rb0f.js:1154-1779 fingerprint (2.1.88 match: parseKeystroke, 0.956)

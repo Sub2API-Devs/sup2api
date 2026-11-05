@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/remoteManagedSettings/types.ts
  * pieces: chunk-a28agxjs.js (1)
  * attribution: callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { objectSchema, stringSchema, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";

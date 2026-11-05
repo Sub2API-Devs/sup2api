@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queryContext.ts
  * pieces: chunk-t4k9zryy.js (2)
  * attribution: facade-exports 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSystemPrompt, buildMemoryDirectorySection } from "../constants/prompts.js";
 import { getOrBuildUserContext, getCachedSystemContext } from "../context.js";

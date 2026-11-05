@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Markdown.tsx
  * pieces: chunk-czq1j3j2.js (1), chunk-ptrwzav4.js (10), chunk-xzmy9dn4.js (2)
  * attribution: fingerprint 3, placement 9, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasActualOperatorNodes, isNotSpaceToken } from "../utils/markdownHeadings.js";
 import { joinRawSegments } from "../ink/render-border.js";

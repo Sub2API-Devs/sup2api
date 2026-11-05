@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/permissionLogging.ts
  * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 2, fingerprint 7, file-local 1, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   extractMcpToolDetails,

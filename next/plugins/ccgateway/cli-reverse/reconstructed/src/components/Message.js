@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Message.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-wjygkcr4.js (15)
  * attribution: fingerprint 5, placement 3, sole-consumer 1, affinity 1, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { claudeMdSessionState } from "../utils/claudemd.js";
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";

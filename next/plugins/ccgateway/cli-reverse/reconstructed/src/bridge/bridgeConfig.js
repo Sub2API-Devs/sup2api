@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeConfig.ts
  * pieces: chunk-4dkmc786.js (1), chunk-c6aqkztt.js (10), chunk-h3xdf7nq.js (5)
  * attribution: facade-exports 10, affinity 1, placement 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hostname } from "os";
 import { isGrowthBookEnabled } from "../services/analytics/growthbook.js";

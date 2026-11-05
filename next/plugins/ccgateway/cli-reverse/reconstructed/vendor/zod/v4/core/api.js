@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-m4y44r15.js (64), chunk-z20c443b.js (1)
  * attribution: esm-layout 8, esm-fingerprint 57
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeParams, slugify, issue } from "./util.js";
 import {

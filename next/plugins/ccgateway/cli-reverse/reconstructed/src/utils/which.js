@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/which.ts
  * pieces: chunk-xjnnz630.js (8)
  * attribution: fingerprint 1, layout 1, placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { delimiter, isAbsolute } from "path";
 

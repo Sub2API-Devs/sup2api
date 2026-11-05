@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-a0xc6evk.js (14), chunk-s584m62r.js (9)
  * attribution: placement 23
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../hostScoped.js";
 import { touchSetEntry } from "./accountMemoryRedaction.js";

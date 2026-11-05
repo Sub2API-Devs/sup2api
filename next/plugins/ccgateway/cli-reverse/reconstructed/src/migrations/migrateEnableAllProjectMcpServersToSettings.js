@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/migrations/migrateEnableAllProjectMcpServersToSettings.ts
  * pieces: chunk-h61dq9nz.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getRawCurrentProjectConfigEntry, deleteCurrentProjectConfigFields } from "../utils/config.js";
 import { blockingLocalSettingsErrors } from "../utils/settings/settingsNotices.js";

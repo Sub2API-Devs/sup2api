@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ch5peek9.js (8), chunk-vb7ng9fr.js (17)
  * attribution: placement 23, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { posix, sep, isAbsolute, join, relative } from "path";
 import { lstat as lstat_2, realpath, open } from "fs/promises";

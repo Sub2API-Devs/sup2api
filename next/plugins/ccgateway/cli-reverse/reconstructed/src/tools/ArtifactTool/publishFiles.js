@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-xzmy9dn4.js (17)
  * attribution: placement 16, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, dirname, relative, sep, isAbsolute, parse } from "path";
 import { findLastUserPromptUuid } from "../../utils/transcript/deserialize.js";

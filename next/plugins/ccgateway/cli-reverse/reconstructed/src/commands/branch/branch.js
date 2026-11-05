@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/branch/branch.ts
  * pieces: chunk-2q3gtfzq.js (8)
  * attribution: affinity 1, facade-majority 4, layout 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { mkdir, unlink } from "fs/promises";

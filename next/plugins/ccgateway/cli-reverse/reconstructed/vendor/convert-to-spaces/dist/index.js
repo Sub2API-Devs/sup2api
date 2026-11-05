@@ -4,6 +4,7 @@
  * third-party: convert-to-spaces@2.0.1
  * pieces: chunk-2avr6cej.js (4)
  * attribution: esm-layout 3, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AppContext } from "../../../src/ink/components/AppContext.js";
 import { init_react_production, createContext } from "../../react/cjs/react.production.js";

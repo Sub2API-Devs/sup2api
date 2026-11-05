@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/cacheUtils.ts
  * pieces: chunk-5s0qaz1x.js (2), chunk-5xgkngpb.js (20), chunk-ndr12bqk.js (1)
  * attribution: fingerprint 6, placement 10, callgraph-witnessed 2, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, sep, resolve as resolve_2 } from "path";
 import { unlink, lstat, readdir, mkdir, copyFile } from "fs/promises";

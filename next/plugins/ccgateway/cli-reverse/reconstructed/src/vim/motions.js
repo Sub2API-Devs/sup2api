@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/motions.ts
  * pieces: chunk-880p06ha.js (4)
  * attribution: fingerprint 2, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BACKSPACE_KEY } from "./types.js";
 import { replaceWithSpaces, Cursor } from "../utils/Cursor.js";

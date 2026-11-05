@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-azq8n2fy.js (1), chunk-nvm0wye1.js (22)
  * attribution: placement 22, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID, randomBytes } from "crypto";
 import { isWindowsSandboxPolicyViolation, SESSION_APPROVAL_STALE_MS } from "./servingState.js";

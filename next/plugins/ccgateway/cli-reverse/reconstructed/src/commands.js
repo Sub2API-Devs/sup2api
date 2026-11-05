@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands.ts
  * pieces: chunk-1z79zgep.js (2), chunk-5xgkngpb.js (101), chunk-7jxyna5q.js (23)
  * attribution: placement 32, facade-exports 39, fingerprint 6, layout 44, affinity 2, callgraph-fingerprint 1, sole-consumer 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve as resolve_2, basename, dirname, relative, sep, isAbsolute } from "path";
 import { commandPolicyGateAllows } from "./services/policyLimits/policyVerdicts.js";

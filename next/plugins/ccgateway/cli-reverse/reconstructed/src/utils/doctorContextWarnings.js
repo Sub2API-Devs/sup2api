@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/doctorContextWarnings.ts
  * pieces: chunk-6vxyfwtv.js (1), chunk-ptrwzav4.js (8)
  * attribution: fingerprint 1, placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "./env.js";
 import { terminalDetector } from "../ink/terminalColorSupport.js";

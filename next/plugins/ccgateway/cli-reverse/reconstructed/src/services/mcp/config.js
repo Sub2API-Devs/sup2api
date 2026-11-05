@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/config.ts
  * pieces: chunk-5xgkngpb.js (161), chunk-czq1j3j2.js (1), chunk-hfc4cfnt.js (7), chunk-mm287dgc.js (4), chunk-z20c443b.js (2)
  * attribution: file-local 4, fingerprint 12, placement 36, layout 62, callgraph-witnessed 2, facade-majority 57, shared-adjacent 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, parse, dirname } from "path";
 import { randomBytes, createHash } from "crypto";

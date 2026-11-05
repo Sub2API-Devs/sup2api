@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/process.ts
  * pieces: chunk-ndcj3jv5.js (23), chunk-ntm2y5qw.js (2), chunk-xd1cb3xs.js (1), chunk-y2nrbm62.js (1)
  * attribution: placement 25, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { withTimeout, sleep } from "./sleep.js";
 import { bindAsyncResource } from "./asyncResourceBind.js";

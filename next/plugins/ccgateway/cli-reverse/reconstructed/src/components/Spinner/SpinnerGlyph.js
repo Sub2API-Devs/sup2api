@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner/SpinnerGlyph.tsx
  * pieces: chunk-9xvmzd8d.js (2)
  * attribution: placement 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useResolvedTheme } from "../design-system/ThemeProvider.js";

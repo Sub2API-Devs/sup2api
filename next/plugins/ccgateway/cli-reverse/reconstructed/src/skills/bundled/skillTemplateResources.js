@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-tv5dgwz5.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/SKILL-e3d212e9.md.zst" with { type: "file" };
 import __cc_resource_1 from "../../../assets/template-eg8004mh.md" with { type: "text" };

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-aejqrk0z.js (7), chunk-mxre7sw0.js (1)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
 import { evaluateAskingNoHost, getPermissionModeCycle } from "../../utils/permissions/permissions.js";

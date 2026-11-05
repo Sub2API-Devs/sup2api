@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/advisor.ts
  * pieces: chunk-7jxyna5q.js (42), chunk-t0mq53e1.js (5)
  * attribution: placement 14, fingerprint 3, layout 27, file-local 1, affinity 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getErrorMessageIfRefusal } from "../services/api/errors.js";
 import { env } from "./env.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-3xmyjkbh.js (5), chunk-czq1j3j2.js (9)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { fromSanitizer_SANITIZER_OUTPUT_ONLY, lit, fromEnum } from "../services/analytics/safeMetadata.js";
 import { sendNotification } from "../services/notifier.js";

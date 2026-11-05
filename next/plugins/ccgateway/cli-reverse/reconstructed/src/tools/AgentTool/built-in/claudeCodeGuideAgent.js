@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/built-in/claudeCodeGuideAgent.ts
  * pieces: chunk-5xgkngpb.js (4)
  * attribution: fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasEmbeddedSearchTools } from "../../../utils/embeddedTools.js";
 import { isBashAvailable } from "../../../utils/shell/shellToolUtils.js";

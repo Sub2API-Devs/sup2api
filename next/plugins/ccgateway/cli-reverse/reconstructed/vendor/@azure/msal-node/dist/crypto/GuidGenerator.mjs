@@ -4,6 +4,7 @@
  * third-party: @azure/msal-node@3.8.1
  * pieces: chunk-b5df2wx1.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { uuid } from "../../../../mermaid/dist/chunks/mermaid.esm/mindmap-definition-HWZWQOMJ.mjs";
 

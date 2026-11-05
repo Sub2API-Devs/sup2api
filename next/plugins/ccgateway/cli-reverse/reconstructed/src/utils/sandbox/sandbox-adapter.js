@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sandbox/sandbox-adapter.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-gg17c06d.js (1), chunk-mrcnh9sb.js (1), chunk-qg41pqt6.js (391)
  * attribution: fingerprint 12, callgraph-fingerprint 2, placement 308, layout 68, sole-consumer 1, file-local 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, win32, resolve, isAbsolute, join, sep, basename, parse, relative } from "path";
 import { homedir, hostname } from "os";

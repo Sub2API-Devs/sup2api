@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/registerProtocol.ts
  * pieces: chunk-f8a5a0kt.js (12), chunk-gvr4gxa7.js (1), chunk-nh327nc2.js (7)
  * attribution: callgraph-witnessed 2, fingerprint 9, callgraph-fingerprint 1, placement 7, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { sep, join } from "path";

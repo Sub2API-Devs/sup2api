@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/pathValidation.ts
  * pieces: chunk-6zpsr8vx.js (45)
  * attribution: sole-consumer 5, affinity 2, fingerprint 8, file-local 4, layout 26
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { isAbsolute, normalize, resolve, win32, dirname } from "path";

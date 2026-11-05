@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vr5v4gzz.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-vr5v4gzz.js:25975-26156 placement
 var AUTO_MODE_DUMP_FILES = "auto-mode-classifier-error.txt";

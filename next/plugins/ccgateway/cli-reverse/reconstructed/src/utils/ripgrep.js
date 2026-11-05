@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ripgrep.ts
  * pieces: chunk-qg41pqt6.js (60), chunk-tsrpnscb.js (1)
  * attribution: sole-consumer 2, placement 5, fingerprint 11, layout 43
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { StringDecoder } from "string_decoder";
 import { stat, open, readlink, access } from "fs/promises";

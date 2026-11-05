@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vgaj51qh.js (39)
  * attribution: placement 39
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PROVIDER_ENV_FLAGS } from "../model/modelIds.js";
 import { env } from "../env.js";

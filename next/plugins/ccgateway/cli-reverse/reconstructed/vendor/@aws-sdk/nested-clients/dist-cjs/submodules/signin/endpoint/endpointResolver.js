@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/nested-clients@3.936.0
  * pieces: chunk-csa0qt1j.js (1), chunk-tvcdn76c.js (1)
  * attribution: cjs-require-graph 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_index_browser } from "../../sso/index.js";
 import { ruleSet } from "../../sso/endpoint/ruleset.js";

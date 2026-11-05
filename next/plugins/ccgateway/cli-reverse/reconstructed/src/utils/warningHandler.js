@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/warningHandler.ts
  * pieces: chunk-nhaxap13.js (4)
  * attribution: affinity 1, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { win32, posix } from "path";
 import { types } from "util";

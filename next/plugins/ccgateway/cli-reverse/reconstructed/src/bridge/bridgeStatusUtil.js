@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeStatusUtil.ts
  * pieces: chunk-czq1j3j2.js (1), chunk-h6n138yz.js (15)
  * attribution: fingerprint 4, placement 6, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { formatRelativeTimeAgo } from "../utils/format.js";
 import { getClaudeAiBaseUrl } from "../constants/product.js";

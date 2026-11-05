@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useReplBridge.tsx
  * pieces: chunk-7swgcwav.js (2), chunk-czq1j3j2.js (28)
  * attribution: placement 13, layout 16, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, resolve, normalize, sep, parse } from "path";
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";

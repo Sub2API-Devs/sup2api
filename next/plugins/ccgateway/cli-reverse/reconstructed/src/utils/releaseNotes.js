@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/releaseNotes.ts
  * pieces: chunk-d9v6k9t9.js (19)
  * attribution: placement 12, fingerprint 2, layout 3, callgraph-fingerprint 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { __toESM } from "../../runtime/bun-runtime.js";

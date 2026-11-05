@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/fpsTracker.ts
  * pieces: chunk-yq5f910z.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-yq5f910z.js:2232-2941 fingerprint (2.1.88 match: FpsTracker, 0.901)

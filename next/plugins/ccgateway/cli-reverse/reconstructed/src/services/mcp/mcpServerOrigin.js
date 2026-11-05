@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0dnre9n4.js (8), chunk-hfc4cfnt.js (3)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { splitSchemeAuthority, mcpTransportType, describeEndpointOrigin } from "./mcpServerEndpoint.js";
 import { maskEnvRefs, splitAroundEnvRefs } from "./envExpansion.js";

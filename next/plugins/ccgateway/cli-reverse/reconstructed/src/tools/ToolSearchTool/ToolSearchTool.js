@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ToolSearchTool/ToolSearchTool.ts
  * pieces: chunk-5xgkngpb.js (19), chunk-7jxyna5q.js (8)
  * attribution: placement 10, fingerprint 4, layout 7, file-local 2, facade-majority 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../../utils/debug.js";
 import { findToolByName } from "../../Tool.js";

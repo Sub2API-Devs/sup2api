@@ -7,6 +7,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-63094ahz.js (14)
  * attribution: esm-layout 1, esm-fingerprint 5, layout 1, placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { castToError } from "../internal/errors.mjs";
 

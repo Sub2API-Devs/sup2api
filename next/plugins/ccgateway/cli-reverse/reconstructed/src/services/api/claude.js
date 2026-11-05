@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/claude.ts
  * pieces: chunk-03m9p8vx.js (1), chunk-1hnjmk23.js (1), chunk-5xgkngpb.js (204), chunk-7pwjpdkw.js (4), chunk-ck4jrdtf.js (1), chunk-exfmq47h.js (1), chunk-n7kzs9r0.js (3)
  * attribution: fingerprint 22, affinity 3, placement 115, layout 55, sole-consumer 13, callgraph-fingerprint 2, callgraph-witnessed 3, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { getModelMaxOutputTokens } from "../../utils/context.js";

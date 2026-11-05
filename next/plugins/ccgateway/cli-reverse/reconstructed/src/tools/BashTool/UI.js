@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/UI.tsx
  * pieces: chunk-4hpb3crc.js (1), chunk-p5q1xrhb.js (2), chunk-sac13h7c.js (8)
  * attribution: fingerprint 1, placement 2, affinity 1, facade-exports 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTaskFramework } from "../../context/voice.js";

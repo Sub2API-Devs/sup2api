@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queryHelpers.ts
  * pieces: chunk-5xgkngpb.js (10), chunk-cwkrfaxh.js (6), chunk-frs14hy1.js (47)
  * attribution: fingerprint 5, placement 15, affinity 2, file-local 1, layout 40
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize } from "path";
 import { isSensitiveFileName, isSensitiveNameOrVariant } from "./permissions/sensitivePaths.js";

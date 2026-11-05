@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-spbsnp6d.js (10)
  * attribution: placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getDefaultAppState_2 } from "../../state/AppStateStore.js";
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/pasteStore.ts
  * pieces: chunk-7jxyna5q.js (16)
  * attribution: fingerprint 4, layout 8, file-local 1, callgraph-fingerprint 1, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { createHash } from "crypto";

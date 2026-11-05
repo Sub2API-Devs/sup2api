@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/loadAgentsDir.ts
  * pieces: chunk-5xgkngpb.js (41), chunk-tmsx2mh0.js (2)
  * attribution: placement 9, facade-exports 19, layout 9, fingerprint 5, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { env } from "../../utils/env.js";

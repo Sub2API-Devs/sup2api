@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-g8sg6xj8.js (63), chunk-vn3g7zt8.js (20)
  * attribution: placement 76, layout 6, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { deflateRawSync, inflateRawSync, deflateRaw, inflateRaw, constants, gunzip } from "zlib";
 import { promisify } from "util";

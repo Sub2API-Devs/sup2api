@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-d69mqm0h.js (14), chunk-xt9j8rvb.js (4)
  * attribution: placement 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeHostnameText, canonicalHostname } from "../hostnameMatching.js";
 import { CLAUDE_IN_CHROME_DOMAIN_RULE_TOOL, CFC_TOOL_PREFIX } from "./common.js";

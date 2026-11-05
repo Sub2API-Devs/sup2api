@@ -4,6 +4,7 @@
  * third-party: jsonc-parser@3.2.1..3.3.1
  * pieces: chunk-aj4djjd6.js (7)
  * attribution: esm-layout 1, esm-fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createScanner } from "./scanner.js";
 

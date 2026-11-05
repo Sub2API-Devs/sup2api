@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (8)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getCommandArgv } from "../../utils/bash/commands.js";
 import { SED_PRINT_RANGE_RE, SED_PRINT_LINE_RE, DEFAULT_HEAD_LINES, DEFAULT_TAIL_LINES } from "./BashTool.js";

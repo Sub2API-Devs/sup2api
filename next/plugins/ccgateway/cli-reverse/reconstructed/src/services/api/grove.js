@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/grove.ts
  * pieces: chunk-zxdyf8nf.js (18)
  * attribution: sole-consumer 6, affinity 2, fingerprint 7, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getHostPlatformForAnalytics, env } from "../../utils/env.js";
 import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";

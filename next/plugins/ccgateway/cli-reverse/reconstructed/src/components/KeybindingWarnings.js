@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/KeybindingWarnings.tsx
  * pieces: chunk-8pf0qxb4.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSettingsWithErrors } from "../utils/settings/settings.js";
 import { CROSSSESSIONINBOUND } from "../utils/settings/hooksValidation.js";

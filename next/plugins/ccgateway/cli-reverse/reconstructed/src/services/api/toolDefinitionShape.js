@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-03tec5k5.js (22), chunk-xh983qqr.js (8)
  * attribution: placement 24, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SKILL_2 } from "../../tools/SkillTool/skillToolNames.js";
 import { sanitizeToolNameForAnalytics } from "../analytics/metadata.js";

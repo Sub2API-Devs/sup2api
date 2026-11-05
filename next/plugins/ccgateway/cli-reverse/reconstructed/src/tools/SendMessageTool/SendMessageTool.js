@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SendMessageTool/SendMessageTool.ts
  * pieces: chunk-5xgkngpb.js (15), chunk-czq1j3j2.js (1), chunk-knmkz0q8.js (83)
  * attribution: placement 24, callgraph-fingerprint 1, sole-consumer 19, affinity 1, fingerprint 9, layout 44, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { getHostAgentPolicy } from "../../utils/hostAgentPolicy.js";

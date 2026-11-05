@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/btw/btw.tsx
  * pieces: chunk-h71rb544.js (20)
  * attribution: sole-consumer 14, callgraph-witnessed 1, affinity 3, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

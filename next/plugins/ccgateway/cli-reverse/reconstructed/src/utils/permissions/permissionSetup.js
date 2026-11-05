@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/permissionSetup.ts
  * pieces: chunk-1z536h0d.js (1), chunk-5xgkngpb.js (10), chunk-6d2p9h2d.js (2), chunk-b9gx6r6h.js (79), chunk-bc4jcw5z.js (51), chunk-c378z4w4.js (1), chunk-gg17c06d.js (20), chunk-qezsn2gc.js (2)
  * attribution: fingerprint 7, facade-exports 64, placement 34, layout 53, affinity 2, callgraph-fingerprint 2, file-local 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { relative, resolve } from "path";

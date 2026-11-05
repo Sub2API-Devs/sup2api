@@ -4,6 +4,7 @@
  * third-party: diff@9.0.0
  * pieces: chunk-9dtasr5y.js (6)
  * attribution: esm-layout 2, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { WordsWithSpaceDiff } from "./word.js";
 import { Diff } from "../../libcjs/diff/base.js";

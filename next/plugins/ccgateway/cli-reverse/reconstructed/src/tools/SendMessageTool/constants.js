@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SendMessageTool/constants.ts
  * pieces: chunk-11rnwx0g.js (1), chunk-5qhxezvs.js (3)
  * attribution: placement 3, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { matchesToolName } from "../../Tool.js";

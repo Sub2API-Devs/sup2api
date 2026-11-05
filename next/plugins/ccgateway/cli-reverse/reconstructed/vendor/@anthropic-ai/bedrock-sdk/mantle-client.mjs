@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
  * pieces: chunk-b8zxeazh.js (4), chunk-f7kbssbx.js (3)
  * attribution: esm-fingerprint 5, esm-layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BaseAnthropic, Anthropic } from "../sdk/client.mjs";
 import { readEnv_2, readEnv_3 } from "./internal/utils/env.mjs";

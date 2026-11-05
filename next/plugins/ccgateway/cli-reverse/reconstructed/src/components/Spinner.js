@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Spinner.tsx
  * pieces: chunk-hzenv5c0.js (21)
  * attribution: placement 8, sole-consumer 3, affinity 1, callgraph-witnessed 1, fingerprint 5, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { cosineEase, getDefaultCharacters, roundToStep, spinnerFramesForTerminal } from "./Spinner/utils.js";
 import { useAnimationFrame } from "../ink/components/Input.js";

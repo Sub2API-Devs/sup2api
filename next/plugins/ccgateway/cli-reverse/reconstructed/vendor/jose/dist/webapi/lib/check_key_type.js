@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-0f6azspv.js (2)
  * attribution: esm-layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isJWK, isSecretJWK, isPrivateJWK, isPublicJWK } from "./type_checks.js";
 import { isKeyLike } from "./key.js";

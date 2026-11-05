@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Divider.tsx
  * pieces: chunk-wkjeb8yp.js (1)
  * attribution: callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { HORIZONTAL_LINE_GLYPH } from "../../constants/figures.js";

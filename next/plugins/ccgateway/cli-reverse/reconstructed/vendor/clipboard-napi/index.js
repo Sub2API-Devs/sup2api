@@ -4,6 +4,7 @@
  * third-party: clipboard-napi/index.js
  * pieces: clipboard-napi.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { require_clipboard_napi_node } from "../private-unresolved/clipboard-napi.node.js";
 

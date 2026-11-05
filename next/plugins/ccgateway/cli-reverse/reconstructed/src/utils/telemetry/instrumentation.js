@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/instrumentation.ts
  * pieces: chunk-3wgj3rdg.js (50), chunk-xjnnz630.js (1)
  * attribution: sole-consumer 30, fingerprint 11, affinity 1, callgraph-witnessed 2, layout 6, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { arch } from "os";
 import http from "http";

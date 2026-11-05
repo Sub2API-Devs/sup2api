@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-5xgkngpb.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_createAggregator } from "./_inlinedHelpers.js";
 import { assignValueRaw } from "../../src/utils/git/gitSafeEnv.js";

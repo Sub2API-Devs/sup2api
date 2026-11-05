@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeUI.ts
  * pieces: chunk-18851qev.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { toString } from "../../vendor/qrcode/lib/server.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/bootstrap.ts
  * pieces: chunk-9dxf3ckd.js (17), chunk-exfmq47h.js (1)
  * attribution: placement 15, fingerprint 1, file-local 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/commit.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-ne2890fx.js (3), chunk-z20c443b.js (1)
  * attribution: placement 3, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   CERTIFIED_GIT_ADD,

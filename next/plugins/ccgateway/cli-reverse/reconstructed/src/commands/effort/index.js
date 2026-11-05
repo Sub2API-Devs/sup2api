@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/effort/index.ts
  * pieces: chunk-5xgkngpb.js (2)
  * attribution: sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { isUltracodeAvailable, getAllowedEffortLevels } from "../../utils/effort.js";

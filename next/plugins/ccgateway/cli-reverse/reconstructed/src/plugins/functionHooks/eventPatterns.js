@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-6sf70a86.js (59)
  * attribution: placement 59
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/state-library.js-wy8y4843.txt" with { type: "text" };
 import { IDENTIFIER_PATTERN_SOURCE } from "./hookApiSurface.js";

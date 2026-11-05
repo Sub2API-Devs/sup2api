@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/embeddedTools.ts
  * pieces: chunk-5xgkngpb.js (4), chunk-9ys74nhz.js (1), chunk-e5z7dpjd.js (1)
  * attribution: placement 4, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "./env.js";
 import { isEnvTruthy } from "./envUtils.js";

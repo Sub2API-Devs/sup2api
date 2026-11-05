@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/agents/AgentsList.tsx
  * pieces: chunk-vmgws42z.js (5)
  * attribution: sole-consumer 3, affinity 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";

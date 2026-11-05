@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (15)
  * attribution: placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CODE_REVIEW, VERIFY, SIMPLIFY, COMMIT, PR_SKILL_NAME } from "../skills/bundled/bundledSkillNames.js";
 import { getSourceSubtitle } from "../components/skills/SkillsMenu.js";

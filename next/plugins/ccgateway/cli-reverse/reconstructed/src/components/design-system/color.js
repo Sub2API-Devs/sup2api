@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/color.ts
  * pieces: chunk-h1kvr8sm.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { colorize } from "../../../vendor/es-toolkit/dist/server/colors/index.mjs";
 import { getTheme } from "../../utils/theme.js";

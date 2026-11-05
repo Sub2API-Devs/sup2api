@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-a3r2kq46.js (14)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isSnakeCaseReasonCode } from "../bridge/codeSessionApi.js";
 import { extractPlainErrorDetail } from "../bridge/debugUtils.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messages/AttachmentMessage.tsx
  * pieces: chunk-wjygkcr4.js (17)
  * attribution: placement 6, layout 3, sole-consumer 2, affinity 1, fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep, basename } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";

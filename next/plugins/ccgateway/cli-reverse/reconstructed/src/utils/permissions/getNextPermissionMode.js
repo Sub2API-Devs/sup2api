@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/getNextPermissionMode.ts
  * pieces: chunk-9q0d7bhm.js (3), chunk-bc4jcw5z.js (1), chunk-czq1j3j2.js (2)
  * attribution: fingerprint 3, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isAutoModeGateEnabled,

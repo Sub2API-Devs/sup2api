@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-0f6azspv.js (6), chunk-pd6th42n.js (2)
  * attribution: esm-fingerprint 7, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { textDecoder, textEncoder } from "./buffer_utils.js";
 import { isObject } from "./type_checks.js";

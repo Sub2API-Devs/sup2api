@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/bedrock.ts
  * pieces: chunk-exfmq47h.js (19), chunk-xjnnz630.js (1)
  * attribution: fingerprint 7, layout 2, file-local 1, placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../debug.js";
 import { resolveAwsRegion } from "../awsRegion.js";

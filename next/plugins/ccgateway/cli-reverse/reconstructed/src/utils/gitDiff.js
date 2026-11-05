@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/gitDiff.ts
  * pieces: chunk-01kgd7xg.js (57), chunk-c7hntn0y.js (1)
  * attribution: placement 8, fingerprint 11, layout 39
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, join, win32, dirname, relative, sep, basename } from "path";
 import { lstat, access, realpath, readFile } from "fs/promises";

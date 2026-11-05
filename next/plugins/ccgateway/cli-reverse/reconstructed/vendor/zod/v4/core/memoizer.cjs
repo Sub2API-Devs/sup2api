@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-1hnjmk23.js (1), chunk-m4y44r15.js (1)
  * attribution: cjs-fingerprint 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { globalConfig, config } from "./core.js";
 import { createMemoizer } from "./memoizer.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ListMcpResourcesTool/UI.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-wjygkcr4.js (2)
  * attribution: callgraph-fingerprint 1, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { BOT_PROTECTED_TENGU_DAPPER_BLUM } from "../../services/tools/batchTools.js";

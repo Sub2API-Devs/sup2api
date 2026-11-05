@@ -4,6 +4,7 @@
  * third-party: dunder-proto@1.0.1
  * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_call_bind_apply_helpers_2 } from "../call-bind-apply-helpers/index.js";

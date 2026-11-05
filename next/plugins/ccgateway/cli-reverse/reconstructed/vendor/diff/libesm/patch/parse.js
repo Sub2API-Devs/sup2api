@@ -4,6 +4,7 @@
  * third-party: diff@9.0.0
  * pieces: chunk-9dtasr5y.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-9dtasr5y.js:7440-9181 esm-fingerprint

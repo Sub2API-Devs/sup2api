@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cleanup.ts
  * pieces: chunk-2zeqrfs5.js (1), chunk-3328vqg0.js (3), chunk-pc3x100t.js (112)
  * attribution: fingerprint 8, placement 35, facade-majority 8, layout 54, file-local 1, callgraph-witnessed 2, affinity 7, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname, basename } from "path";
 import * as fsPromisesModule from "fs/promises";

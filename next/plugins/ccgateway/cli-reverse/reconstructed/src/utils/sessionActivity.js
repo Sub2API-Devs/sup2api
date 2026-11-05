@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionActivity.ts
  * pieces: chunk-1kk50rk6.js (3), chunk-eknyxrgq.js (28)
  * attribution: affinity 2, fingerprint 4, shared-adjacent 1, sole-consumer 5, layout 15, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createSignal } from "./signal.js";
 import { HostScoped } from "./hostScoped.js";

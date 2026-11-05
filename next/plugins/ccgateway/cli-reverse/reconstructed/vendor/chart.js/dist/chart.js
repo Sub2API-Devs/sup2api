@@ -4,6 +4,7 @@
  * third-party: chart.js@4.6.1
  * pieces: chunk-z20c443b.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BRAILLE_SPINNER_FRAMES } from "../../../src/constants/figures.js";
 

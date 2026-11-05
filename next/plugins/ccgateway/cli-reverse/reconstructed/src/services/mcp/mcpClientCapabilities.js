@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-06vyq63w.js (15), chunk-zcbqcqbg.js (3)
  * attribution: placement 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getPluginRegistry } from "../../utils/plugins/pluginLoadState.js";
 import { isModuleAdmitted } from "../../utils/plugins/functionHooks/admission.js";

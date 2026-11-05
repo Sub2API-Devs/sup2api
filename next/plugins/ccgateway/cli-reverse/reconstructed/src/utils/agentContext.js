@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/agentContext.ts
  * pieces: chunk-d91efs9w.js (1), chunk-exfmq47h.js (32), chunk-w3ch4xq2.js (4)
  * attribution: placement 19, layout 11, fingerprint 4, sole-consumer 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TMUX_QUERY_TIMEOUT_MS, tmuxQueryCacheByRoot } from "./concurrentSessions.js";
 import { formatRulesForCritique_2 } from "../cli/handlers/autoMode.js";

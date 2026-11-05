@@ -4,6 +4,7 @@
  * third-party: @azure/core-rest-pipeline@1.21.0
  * pieces: chunk-b5df2wx1.js (8)
  * attribution: esm-layout 2, esm-fingerprint 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { RestError, isRestError } from "../../../../../@typespec/ts-http-runtime/dist/esm/restError.js";
 import { getUserAgentValue } from "../util/userAgent.js";

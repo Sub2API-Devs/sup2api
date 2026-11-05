@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-gb7aq6sf.js (38)
  * attribution: placement 38
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeFullWidthSpace, truncateWithCount, takeLastChars } from "./stringUtils.js";
 import { INVISIBLE_FORMAT_RANGES, stripCombiningRepeated } from "./sanitization.js";

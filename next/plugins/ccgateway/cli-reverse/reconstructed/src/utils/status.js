@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/status.tsx
  * pieces: chunk-456z28kn.js (1), chunk-51jy8ztq.js (1), chunk-yt1xsmrj.js (25)
  * attribution: placement 9, fingerprint 8, layout 9, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { currentAttributionProject } from "./attributionProject.js";
 import { projectOriginLabel } from "./status/attributionProjectNotice.js";

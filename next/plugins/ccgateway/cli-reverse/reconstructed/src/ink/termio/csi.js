@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/csi.ts
  * pieces: chunk-3zb8bxyj.js (22)
  * attribution: fingerprint 5, callgraph-witnessed 1, layout 15, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ESC, ESC_TYPE, SEP } from "./ansi.js";
 

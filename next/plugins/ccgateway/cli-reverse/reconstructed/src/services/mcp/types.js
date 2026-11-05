@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/types.ts
  * pieces: chunk-5hddsdew.js (1), chunk-6vxyfwtv.js (2), chunk-bym3dfgj.js (1), chunk-z20c443b.js (16)
  * attribution: fingerprint 4, affinity 1, layout 1, placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {

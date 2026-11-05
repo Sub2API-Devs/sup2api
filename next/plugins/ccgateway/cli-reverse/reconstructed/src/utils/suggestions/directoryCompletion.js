@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/suggestions/directoryCompletion.ts
  * pieces: chunk-czq1j3j2.js (9), chunk-pc3x100t.js (1)
  * attribution: fingerprint 4, layout 3, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, sep, dirname, basename } from "path";
 import { isENOENT, errorMessage, isFsInaccessible, isSyscallError, getErrnoCode } from "../errors.js";

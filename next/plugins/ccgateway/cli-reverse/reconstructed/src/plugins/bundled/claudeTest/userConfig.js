@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ptygfaca.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CC_PLUGIN_CLAUDE_TEST, HELPER_SERVER_NAME } from "./constants.js";
 import { BUILTIN } from "../../../utils/telemetry/pluginTelemetry.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/skills/skills.tsx
  * pieces: chunk-4fw9ejgj.js (9), chunk-sprn4z2j.js (1)
  * attribution: sole-consumer 4, placement 2, layout 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { init_react_production, useState, useRef } from "../../../vendor/react/cjs/react.production.js";
 import { isNotProtoKey } from "../../utils/commandPredicates.js";

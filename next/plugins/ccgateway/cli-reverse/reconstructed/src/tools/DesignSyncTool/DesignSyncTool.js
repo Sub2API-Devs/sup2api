@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ypvxrg8a.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { isEssentialTrafficOnly } from "../../utils/privacyLevel.js";

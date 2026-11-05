@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/loadUserBindings.ts
  * pieces: chunk-m2f3rb0f.js (24), chunk-z0x4zh5m.js (1)
  * attribution: fingerprint 8, layout 9, file-local 1, placement 3, sole-consumer 1, affinity 1, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { readFileSync } from "fs";

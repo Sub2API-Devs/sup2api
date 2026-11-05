@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/path.ts
  * pieces: chunk-1dbza2qv.js (2), chunk-3yhwrhy0.js (19), chunk-7jxyna5q.js (1)
  * attribution: placement 21, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathWin32Module from "path/win32";
 import {

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/permissionSync.ts
  * pieces: chunk-1hnjmk23.js (1), chunk-77qzxtqv.js (4), chunk-exfmq47h.js (1), chunk-p68axnzw.js (10)
  * attribution: fingerprint 11, sole-consumer 2, affinity 1, placement 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { win32, join } from "path";
 import {

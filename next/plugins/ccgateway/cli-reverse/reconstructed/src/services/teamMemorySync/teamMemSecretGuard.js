@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/teamMemorySync/teamMemSecretGuard.ts
  * pieces: chunk-b3a6nm9h.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { scanSecretsInVariants } from "../memoryStore/memoryKeys.js";
 import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";

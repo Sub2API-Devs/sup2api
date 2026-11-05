@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 12
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { escapeSystemReminderTags } from "../../services/api/promptCacheBreakParts.js";
 import { confusableTagScrubPattern, escapedCharPrefix, escapeXml_2 as escapeXml } from "../confusables.js";

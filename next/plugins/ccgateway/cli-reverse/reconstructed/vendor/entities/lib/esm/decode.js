@@ -4,6 +4,7 @@
  * third-party: entities@4.5.0
  * pieces: chunk-p9ac6cnb.js (15)
  * attribution: esm-layout 4, esm-fingerprint 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { decodeCodePoint, fromCodePoint } from "./decode_codepoint.js";
 

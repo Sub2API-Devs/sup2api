@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-08q4d92p.js (25)
  * attribution: placement 25
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DANGEROUS_SHELL_PREFIXES } from "../../../utils/shell/prefix.js";
 import { JETBRAINS_IDES_2 } from "../../../utils/env.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/cronTasksLock.ts
  * pieces: chunk-75adsf9v.js (7)
  * attribution: fingerprint 4, layout 1, file-local 1, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname } from "path";
 import { readFile, writeFile, mkdir, unlink } from "fs/promises";

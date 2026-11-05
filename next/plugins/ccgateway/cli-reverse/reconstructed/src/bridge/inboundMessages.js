@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/inboundMessages.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-6gyvmn2t.js (1), chunk-aexe35rn.js (2), chunk-wjygkcr4.js (7)
  * attribution: fingerprint 3, placement 7, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { detectImageFormatFromBase64 } from "../utils/imageResizer.js";
 import { parseDataUri } from "../utils/task/shellOutputPersist.js";

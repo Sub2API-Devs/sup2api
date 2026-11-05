@@ -4,6 +4,7 @@
  * third-party: ajv@8.13.0
  * pieces: chunk-1jdkttw7.js (3), chunk-xcs4sv9h.js (2)
  * attribution: cjs-require-graph 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_additionalItems } from "../applicator/additionalItems.js";

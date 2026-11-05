@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/readOnlyCommandValidation.ts
  * pieces: chunk-a2q0x549.js (22)
  * attribution: fingerprint 6, layout 15, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { containsAnyPlaceholder, startsWithAnyPlaceholder } from "../bash/ast.js";
 import { firstLineOf } from "../stringUtils.js";

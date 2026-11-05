@@ -4,6 +4,7 @@
  * third-party: tslib@2.6.3..2.7.0
  * pieces: chunk-01zearth.js (1)
  * attribution: esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_tslib } from "./tslib.js";

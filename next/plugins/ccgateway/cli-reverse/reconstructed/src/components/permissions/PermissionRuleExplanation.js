@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/PermissionRuleExplanation.tsx
  * pieces: chunk-8prszgkd.js (6)
  * attribution: callgraph-fingerprint 1, layout 3, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { displayField, needsGutter } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { ensureNoReasonProvided } from "../../utils/messages.js";

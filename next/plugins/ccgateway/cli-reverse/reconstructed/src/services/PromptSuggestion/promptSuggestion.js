@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/PromptSuggestion/promptSuggestion.ts
  * pieces: chunk-rypxzpmd.js (19)
  * attribution: placement 6, fingerprint 8, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../../utils/env.js";
 import { logEvent } from "../analytics/index.js";

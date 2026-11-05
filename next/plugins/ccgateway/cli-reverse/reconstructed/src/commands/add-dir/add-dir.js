@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/add-dir/add-dir.tsx
  * pieces: chunk-47gvxd8g.js (1), chunk-hh5fnyrf.js (1), chunk-kaf2hmxw.js (2)
  * attribution: fingerprint 2, placement 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { validateDirectoryForWorkspace, addDirHelpMessage } from "./validation.js";
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";

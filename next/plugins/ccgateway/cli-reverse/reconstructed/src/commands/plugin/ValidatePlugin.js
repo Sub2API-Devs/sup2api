@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/plugin/ValidatePlugin.tsx
  * pieces: chunk-wb51jffc.js (4)
  * attribution: sole-consumer 2, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { resolveValidateTarget, sanitizeForDisplay } from "../../utils/plugins/validatePlugin.js";

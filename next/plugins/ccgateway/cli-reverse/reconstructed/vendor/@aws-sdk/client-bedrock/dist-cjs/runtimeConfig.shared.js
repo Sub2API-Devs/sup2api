@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-bedrock@3.936.0..3.938.0
  * pieces: chunk-gkj73j15.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   import_credential_provider_web_identity,

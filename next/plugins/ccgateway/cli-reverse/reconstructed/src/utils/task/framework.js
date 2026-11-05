@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/task/framework.ts
  * pieces: chunk-01kgd7xg.js (17), chunk-5xgkngpb.js (10), chunk-ab36sake.js (1), chunk-nh1pvp1m.js (1)
  * attribution: placement 21, fingerprint 6, layout 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { isTerminalTaskStatus } from "../../tasks/taskStatus.js";

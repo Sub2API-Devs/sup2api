@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/memory/MemoryFileSelector.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-czq1j3j2.js (1), chunk-dzt5bmy4.js (7)
  * attribution: fingerprint 3, placement 2, layout 3, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { mkdir } from "fs/promises";

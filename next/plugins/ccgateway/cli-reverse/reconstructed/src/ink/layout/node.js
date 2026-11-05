@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/layout/node.ts
  * pieces: chunk-2avr6cej.js (12), chunk-czq1j3j2.js (1)
  * attribution: placement 6, fingerprint 6, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { squashTextNodes } from "../squash-text-nodes.js";
 import { joined, regExp as regExp_3 } from "../render-border.js";

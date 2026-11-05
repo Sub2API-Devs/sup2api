@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/context/modalContext.tsx
  * pieces: chunk-rkbsrtg1.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
 import { mountPluginImage, withSwap } from "../plugins/functionHooks/imageApi.js";

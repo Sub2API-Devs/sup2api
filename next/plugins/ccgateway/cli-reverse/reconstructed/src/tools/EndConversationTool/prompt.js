@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5vpkey1h.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { END_CONVERSATION_TOOL_NAME, END_CONVERSATION_GB_FLAG } from "./constants.js";
 import { withTaskSuffix, isModelEndCheckSupported } from "../../tasks/endedByModel.js";

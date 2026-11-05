@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ansiToSvg.ts
  * pieces: chunk-h0kck2eh.js (3)
  * attribution: affinity 1, fingerprint 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-h0kck2eh.js:394-792 affinity (2.1.88 match: SETTLED_GREY, 1)
 var ANSI_FG_RGB = {

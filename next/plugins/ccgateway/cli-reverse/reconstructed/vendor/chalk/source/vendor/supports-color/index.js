@@ -4,6 +4,7 @@
  * third-party: chalk@5.6.0..5.6.2
  * pieces: chunk-h88kgep4.js (9)
  * attribution: esm-layout 2, esm-fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import v from "process";
 import os from "os";

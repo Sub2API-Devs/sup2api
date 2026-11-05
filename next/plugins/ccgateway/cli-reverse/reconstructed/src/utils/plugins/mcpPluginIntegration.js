@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/mcpPluginIntegration.ts
  * pieces: chunk-5xgkngpb.js (21), chunk-jdfzheem.js (1), chunk-phjrnmh9.js (2), chunk-x6t8knrk.js (1)
  * attribution: fingerprint 9, placement 8, layout 7, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { join } from "path";

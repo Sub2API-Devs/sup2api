@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/ultraplan.tsx
  * pieces: chunk-5xgkngpb.js (28), chunk-7jxyna5q.js (1), chunk-czq1j3j2.js (1), chunk-exfmq47h.js (1), chunk-wrq65rh8.js (1)
  * attribution: placement 11, callgraph-fingerprint 2, layout 9, fingerprint 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stat } from "fs/promises";
 import { getAPIProvider } from "../utils/model/providers.js";

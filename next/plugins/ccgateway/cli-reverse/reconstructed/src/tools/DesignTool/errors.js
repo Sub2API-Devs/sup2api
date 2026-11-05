@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ma8ytfb3.js (16)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isDesignConsentName, hasDesignOAuthToken } from "../../services/design/designApi.js";
 import { MAX_PLAN_PATH_CHARS_2 } from "../../services/mcp/designPlanGate.js";

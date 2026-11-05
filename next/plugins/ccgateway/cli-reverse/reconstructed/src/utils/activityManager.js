@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/activityManager.ts
  * pieces: chunk-q1n8g25m.js (13)
  * attribution: placement 8, fingerprint 1, layout 3, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { getClaudeConfigDir } from "./markdownConfigLoader.js";

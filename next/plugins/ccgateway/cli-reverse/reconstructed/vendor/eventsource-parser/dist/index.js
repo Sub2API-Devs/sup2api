@@ -4,6 +4,7 @@
  * third-party: eventsource-parser@3.0.8
  * pieces: chunk-sdd6eajv.js (6)
  * attribution: esm-fingerprint 2, esm-layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-sdd6eajv.js:191-335 esm-fingerprint

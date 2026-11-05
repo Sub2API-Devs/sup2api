@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bootstrap/state.ts
  * pieces: chunk-5ythzcas.js (704), chunk-f798ahhj.js (11)
  * attribution: sole-consumer 1, affinity 1, fingerprint 11, layout 31, file-local 1, facade-majority 668, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve, sep } from "path";
 import { randomUUID } from "crypto";

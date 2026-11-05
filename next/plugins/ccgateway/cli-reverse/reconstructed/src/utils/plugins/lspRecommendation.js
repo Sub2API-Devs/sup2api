@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/lspRecommendation.ts
  * pieces: chunk-czq1j3j2.js (9)
  * attribution: affinity 1, fingerprint 7, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname } from "path";
 import { logForDebugging } from "../debug.js";

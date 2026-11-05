@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/MCPConnectionManager.tsx
  * pieces: chunk-44e3b0zs.js (2), chunk-czq1j3j2.js (9)
  * attribution: placement 7, layout 1, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isUnhiddenFailedServer } from "../../hooks/notifs/useMcpConnectivityStatus.js";
 import { describeDisabledServers } from "./mcpToggleMessages.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (4), chunk-nt9amew5.js (44)
  * attribution: placement 48
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { fromEnum, fromEnumOpt } from "../../../services/analytics/safeMetadata.js";
 import { logError } from "../../log.js";

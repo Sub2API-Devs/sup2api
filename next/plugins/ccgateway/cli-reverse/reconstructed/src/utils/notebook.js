@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/notebook.ts
  * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 8, layout 1, fingerprint 9, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonParse } from "./slowOperations.js";
 import { isBashAvailable } from "./shell/shellToolUtils.js";

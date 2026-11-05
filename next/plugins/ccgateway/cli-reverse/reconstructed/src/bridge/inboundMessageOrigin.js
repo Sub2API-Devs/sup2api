@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-aexe35rn.js (57)
  * attribution: placement 57
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { array, union, stringSchema, objectSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";

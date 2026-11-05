@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/oauth.ts
  * pieces: chunk-exfmq47h.js (2), chunk-tzbg5px3.js (18)
  * attribution: placement 2, affinity 1, facade-majority 16, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeCaseForComparison_2 } from "../utils/permissions/filesystem.js";
 import { env } from "../utils/env.js";

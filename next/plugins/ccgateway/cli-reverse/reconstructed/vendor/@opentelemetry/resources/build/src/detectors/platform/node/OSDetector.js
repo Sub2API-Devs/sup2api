@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/resources@2.2.0
  * pieces: chunk-7kayq7nc.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../../../../../../../runtime/bun-runtime.js";
 import { require_semconv_2 } from "../../../semconv.js";

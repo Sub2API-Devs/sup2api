@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/claudeInChrome/mcpServer.ts
  * pieces: chunk-drr3hy76.js (15)
  * attribution: fingerprint 6, callgraph-fingerprint 1, file-local 1, layout 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { format } from "util";
 import { fromEnum, lit, fromSanitizer_SANITIZER_OUTPUT_ONLY } from "../../services/analytics/safeMetadata.js";

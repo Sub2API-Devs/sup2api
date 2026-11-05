@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processBashCommand.tsx
  * pieces: chunk-mgqrtm9t.js (3)
  * attribution: fingerprint 1, affinity 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve } from "path";
 import { randomUUID } from "crypto";

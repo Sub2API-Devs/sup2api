@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/loadPluginAgents.ts
  * pieces: chunk-5xgkngpb.js (11), chunk-6sf70a86.js (1)
  * attribution: placement 7, layout 2, fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, basename } from "path";
 import { AgentFrontmatterSchema } from "../frontmatterSchema.js";

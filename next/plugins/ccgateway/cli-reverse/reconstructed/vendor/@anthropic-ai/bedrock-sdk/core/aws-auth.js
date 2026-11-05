@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/bedrock-sdk@0.33.7..0.34.3
  * pieces: chunk-b8zxeazh.js (2), chunk-f7kbssbx.js (1)
  * attribution: esm-layout 1, esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import assert from "assert";
 import { __toESM } from "../../../../runtime/bun-runtime.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/util.tsx
  * pieces: chunk-2c3jp4kn.js (2), chunk-k6qypy1d.js (3), chunk-wd99377v.js (8)
  * attribution: fingerprint 2, sole-consumer 1, placement 2, facade-exports 5, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createInterface } from "readline";
 import { stripVTControlCharacters } from "util";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileWriteTool/prompt.ts
  * pieces: chunk-mer7cb3z.js (2), chunk-p223w7hd.js (1)
  * attribution: fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { READ } from "../FileReadTool/constants.js";
 import { leanPromptOf } from "../../utils/model/promptBundles.js";

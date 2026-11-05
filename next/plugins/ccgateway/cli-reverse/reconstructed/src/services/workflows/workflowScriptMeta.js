@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h3b88qs5.js (26)
  * attribution: placement 26
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { MAX_SCRIPT_FILE_BYTES } from "../workflow/scriptFile.js";
 import { require_acorn } from "../../../vendor/acorn/dist/acorn.js";

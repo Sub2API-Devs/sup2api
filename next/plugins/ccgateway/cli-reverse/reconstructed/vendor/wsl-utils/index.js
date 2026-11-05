@@ -4,6 +4,7 @@
  * third-party: wsl-utils@0.1.0
  * pieces: chunk-j8hasev3.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import fsPromises, { constants } from "fs/promises";
 import { default as E } from "process";

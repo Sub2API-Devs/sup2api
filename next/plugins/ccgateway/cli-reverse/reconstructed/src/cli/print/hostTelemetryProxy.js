@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-0yw3taqg.js (13)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { shouldSkipFeedbackSurvey, isFeedbackSurveyForOtel } from "../../utils/hostEnvironment.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/LocalMainSessionTask.ts
  * pieces: chunk-5xgkngpb.js (8), chunk-czq1j3j2.js (1)
  * attribution: fingerprint 7, file-local 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 import { initAgentOutputSymlink, isObserverAgentTask } from "./LocalAgentTask/LocalAgentTask.js";

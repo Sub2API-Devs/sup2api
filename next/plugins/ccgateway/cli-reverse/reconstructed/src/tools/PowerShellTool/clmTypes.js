@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/clmTypes.ts
  * pieces: chunk-6zpsr8vx.js (3)
  * attribution: fingerprint 1, file-local 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-6zpsr8vx.js:59906-62737 fingerprint (2.1.88 match: CLM_ALLOWED_TYPES, 1)

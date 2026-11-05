@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-exfmq47h.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CLAUDE_MODEL_PREFIX } from "./modelAllowlist.js";
 import { VERSIONED_MODEL_RE } from "../toolErrors.js";

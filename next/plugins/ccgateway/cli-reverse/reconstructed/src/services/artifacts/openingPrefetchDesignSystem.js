@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-703mwkgv.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseArtifactUrl, ARTIFACT_TOOL_NAME } from "../../tools/ArtifactTool/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";

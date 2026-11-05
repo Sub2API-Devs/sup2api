@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/statusNoticeDefinitions.tsx
  * pieces: chunk-czq1j3j2.js (1), chunk-hnxhr3bs.js (34)
  * attribution: placement 32, layout 1, fingerprint 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { relative, sep } from "path";
 import { init_react_production, useContext, useEffect } from "../../vendor/react/cjs/react.production.js";

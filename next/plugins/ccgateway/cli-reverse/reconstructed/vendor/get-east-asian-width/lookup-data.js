@@ -4,6 +4,7 @@
  * third-party: get-east-asian-width@1.5.0..1.6.0
  * pieces: chunk-ngeq6w7y.js (2)
  * attribution: esm-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-ngeq6w7y.js:4012-4083 esm-fingerprint

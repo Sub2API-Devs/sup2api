@@ -4,6 +4,7 @@
  * third-party: @smithy/fetch-http-handler@5.4.0..5.5.2
  * pieces: chunk-2v4fe6xx.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../protocol-http/dist-cjs/index.js";

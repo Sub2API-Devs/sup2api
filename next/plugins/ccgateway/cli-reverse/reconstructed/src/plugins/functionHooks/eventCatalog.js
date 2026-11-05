@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (19)
  * attribution: placement 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AGENT_OFFER_EVENT, AGENT_SPAWN_SITE_RULES } from "./agentHooks.js";
 import { ATTRIBUTION_TEXT_EVENT } from "./attributionHooks.js";

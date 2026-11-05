@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BashTool/readOnlyValidation.ts
  * pieces: chunk-5xgkngpb.js (24)
  * attribution: fingerprint 12, layout 6, affinity 1, file-local 1, placement 3, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { posix } from "path";

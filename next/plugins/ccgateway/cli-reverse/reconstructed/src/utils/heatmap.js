@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/heatmap.ts
  * pieces: chunk-j6tt9nsa.js (6)
  * attribution: fingerprint 5, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sequential } from "./sequential.js";
 import { deferInit } from "../../runtime/deferred-init.js";

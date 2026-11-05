@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-xd1cb3xs.js (13)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { StdinContext } from "./components/StdinContext.js";
 import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";

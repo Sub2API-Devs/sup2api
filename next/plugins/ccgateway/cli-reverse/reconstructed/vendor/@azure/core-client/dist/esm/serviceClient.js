@@ -4,6 +4,7 @@
  * third-party: @azure/core-client@1.9.2..1.10.0
  * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logger_3 } from "./log.js";
 import { getSerializer, getRequestUrl } from "./urlHelpers.js";

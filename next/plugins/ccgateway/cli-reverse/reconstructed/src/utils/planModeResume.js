@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-wfanetzz.js (20)
  * attribution: placement 19, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getFeatureValue_SESSION_PINNED } from "../services/analytics/growthbook.js";
 import { DoctorLazy } from "../cli/handlers/util.js";

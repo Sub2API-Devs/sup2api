@@ -4,6 +4,7 @@
  * third-party: @azure/identity@4.10.1
  * pieces: chunk-b5df2wx1.js (3)
  * attribution: esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-b5df2wx1.js:22297-22370 esm-fingerprint
 /**

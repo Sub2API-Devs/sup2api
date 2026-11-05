@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/queryProfiler.ts
  * pieces: chunk-2dvnfacg.js (60), chunk-5xgkngpb.js (11)
  * attribution: placement 44, affinity 2, layout 16, sole-consumer 3, fingerprint 5, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { AsyncLocalStorage } from "async_hooks";
 import { readFileSync } from "fs";

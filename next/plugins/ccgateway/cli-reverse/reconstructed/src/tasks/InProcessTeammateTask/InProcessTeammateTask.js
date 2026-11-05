@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/InProcessTeammateTask/InProcessTeammateTask.tsx
  * pieces: chunk-2dv3kn8z.js (1), chunk-94s4dsgm.js (5), chunk-fmnbrxwy.js (1)
  * attribution: fingerprint 4, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { killInProcessTeammate } from "../../utils/swarm/spawnInProcess.js";
 import { isInProcessTeammateTask } from "./types.js";

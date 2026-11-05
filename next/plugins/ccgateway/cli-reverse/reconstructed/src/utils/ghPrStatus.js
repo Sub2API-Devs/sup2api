@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/ghPrStatus.ts
  * pieces: chunk-7jxyna5q.js (51)
  * attribution: placement 36, layout 13, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readFile } from "fs/promises";

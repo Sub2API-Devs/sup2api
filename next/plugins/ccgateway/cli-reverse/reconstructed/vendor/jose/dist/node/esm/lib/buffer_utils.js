@@ -4,6 +4,7 @@
  * third-party: jose@6.2.2
  * pieces: chunk-pd6th42n.js (7)
  * attribution: esm-layout 4, esm-fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { encoder, UINT32_RANGE } from "../../../browser/runtime/base64url.js";
 import { sha256DigestInit } from "../../../webapi/lib/buffer_utils.js";

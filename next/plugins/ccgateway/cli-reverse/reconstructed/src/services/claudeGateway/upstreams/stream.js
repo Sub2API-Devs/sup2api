@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1hnjmk23.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SSE_PING_INTERVAL_MS, SSE_PING_FRAME, SSE_RESPONSE_HEADERS } from "../proxyRequest.js";
 import { reportGuardrailTrace } from "../bedrockGuardrails.js";

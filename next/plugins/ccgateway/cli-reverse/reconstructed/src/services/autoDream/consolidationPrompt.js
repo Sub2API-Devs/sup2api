@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/autoDream/consolidationPrompt.ts
  * pieces: chunk-arvn22xd.js (2)
  * attribution: affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DIR_EXISTS_GUIDANCE, MEMORY_INDEX_FILENAME, MAX_ENTRYPOINT_LINES } from "../../memdir/memdir.js";
 import { MEMORY_LIST_TOOL_NAME, MEMORY_READ, MEMORY_WRITE } from "../../tools/MemoryTool/memoryToolNames.js";

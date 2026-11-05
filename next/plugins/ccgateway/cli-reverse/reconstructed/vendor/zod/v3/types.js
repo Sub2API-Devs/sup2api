@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-djgshcbm.js (91)
  * attribution: esm-fingerprint 87, esm-layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isValid,

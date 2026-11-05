@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/tokenize.ts
  * pieces: chunk-3zb8bxyj.js (1), chunk-8n1fbght.js (4)
  * attribution: placement 1, affinity 1, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { C0, ESC_TYPE } from "./ansi.js";
 import { isCompleteEscapeSequence } from "../wrapAnsi.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/clearTerminal.ts
  * pieces: chunk-2avr6cej.js (1), chunk-xd1cb3xs.js (4)
  * attribution: fingerprint 2, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ERASE_SCREEN, ERASE_SCROLLBACK, CURSOR_HOME, ERASE_LINE, cursorDown } from "./termio/csi.js";
 import { env } from "../utils/env.js";

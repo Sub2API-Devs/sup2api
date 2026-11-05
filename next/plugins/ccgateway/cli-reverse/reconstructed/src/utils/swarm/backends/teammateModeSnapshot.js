@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/swarm/backends/teammateModeSnapshot.ts
  * pieces: chunk-g66rrg40.js (10)
  * attribution: facade-exports 9, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../../hostScoped.js";
 import { getRootSession } from "../../../bootstrap/state.js";

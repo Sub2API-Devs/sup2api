@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/oauth/getOauthProfile.ts
  * pieces: chunk-exfmq47h.js (4)
  * attribution: placement 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getGlobalConfig } from "../../utils/config.js";
 import { apiKeyForHost } from "../analytics/telemetryCredentialGuard.js";

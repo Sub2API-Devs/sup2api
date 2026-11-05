@@ -4,6 +4,7 @@
  * third-party: parse5@7.2.0..7.2.1
  * pieces: chunk-p9ac6cnb.js (13)
  * attribution: esm-layout 4, esm-fingerprint 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   CODE_POINTS,

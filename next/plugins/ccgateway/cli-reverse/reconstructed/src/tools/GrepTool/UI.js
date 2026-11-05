@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GrepTool/UI.tsx
  * pieces: chunk-5xgkngpb.js (1), chunk-wjygkcr4.js (4), chunk-xm6m8ykh.js (1)
  * attribution: fingerprint 3, placement 2, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
 import {

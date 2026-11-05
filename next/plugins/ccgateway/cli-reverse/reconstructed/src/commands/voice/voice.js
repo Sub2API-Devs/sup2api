@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/voice/voice.ts
  * pieces: chunk-xe2139jk.js (3)
  * attribution: sole-consumer 1, affinity 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isVoiceModeAvailable } from "../../voice/voiceModeEnabled.js";
 import { isAnthropicAuthEnabled } from "../../utils/auth.js";

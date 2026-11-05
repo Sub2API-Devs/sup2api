@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-r4f248e9.js (2), chunk-zgfxb7w4.js (2)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0_10 from "../../assets/package-build.mjs-5c9a3b66.txt.zst" with { type: "file" };
 import __cc_resource_0 from "../../assets/capture.mjs-9e2f2f8b.txt.zst" with { type: "file" };

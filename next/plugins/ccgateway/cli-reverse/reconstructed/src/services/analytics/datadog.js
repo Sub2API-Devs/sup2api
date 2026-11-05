@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/datadog.ts
  * pieces: chunk-77qzxtqv.js (1), chunk-nw1tz3f4.js (26)
  * attribution: fingerprint 3, placement 2, facade-exports 4, layout 15, file-local 1, affinity 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { gzipSync } from "zlib";
 import { promises, ADDRCONFIG } from "dns";

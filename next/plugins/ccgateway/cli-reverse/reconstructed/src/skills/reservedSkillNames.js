@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (11)
  * attribution: placement 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { MAX_SEGMENT_CELLS, assertCellSegmenter } from "../ink/terminalImages.js";
 import { BIDI_CONTROL_RANGES } from "../ink/render-border.js";

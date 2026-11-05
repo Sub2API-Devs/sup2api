@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-hvyzk4qa.js (30)
  * attribution: placement 30
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalizeCaseForComparison_2 } from "../../utils/permissions/filesystem.js";
 import { ARTIFACT_DESIGN, ARTIFACT_CAPABILITIES } from "../../skills/bundled/bundledSkillNames.js";

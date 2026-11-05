@@ -4,6 +4,7 @@
  * third-party: parse5@7.2.0..7.2.1
  * pieces: chunk-p9ac6cnb.js (133)
  * attribution: esm-fingerprint 133
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TAG_ID, getTagID, SPECIAL_ELEMENTS, HEADING_ELEMENTS } from "../common/html.js";
 import { defaultTreeAdapter } from "../tree-adapters/default.js";

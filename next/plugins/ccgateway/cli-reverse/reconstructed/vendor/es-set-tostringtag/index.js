@@ -4,6 +4,7 @@
  * third-party: es-set-tostringtag@2.1.0
  * pieces: chunk-ww9agm6g.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_get_intrinsic } from "../get-intrinsic/index.js";

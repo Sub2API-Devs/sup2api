@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/attachments.ts
  * pieces: chunk-1z79zgep.js (1), chunk-5xgkngpb.js (136), chunk-f14qge9c.js (1)
  * attribution: fingerprint 49, placement 9, layout 71, file-local 6, callgraph-fingerprint 2, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { join, relative, dirname, resolve as resolve_2, parse, basename, isAbsolute, sep } from "path";

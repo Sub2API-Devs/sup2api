@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/channelNotification.ts
  * pieces: chunk-fwztkm7s.js (1), chunk-z2w3sxhj.js (11)
  * attribution: placement 1, facade-exports 8, layout 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {

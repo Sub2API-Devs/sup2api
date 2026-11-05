@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sideQuestion.ts
  * pieces: chunk-7jxyna5q.js (1), chunk-cb4h6sdt.js (6)
  * attribution: fingerprint 2, affinity 2, facade-exports 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { OPEN_TO_CLOSE } from "./ultraplan/keyword.js";
 import { createChildAbortController, createAbortController } from "./abortController.js";

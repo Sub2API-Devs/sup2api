@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolResultStorage.ts
  * pieces: chunk-03m9p8vx.js (51), chunk-2s9zwbhq.js (2), chunk-51bt13vw.js (1), chunk-85eyj5gy.js (16), chunk-ka648m95.js (4), chunk-vr5v4gzz.js (2)
  * attribution: placement 36, fingerprint 17, layout 11, file-local 9, sole-consumer 1, affinity 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, basename, relative, sep, isAbsolute, dirname } from "path";
 import { getSessionProject, SessionRootSlot } from "../bootstrap/sessionSlices.js";

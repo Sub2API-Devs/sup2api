@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/teamMemPrompts.ts
  * pieces: chunk-a2q0x549.js (7)
  * attribution: placement 6, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sep as sep_2, join as join_2 } from "path";
 import { readdir } from "fs/promises";

@@ -4,6 +4,7 @@
  * third-party: open@10.2.0
  * pieces: chunk-j8hasev3.js (13)
  * attribution: esm-fingerprint 10, esm-layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { promisify } from "util";
 import child_process from "child_process";

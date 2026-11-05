@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionEnvironment.ts
  * pieces: chunk-pc3x100t.js (1), chunk-rmva59md.js (14)
  * attribution: fingerprint 6, placement 4, layout 4, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { readdir, writeFile, readFile } from "fs/promises";

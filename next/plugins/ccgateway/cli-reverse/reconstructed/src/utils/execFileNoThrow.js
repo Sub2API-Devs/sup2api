@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/execFileNoThrow.ts
  * pieces: chunk-7jxyna5q.js (1), chunk-hb44av3w.js (25)
  * attribution: fingerprint 2, affinity 1, facade-exports 4, layout 1, placement 13, sole-consumer 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { constants } from "buffer";

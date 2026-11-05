@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/DreamTask/DreamTask.ts
  * pieces: chunk-arvn22xd.js (5), chunk-fmnbrxwy.js (1)
  * attribution: affinity 1, fingerprint 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { generateTaskId, createTaskStateBase } from "../../Task.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";

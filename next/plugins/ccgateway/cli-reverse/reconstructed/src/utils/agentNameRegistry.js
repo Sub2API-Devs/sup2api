@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-tz3jw2na.js (5)
  * attribution: placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { isTerminalTaskStatus } from "../tasks/taskStatus.js";

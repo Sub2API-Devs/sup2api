@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-h61dq9nz.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS } from "../types/permissions.js";
 import { InvalidArgumentError } from "../../vendor/commander/esm.mjs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/GrepTool/prompt.ts
  * pieces: chunk-8nzbdydx.js (1), chunk-exfmq47h.js (1)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { leanPromptOf, leanRewriteOf } from "../../utils/model/promptBundles.js";
 import { GREP_TOOL_DESCRIPTION } from "../../constants/promptSections.js";

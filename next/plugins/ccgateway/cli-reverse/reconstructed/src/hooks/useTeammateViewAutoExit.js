@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/useTeammateViewAutoExit.ts
  * pieces: chunk-wrq65rh8.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-wrq65rh8.js:7275-7437 fingerprint (2.1.88 match: useTeammateViewAutoExit, 0.626)

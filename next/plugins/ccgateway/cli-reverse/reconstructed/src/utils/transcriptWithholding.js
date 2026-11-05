@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-q93abe8z.js (1), chunk-t3ztrybq.js (15)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasRecordedText } from "./telemetry/thirdPartyEventRecords.js";
 import { messagesWithoutAccountMemory } from "./messages/accountMemory.js";

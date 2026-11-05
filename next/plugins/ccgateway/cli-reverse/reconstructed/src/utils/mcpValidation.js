@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/mcpValidation.ts
  * pieces: chunk-0rd17ynw.js (15)
  * attribution: affinity 1, fingerprint 2, placement 7, layout 2, callgraph-fingerprint 1, callgraph-witnessed 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "./env.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";

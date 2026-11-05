@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginInstallationHelpers.ts
  * pieces: chunk-5xgkngpb.js (18)
  * attribution: fingerprint 4, callgraph-fingerprint 1, placement 11, callgraph-witnessed 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, resolve as resolve_2, sep } from "path";
 import {

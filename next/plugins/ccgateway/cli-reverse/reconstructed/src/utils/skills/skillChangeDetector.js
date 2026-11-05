@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/skills/skillChangeDetector.ts
  * pieces: chunk-3n0n2sf6.js (5), chunk-f3md3zsc.js (1), chunk-s24mfyjz.js (1), chunk-wtefc7a6.js (1)
  * attribution: placement 4, fingerprint 2, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { complianceTaintState } from "../../services/policyLimits/complianceTaints.js";

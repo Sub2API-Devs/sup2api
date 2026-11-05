@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/transports/SSETransport.ts
  * pieces: chunk-n0aeaafb.js (5), chunk-qyz2x025.js (22), chunk-z68qgrbt.js (1)
  * attribution: sole-consumer 3, fingerprint 4, affinity 1, placement 18, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { toError, errorMessage } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";

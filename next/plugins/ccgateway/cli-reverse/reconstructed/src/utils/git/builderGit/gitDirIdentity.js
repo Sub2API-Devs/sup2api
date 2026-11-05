@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-fepf8jp6.js (36)
  * attribution: placement 36
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { realpath, lstat, readFile, open } from "fs/promises";
 import { join, basename, dirname, sep, relative, isAbsolute, delimiter } from "path";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/updateConfig.ts
  * pieces: chunk-0yw3taqg.js (1), chunk-ne2890fx.js (4)
  * attribution: fingerprint 2, sole-consumer 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { artifactPathPrefix } from "../../services/artifacts/artifactMount.js";
 import { registerBundledSkill } from "../bundledSkills.js";

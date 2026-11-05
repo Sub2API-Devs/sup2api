@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/remote/sdkMessageAdapter.ts
  * pieces: chunk-0p9n1dy7.js (18), chunk-frs14hy1.js (12), chunk-rrnsdthq.js (1)
  * attribution: placement 9, callgraph-fingerprint 1, layout 12, fingerprint 5, affinity 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import {

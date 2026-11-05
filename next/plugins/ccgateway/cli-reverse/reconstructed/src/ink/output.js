@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/output.ts
  * pieces: chunk-2avr6cej.js (13), chunk-hnxhr3bs.js (1)
  * attribution: sole-consumer 6, affinity 1, fingerprint 3, layout 2, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   createScreenSegmenter,

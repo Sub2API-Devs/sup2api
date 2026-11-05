@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ne2890fx.js (4)
  * attribution: placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HTTPS_CLAUDE_AI_CHROME } from "../../commands/chrome/chrome.js";
 import { CFC_TOOL_PREFIX, CLAUDE_IN_CHROME_MCP_SERVER_NAME } from "./common.js";

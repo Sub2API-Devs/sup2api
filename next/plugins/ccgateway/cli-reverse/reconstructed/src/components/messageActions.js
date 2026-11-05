@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/messageActions.tsx
  * pieces: chunk-0yw3taqg.js (1), chunk-5xgkngpb.js (14), chunk-8prszgkd.js (1), chunk-aexe35rn.js (1), chunk-hnxhr3bs.js (2), chunk-p762h6ag.js (1), chunk-tdcrpxkn.js (1)
  * attribution: fingerprint 9, placement 7, layout 4, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HOOK_RESPONSE_POLL_MS } from "../utils/hooks/hookEvents.js";
 import { postSwitchSlot } from "../utils/model/modelSwitchHooks.js";

@@ -4,6 +4,7 @@
  * third-party: zod@4.6.2
  * pieces: chunk-djgshcbm.js (13)
  * attribution: esm-layout 5, esm-fingerprint 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ZodError, ZodIssueCode } from "../v3/ZodError.js";
 import { ZodParsedType, util } from "../v3/helpers/util.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/memdir/memdir.ts
  * pieces: chunk-7jeh0w0e.js (12), chunk-a2q0x549.js (16)
  * attribution: fingerprint 8, layout 10, placement 9, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join as join_2 } from "path";
 import { countCharInString, truncateAtWord } from "../utils/stringUtils.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tasks/LocalAgentTask/LocalAgentTask.tsx
  * pieces: chunk-01kgd7xg.js (1), chunk-5xgkngpb.js (47), chunk-avy0g5d4.js (3), chunk-czq1j3j2.js (6), chunk-fmnbrxwy.js (1)
  * attribution: callgraph-witnessed 2, placement 11, layout 26, fingerprint 14, callgraph-fingerprint 2, file-local 1, affinity 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isDiskless,

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-k4mxxz7x.js (108)
  * attribution: placement 103, layout 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, resolve, isAbsolute, win32, join } from "path";
 import { createHash, randomUUID } from "crypto";

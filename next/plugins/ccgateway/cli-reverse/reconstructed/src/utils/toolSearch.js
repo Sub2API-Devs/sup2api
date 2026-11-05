@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolSearch.ts
  * pieces: chunk-5xgkngpb.js (22), chunk-png42f8p.js (18), chunk-tacvwrx2.js (5)
  * attribution: fingerprint 10, placement 2, layout 21, file-local 3, facade-exports 8, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseIntLoose, isEnvTruthy, isEnvDefinedFalsy } from "./envUtils.js";
 import { logForDebugging } from "./debug.js";

@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-sts@3.936.0..3.939.0
  * pieces: chunk-539esr4f.js (46)
  * attribution: esm-fingerprint 28, esm-layout 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_schema } from "../../../@smithy/core/dist-cjs/submodules/schema/index.js";

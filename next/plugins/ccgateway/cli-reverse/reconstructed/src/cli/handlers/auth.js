@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/handlers/auth.ts
  * pieces: chunk-bqqhmpn3.js (11), chunk-de28gzhb.js (1), chunk-wqfxt05n.js (4)
  * attribution: sole-consumer 4, affinity 1, fingerprint 3, layout 3, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createInterface } from "readline";
 import { resolve } from "path";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/bash/prefix.ts
  * pieces: chunk-5xgkngpb.js (11)
  * attribution: fingerprint 5, layout 2, file-local 1, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { parseCommand, extractCommandArguments } from "./parser.js";
 import { buildPrefix, noAdditionalDepthRule } from "../shell/specPrefix.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-rgh5rrjm.js (15)
  * attribution: placement 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { WEBFETCH, WEB_FETCH_RULE_CONTENT_FIELD } from "../../WebFetchTool/prompt.js";
 import {

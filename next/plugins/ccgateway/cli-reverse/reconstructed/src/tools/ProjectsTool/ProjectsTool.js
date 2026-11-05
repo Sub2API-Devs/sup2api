@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-y2k9w57g.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { PROJECTS_TOOL_NAME, projectsToolPrompt } from "./prompt.js";

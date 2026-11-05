@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/ModelPicker.tsx
  * pieces: chunk-bc4jcw5z.js (1), chunk-czq1j3j2.js (18)
  * attribution: fingerprint 4, placement 5, sole-consumer 5, layout 3, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   init_react_production,

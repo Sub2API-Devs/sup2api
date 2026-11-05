@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/SkillTool/SkillTool.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-6kmb8me5.js (21), chunk-n0gp41wj.js (1)
  * attribution: fingerprint 6, sole-consumer 10, layout 2, file-local 1, placement 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isOfficialMarketplaceName_3,

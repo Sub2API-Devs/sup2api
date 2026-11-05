@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/logoV2Utils.ts
  * pieces: chunk-rzkdv0c6.js (1), chunk-tvbhy3tn.js (4)
  * attribution: fingerprint 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { truncateToWidth, truncateToWidthNoEllipsis, truncate } from "./format.js";

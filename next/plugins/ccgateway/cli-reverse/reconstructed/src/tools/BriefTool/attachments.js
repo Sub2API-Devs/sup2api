@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/BriefTool/attachments.ts
  * pieces: chunk-f4xfd9je.js (16)
  * attribution: placement 4, callgraph-fingerprint 1, layout 10, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname, isAbsolute, basename, join } from "path";
 import { stat } from "fs/promises";

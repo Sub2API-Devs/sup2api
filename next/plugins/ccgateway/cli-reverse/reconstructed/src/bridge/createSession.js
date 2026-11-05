@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/createSession.ts
  * pieces: chunk-mgc9twez.js (9), chunk-vr5v4gzz.js (20)
  * attribution: sole-consumer 7, callgraph-fingerprint 1, affinity 1, placement 20
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { fromEnum } from "../services/analytics/safeMetadata.js";

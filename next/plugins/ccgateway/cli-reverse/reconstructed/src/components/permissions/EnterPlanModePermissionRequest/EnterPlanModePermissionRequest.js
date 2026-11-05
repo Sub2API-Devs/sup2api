@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/EnterPlanModePermissionRequest/EnterPlanModePermissionRequest.tsx
  * pieces: chunk-czq1j3j2.js (3)
  * attribution: callgraph-fingerprint 1, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isConsentRow, modeSwitchRow } from "../consentRows.js";
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";

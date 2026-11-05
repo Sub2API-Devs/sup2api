@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-p126a53v.js (16)
  * attribution: placement 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { tmpdir as tmpdir_2 } from "os";
 import { openSync, constants, lstatSync, fstatSync, fchmodSync, closeSync, mkdirSync } from "fs";

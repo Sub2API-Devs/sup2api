@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/api/overageCreditGrant.ts
  * pieces: chunk-53f0ndkv.js (1), chunk-77qzxtqv.js (1), chunk-a76zrsb5.js (9), chunk-g88zyy4n.js (2)
  * attribution: fingerprint 4, layout 7, placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import {

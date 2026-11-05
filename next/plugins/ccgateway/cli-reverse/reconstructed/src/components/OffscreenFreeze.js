@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/OffscreenFreeze.tsx
  * pieces: chunk-dkh1nd34.js (4)
  * attribution: placement 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SessionRootSlot } from "../bootstrap/sessionSlices.js";
 import { DoctorLazy } from "../cli/handlers/util.js";

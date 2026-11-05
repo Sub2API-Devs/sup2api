@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/addDirPluginSettings.ts
  * pieces: chunk-tt36reb3.js (5)
  * attribution: placement 1, fingerprint 2, affinity 1, sole-consumer 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { isAttachServeMode } from "../../cli/headlessCloud/attachServe.js";

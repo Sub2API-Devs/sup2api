@@ -4,6 +4,7 @@
  * third-party: jsonwebtoken@9.0.1
  * pieces: chunk-b5df2wx1.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_JsonWebTokenError } from "./lib/JsonWebTokenError.js";

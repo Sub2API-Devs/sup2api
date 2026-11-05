@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/sdk@0.128.0
  * pieces: chunk-vn3g7zt8.js (7)
  * attribution: esm-fingerprint 3, esm-layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-vn3g7zt8.js:49769-49828 esm-fingerprint
 var X_STAINLESS_HELPER = "x-stainless-helper";

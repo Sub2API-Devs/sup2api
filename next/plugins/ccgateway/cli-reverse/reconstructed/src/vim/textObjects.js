@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/vim/textObjects.ts
  * pieces: chunk-880p06ha.js (5)
  * attribution: fingerprint 1, placement 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isWordChar, isWhitespaceChar, isPunctuationChar } from "../utils/Cursor.js";
 import { getGraphemeSegmenter } from "../utils/intl.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/WorktreeExitDialog.tsx
  * pieces: chunk-czq1j3j2.js (12)
  * attribution: placement 9, layout 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir } from "os";
 import { dirname } from "path";

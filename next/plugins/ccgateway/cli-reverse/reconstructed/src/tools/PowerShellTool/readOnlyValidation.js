@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/PowerShellTool/readOnlyValidation.ts
  * pieces: chunk-e0skvs33.js (54)
  * attribution: sole-consumer 1, placement 11, layout 26, fingerprint 9, file-local 6, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { statSync } from "fs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/pdf.ts
  * pieces: chunk-5j7d17eb.js (1), chunk-85eyj5gy.js (25)
  * attribution: fingerprint 4, affinity 1, layout 18, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { constants } from "fs";
 import { win32, join, dirname, basename } from "path";

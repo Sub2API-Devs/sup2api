@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/mdm/settings.ts
  * pieces: chunk-5fn9rb8r.js (21), chunk-gme60te5.js (1), chunk-z20c443b.js (1)
  * attribution: fingerprint 4, placement 7, layout 10, sole-consumer 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { dirname, join } from "path";
 import { lstat } from "fs/promises";

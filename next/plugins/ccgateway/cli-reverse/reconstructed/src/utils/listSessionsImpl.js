@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/listSessionsImpl.ts
  * pieces: chunk-csvcrjg7.js (4), chunk-wzyv38y8.js (1), chunk-xmpe3wef.js (1)
  * attribution: sole-consumer 1, fingerprint 3, layout 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readdir, stat } from "fs/promises";
 import { join } from "path";

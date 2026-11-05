@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-gma6wm57.js (40)
  * attribution: placement 39, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { writeFile, mkdir, stat, readFile } from "fs/promises";
 import { dirname, join, basename } from "path";

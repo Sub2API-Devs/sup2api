@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/shellRuleMatching.ts
  * pieces: chunk-z20c443b.js (10)
  * attribution: fingerprint 2, file-local 2, layout 1, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-z20c443b.js:207162-207313 fingerprint (2.1.88 match: ESCAPED_STAR_PLACEHOLDER, 0.5)
 var ESCAPED_STAR_RE = new RegExp("\x00ESCAPED_STAR\x00", "g");

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/commit-push-pr.ts
  * pieces: chunk-5xgkngpb.js (8)
  * attribution: affinity 2, fingerprint 3, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   CERTIFIED_GIT_CHECKOUT_B,

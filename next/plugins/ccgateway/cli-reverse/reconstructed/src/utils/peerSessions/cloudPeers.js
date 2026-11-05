@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-x7y4f088.js (27)
  * attribution: placement 27
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../debug.js";

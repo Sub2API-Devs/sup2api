@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2jb250pa.js (21), chunk-6hadbefe.js (7)
  * attribution: placement 28
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { regExp_9, regExp_2, MAX_SHORT_TEXT } from "./sanitization.js";
 import { toWellFormedString, truncateToLength } from "./stringUtils.js";

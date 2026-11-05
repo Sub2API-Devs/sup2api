@@ -4,6 +4,7 @@
  * third-party: lodash-es@4.17.22..4.18.1
  * pieces: chunk-1p0bwqzj.js (7), chunk-6sf70a86.js (10), chunk-z20c443b.js (30)
  * attribution: placement 47
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   keysAlias,

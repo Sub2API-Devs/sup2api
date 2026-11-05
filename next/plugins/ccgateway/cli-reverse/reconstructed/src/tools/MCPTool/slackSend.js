@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-xdsy7f3d.js (6)
  * attribution: placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stripControlChars, renderToolUseMessage_4 } from "./UI.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

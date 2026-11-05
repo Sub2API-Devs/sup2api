@@ -4,6 +4,7 @@
  * build. It is not one of the scanned chunks: its names come from naming/worker-hooks-worker.json
  * (renamed and checked by tools/emit/worker-names.mjs) and its imports name the reading tree's modules. Started by
  * plugins/functionHooks/hooksWorker.js; built as its own entry (build.mjs).
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { workerData } from "worker_threads";
 import { setMatcherLog, serializeMatcherList } from "../../../utils/hooks/functionHookMatchers.js";

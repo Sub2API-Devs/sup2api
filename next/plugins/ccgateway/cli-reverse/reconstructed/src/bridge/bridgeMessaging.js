@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeMessaging.ts
  * pieces: chunk-ck4jrdtf.js (15)
  * attribution: fingerprint 6, layout 7, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { bridgeHostState } from "./bridgeHostState.js";
 import { codeModeAccepted } from "../utils/codeMode/accepted.js";

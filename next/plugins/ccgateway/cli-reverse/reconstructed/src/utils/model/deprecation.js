@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/model/deprecation.ts
  * pieces: chunk-exfmq47h.js (7)
  * attribution: fingerprint 3, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getCanonicalName } from "./canonicalModelName.js";
 import { strip1mSuffix } from "./modelIds.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ag8kwx12.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
 import { evaluateAskingNoHost } from "../../utils/permissions/permissions.js";

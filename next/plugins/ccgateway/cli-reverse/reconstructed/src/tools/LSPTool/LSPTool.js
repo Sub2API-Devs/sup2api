@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/LSPTool.ts
  * pieces: chunk-fmnbrxwy.js (13)
  * attribution: fingerprint 7, placement 1, file-local 2, callgraph-fingerprint 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import * as pathModule from "path";
 import { pathToFileURL } from "url";

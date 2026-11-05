@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/middleware-websocket@3.936.0
  * pieces: chunk-ayc8mk37.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";

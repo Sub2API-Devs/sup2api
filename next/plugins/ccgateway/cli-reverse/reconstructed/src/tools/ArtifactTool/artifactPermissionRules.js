@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-4wmswyss.js (1), chunk-f2b3q7t8.js (55)
  * attribution: placement 55, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { MCP_SERVER_NOT_ALLOWED_MESSAGE, artifactsMcpClient } from "../../services/mcp/client.js";
 import {

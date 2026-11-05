@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.tsx
  * pieces: chunk-czq1j3j2.js (9)
  * attribution: placement 3, fingerprint 4, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import {

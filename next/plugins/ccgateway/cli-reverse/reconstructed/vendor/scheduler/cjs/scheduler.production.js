@@ -4,6 +4,7 @@
  * third-party: scheduler@0.26.0..0.28.0
  * pieces: chunk-2avr6cej.js (12)
  * attribution: esm-layout 4, esm-fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { defineExports, __esm } from "../../../runtime/bun-runtime.js";
 import { schedulerExports } from "./scheduler-unstable_post_task.development.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/WebFetchTool/WebFetchTool.ts
  * pieces: chunk-5xgkngpb.js (21)
  * attribution: sole-consumer 7, fingerprint 2, affinity 4, file-local 1, layout 5, facade-exports 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   WEBFETCH,

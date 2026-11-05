@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/compact/compact.ts
  * pieces: chunk-4yapqwwv.js (5), chunk-kwfzs2kb.js (3)
  * attribution: placement 4, fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getLastCacheSafeParamsForSameModel } from "../../utils/forkedAgent.js";
 import { getOrBuildUserContext, getCachedSystemContext, invalidateUserContext } from "../../context.js";

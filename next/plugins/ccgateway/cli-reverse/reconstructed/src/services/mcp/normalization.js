@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/normalization.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-ja2b06pa.js (7)
  * attribution: placement 7, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-ja2b06pa.js:191-228 placement
 /**

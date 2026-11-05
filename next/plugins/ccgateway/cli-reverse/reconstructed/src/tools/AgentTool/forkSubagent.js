@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/forkSubagent.ts
  * pieces: chunk-5xgkngpb.js (13), chunk-8gk80pm3.js (1)
  * attribution: placement 5, facade-exports 7, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { getCachedClientData } from "../../utils/config.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/PermissionPromptToolResultSchema.ts
  * pieces: chunk-0fqk5atw.js (7)
  * attribution: placement 4, fingerprint 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "../env.js";
 import { executeNotificationHooks } from "../hooks.js";

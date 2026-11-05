@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FileEditToolDiff.tsx
  * pieces: chunk-cec8js9j.js (1), chunk-czq1j3j2.js (7), chunk-e5wzyn92.js (1)
  * attribution: fingerprint 6, affinity 1, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";

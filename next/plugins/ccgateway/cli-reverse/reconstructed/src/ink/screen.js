@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/screen.ts
  * pieces: chunk-2avr6cej.js (58), chunk-h88kgep4.js (1), chunk-hnxhr3bs.js (1), chunk-rkbsrtg1.js (1)
  * attribution: placement 6, fingerprint 24, layout 27, callgraph-witnessed 2, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { colorSupport } from "./colorize.js";
 import {

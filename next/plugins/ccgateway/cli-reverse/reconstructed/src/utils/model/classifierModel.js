@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-exfmq47h.js (19)
  * attribution: placement 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { has1mSuffix_2, modelHasNative1MContext, isLegacyNo1mModel } from "./contextWindow1m.js";
 import { getCanonicalName, strippedCanonicalName } from "./canonicalModelName.js";

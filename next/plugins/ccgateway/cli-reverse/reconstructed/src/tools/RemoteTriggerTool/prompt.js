@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/RemoteTriggerTool/prompt.ts
  * pieces: chunk-7kayq7nc.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-7kayq7nc.js:166561-170026 fingerprint (2.1.88 match: REMOTE_TRIGGER_TOOL_NAME, 0.667)
 /**

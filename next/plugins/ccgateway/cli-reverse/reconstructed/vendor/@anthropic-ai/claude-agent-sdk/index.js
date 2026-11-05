@@ -4,6 +4,7 @@
  * third-party: @anthropic-ai/claude-agent-sdk/index.js
  * pieces: chunk-tp1gh0pb.js (29)
  * attribution: placement 29
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, resolve, relative, sep, isAbsolute, dirname, posix, win32 } from "path";
 import { homedir, tmpdir } from "os";

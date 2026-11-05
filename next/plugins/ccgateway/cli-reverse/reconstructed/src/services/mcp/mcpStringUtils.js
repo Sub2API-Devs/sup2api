@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/mcpStringUtils.ts
  * pieces: chunk-5xgkngpb.js (1), chunk-c378z4w4.js (3), chunk-evj8g37g.js (17)
  * attribution: placement 14, fingerprint 1, layout 3, callgraph-witnessed 1, shared-adjacent 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CLAUDEAI_SERVER_PREFIX } from "./normalization.js";
 import { parseToolPolicyEntry, isServerIdentityActive, denyOrAskNamesFor } from "./serverIdentity.js";

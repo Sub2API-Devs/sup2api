@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/schemas/hooks.ts
  * pieces: chunk-dew2fy99.js (1), chunk-z20c443b.js (6)
  * attribution: fingerprint 3, placement 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import {

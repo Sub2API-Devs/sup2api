@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/bypassPermissionsKillswitch.ts
  * pieces: chunk-01b7fqej.js (5), chunk-czq1j3j2.js (2)
  * attribution: placement 3, fingerprint 3, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../hostScoped.js";
 import {

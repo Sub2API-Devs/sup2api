@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/settings/constants.ts
  * pieces: chunk-0avm71bs.js (1), chunk-sq9ffh11.js (13)
  * attribution: fingerprint 1, facade-exports 12, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CLAUDE_AI_SYNC_LABEL, commandSyncNameState } from "./commandSyncNames.js";
 import { capitalize } from "../stringUtils.js";

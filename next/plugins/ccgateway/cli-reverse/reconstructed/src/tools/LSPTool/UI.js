@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/LSPTool/UI.tsx
  * pieces: chunk-fmnbrxwy.js (1), chunk-pfdb6yeg.js (1), chunk-wjygkcr4.js (4), chunk-wrav3w1r.js (1)
  * attribution: fingerprint 5, placement 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSymbolAtPosition } from "./symbolContext.js";
 import { getDisplayPath } from "../../utils/file.js";

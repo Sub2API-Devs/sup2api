@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/built-in/statuslineSetup.ts
  * pieces: chunk-5xgkngpb.js (2)
  * attribution: sole-consumer 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getPlatform } from "../../../utils/platform.js";
 import { getGitBashPathCached } from "../../../utils/windowsPaths.js";

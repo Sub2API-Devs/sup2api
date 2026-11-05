@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/NotebookEditTool/NotebookEditTool.ts
  * pieces: chunk-5xgkngpb.js (2)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { extname } from "path";
 import { randomUUID } from "crypto";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/keys.ts
  * pieces: chunk-exfmq47h.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-exfmq47h.js:642843-642886 fingerprint (2.1.88 match: getGrowthBookClientKey, 0.616)

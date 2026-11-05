@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/AgentTool/constants.ts
  * pieces: chunk-bdghrkgz.js (2), chunk-j8f885h1.js (1)
  * attribution: placement 2, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { deferInit } from "../../../runtime/deferred-init.js";

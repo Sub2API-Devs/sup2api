@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/statsCache.ts
  * pieces: chunk-j6tt9nsa.js (9), chunk-mhn0amzz.js (1)
  * attribution: fingerprint 6, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomBytes } from "crypto";
 import { open, rm } from "fs/promises";

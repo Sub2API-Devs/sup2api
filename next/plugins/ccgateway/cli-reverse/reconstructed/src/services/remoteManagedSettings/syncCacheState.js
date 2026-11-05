@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/remoteManagedSettings/syncCacheState.ts
  * pieces: chunk-a2q0x549.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { open } from "fs/promises";
 import { constants } from "fs";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/generatedFiles.ts
  * pieces: chunk-c7hntn0y.js (4)
  * attribution: fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-c7hntn0y.js:26292-26586 fingerprint (2.1.88 match: EXCLUDED_DIRECTORIES, 0.954)

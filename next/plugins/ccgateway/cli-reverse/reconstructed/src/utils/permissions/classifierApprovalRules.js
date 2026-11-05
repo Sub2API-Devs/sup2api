@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vr5v4gzz.js (3)
  * attribution: placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SHA256_DIGEST_SUFFIX_RE } from "../../cli/transports/ccrMessageMapping.js";
 import { SKILL } from "../../tools/SkillTool/skillToolNames.js";

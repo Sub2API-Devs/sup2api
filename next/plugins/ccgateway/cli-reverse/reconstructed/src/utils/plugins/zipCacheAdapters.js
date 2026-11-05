@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/zipCacheAdapters.ts
  * pieces: chunk-54b7qs0h.js (5)
  * attribution: fingerprint 3, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readFile } from "fs/promises";
 import { join } from "path";

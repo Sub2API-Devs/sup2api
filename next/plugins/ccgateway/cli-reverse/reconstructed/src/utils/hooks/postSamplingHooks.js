@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/postSamplingHooks.ts
  * pieces: chunk-w3ch4xq2.js (19)
  * attribution: placement 18, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { collapseSmallPastedBlocks, formatImageRef, logEntryToHistoryEntry } from "../../history.js";
 import { logError } from "../log.js";

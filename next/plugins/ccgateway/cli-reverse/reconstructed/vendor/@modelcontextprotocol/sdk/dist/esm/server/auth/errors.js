@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/sdk@1.29.0
  * pieces: chunk-6dff51n3.js (36)
  * attribution: esm-fingerprint 19, esm-layout 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-6dff51n3.js:5186-5465 esm-fingerprint

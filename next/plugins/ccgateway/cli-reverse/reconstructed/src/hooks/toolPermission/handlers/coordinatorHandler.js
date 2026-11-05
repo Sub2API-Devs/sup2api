@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/toolPermission/handlers/coordinatorHandler.ts
  * pieces: chunk-g4tsxwy3.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logError } from "../../../utils/log.js";
 import { withTelemetryMessage } from "../../../utils/errors.js";

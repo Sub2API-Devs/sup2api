@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/billing.ts
  * pieces: chunk-vn3g7zt8.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { env } from "./env.js";
 import { isClaudeAISubscriber, getAuthTokenSource, hasAnthropicApiKey } from "./auth.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/Settings/Settings.tsx
  * pieces: chunk-j6tt9nsa.js (4)
  * attribution: sole-consumer 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { EMPTY_MACHINE_STATUS, noopMachineStatusHook } from "../../utils/machineStatus.js";
 import { createSignal } from "../../utils/signal.js";

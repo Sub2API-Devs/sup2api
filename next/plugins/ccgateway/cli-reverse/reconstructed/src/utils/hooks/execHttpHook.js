@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/hooks/execHttpHook.ts
  * pieces: chunk-5xgkngpb.js (7)
  * attribution: sole-consumer 1, fingerprint 4, file-local 1, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TLS_ENV_VARS } from "../tlsEnv.js";
 import { mergeWithAssigner_2 } from "../../../vendor/lodash-es/_mergeWithFamily.js";

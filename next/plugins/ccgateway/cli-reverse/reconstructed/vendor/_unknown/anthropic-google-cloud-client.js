@@ -4,6 +4,7 @@
  * third-party: _unknown/anthropic-google-cloud-client.js
  * pieces: chunk-mgs2qfsy.js (1)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Anthropic } from "../@anthropic-ai/sdk/client.mjs";
 import { VERSION } from "../@anthropic-ai/bedrock-sdk/version.mjs";

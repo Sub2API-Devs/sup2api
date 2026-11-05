@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-1emffj1t.js (2), chunk-572d4n1g.js (2), chunk-ae5m8v3b.js (2)
  * attribution: placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0_2 from "../../../assets/permissions_external-2ede28fe.txt.zst" with { type: "file" };
 import __cc_resource_0 from "../../../assets/SKILL-kyber1ah.md" with { type: "text" };

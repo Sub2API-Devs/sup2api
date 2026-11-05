@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/controlMessageCompat.ts
  * pieces: chunk-gas4wctd.js (4)
  * attribution: placement 3, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-gas4wctd.js:191-352 placement (2.1.88 match: extractHttpStatus, 1)

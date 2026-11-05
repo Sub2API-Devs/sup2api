@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/toolErrors.ts
  * pieces: chunk-5xgkngpb.js (5), chunk-exfmq47h.js (9)
  * attribution: placement 10, fingerprint 3, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
 import { objectSchema, stringSchema, record, unknown } from "../../vendor/zod/v4/classic/schemas.js";

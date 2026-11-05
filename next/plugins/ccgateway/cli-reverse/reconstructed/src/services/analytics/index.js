@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/analytics/index.ts
  * pieces: chunk-nkv493nm.js (10)
  * attribution: facade-exports 4, layout 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { HostScoped } from "../../utils/hostScoped.js";
 import { onProcessRootHost } from "../../bootstrap/state.js";

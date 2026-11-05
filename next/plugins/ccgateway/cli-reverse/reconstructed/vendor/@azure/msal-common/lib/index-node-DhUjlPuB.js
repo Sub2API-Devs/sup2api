@@ -4,6 +4,7 @@
  * third-party: @azure/msal-common@15.13.1
  * pieces: chunk-b5df2wx1.js (171)
  * attribution: esm-fingerprint 131, esm-layout 25, layout 15
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LogLevel, Logger } from "../dist/logger/Logger.mjs";
 import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";

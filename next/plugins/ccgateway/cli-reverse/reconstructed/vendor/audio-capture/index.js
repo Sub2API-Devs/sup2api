@@ -4,6 +4,7 @@
  * third-party: audio-capture/index.js
  * pieces: audio-capture.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { require_audio_capture_node } from "../private-unresolved/audio-capture.node.js";
 

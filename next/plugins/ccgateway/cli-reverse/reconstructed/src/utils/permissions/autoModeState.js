@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/autoModeState.ts
  * pieces: chunk-7kayq7nc.js (29)
  * attribution: placement 29
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../debug.js";
 import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";

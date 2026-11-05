@@ -4,6 +4,7 @@
  * third-party: @bufbuild/cel@0.4.0
  * pieces: chunk-qg41pqt6.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_planner } from "./planner.js";

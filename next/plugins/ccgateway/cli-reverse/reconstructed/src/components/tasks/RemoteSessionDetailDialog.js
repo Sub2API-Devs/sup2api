@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/tasks/RemoteSessionDetailDialog.tsx
  * pieces: chunk-czq1j3j2.js (12), chunk-h6gkxbpm.js (1), chunk-ne2890fx.js (1)
  * attribution: placement 3, fingerprint 9, layout 1, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { plural } from "../../utils/stringUtils.js";
 import { isFilePersistenceEnabled } from "../../utils/filePersistence/filePersistence.js";

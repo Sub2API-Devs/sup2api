@@ -4,6 +4,7 @@
  * third-party: signal-exit@4.1.0
  * pieces: chunk-t889g22j.js (7)
  * attribution: esm-fingerprint 6, esm-layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logForDebugging } from "../../../../src/utils/debug.js";
 import { env } from "../../../../src/utils/env.js";

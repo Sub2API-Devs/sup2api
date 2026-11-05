@@ -4,6 +4,7 @@
  * third-party: @smithy/eventstream-codec@4.2.13..4.2.14
  * pieces: chunk-ayc8mk37.js (12)
  * attribution: esm-layout 5, esm-fingerprint 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_util_hex_encoding } from "../../util-hex-encoding/dist-cjs/index.js";

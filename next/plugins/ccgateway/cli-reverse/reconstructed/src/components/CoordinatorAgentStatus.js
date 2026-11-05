@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CoordinatorAgentStatus.tsx
  * pieces: chunk-5xgkngpb.js (2), chunk-czq1j3j2.js (83)
  * attribution: placement 63, callgraph-witnessed 1, fingerprint 4, affinity 1, layout 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   isMainSessionTask as isMainSessionTask_2,

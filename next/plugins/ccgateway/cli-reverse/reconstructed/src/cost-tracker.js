@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cost-tracker.ts
  * pieces: chunk-5xgkngpb.js (21), chunk-8n1fbght.js (1)
  * attribution: placement 12, fingerprint 4, layout 5, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   getTotalCostUSD,

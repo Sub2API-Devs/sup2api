@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/nested-clients@3.936.0
  * pieces: chunk-539esr4f.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-539esr4f.js:5419-10036 esm-fingerprint
 var stringParamSchema = {

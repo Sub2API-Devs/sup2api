@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/dom.ts
  * pieces: chunk-2avr6cej.js (27), chunk-xd1cb3xs.js (1)
  * attribution: fingerprint 10, callgraph-witnessed 2, layout 1, file-local 3, affinity 1, callgraph-fingerprint 1, placement 10
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { Yoga } from "./components/ErrorBoundary.js";
 import { markHasAbsoluteDescendant } from "./focus.js";

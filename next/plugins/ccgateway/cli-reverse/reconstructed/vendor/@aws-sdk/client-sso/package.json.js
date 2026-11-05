@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
  * pieces: chunk-tvcdn76c.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-tvcdn76c.js:1969-4847 placement

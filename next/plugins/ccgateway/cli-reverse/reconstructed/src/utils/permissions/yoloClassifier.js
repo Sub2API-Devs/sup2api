@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/permissions/yoloClassifier.ts
  * pieces: chunk-5xgkngpb.js (155), chunk-exfmq47h.js (1), chunk-fta1hp2w.js (4)
  * attribution: placement 67, fingerprint 15, layout 64, file-local 5, sole-consumer 5, affinity 2, callgraph-fingerprint 1, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, dirname, join } from "path";
 import { randomUUID } from "crypto";

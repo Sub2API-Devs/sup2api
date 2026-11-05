@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-4vbvjchj.js (8)
  * attribution: placement 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/component-schemas-7fabf82f.md.zst" with { type: "file" };
 import __cc_resource_1 from "../../../assets/example-plugins-9n8v6pe1.md" with { type: "text" };

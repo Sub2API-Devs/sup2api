@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/client.ts
  * pieces: chunk-0cf4tfjz.js (1), chunk-4wmswyss.js (4), chunk-5xgkngpb.js (21), chunk-br8c6c8g.js (2), chunk-czq1j3j2.js (1), chunk-dh16zjm4.js (1), chunk-eeh1dqm6.js (3), chunk-fmy4vc7c.js (5), chunk-h44h5gdv.js (79), chunk-sywnjtqb.js (216)
  * attribution: fingerprint 21, placement 273, layout 35, callgraph-fingerprint 2, callgraph-witnessed 1, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash, randomUUID } from "crypto";
 import { dirname } from "path";

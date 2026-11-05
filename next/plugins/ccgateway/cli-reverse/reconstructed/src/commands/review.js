@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/review.ts
  * pieces: chunk-5xgkngpb.js (3), chunk-7jxyna5q.js (1)
  * attribution: fingerprint 3, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ghPrCmdRe } from "../tools/shared/gitOperationTracking.js";
 import {

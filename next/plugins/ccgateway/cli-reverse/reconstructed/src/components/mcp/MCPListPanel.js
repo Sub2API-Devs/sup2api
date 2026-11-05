@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/mcp/MCPListPanel.tsx
  * pieces: chunk-5fazksz3.js (1), chunk-h6004nzv.js (21), chunk-xqynshdn.js (1), chunk-z20c443b.js (1)
  * attribution: fingerprint 4, sole-consumer 3, affinity 1, callgraph-fingerprint 5, layout 10, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPluginServerConfig } from "../../services/mcp/types.js";
 import { withConfigScope, decorateMcpTools, stampToolScope } from "../../services/mcp/mcpToolDecoration.js";

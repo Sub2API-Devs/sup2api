@@ -4,6 +4,7 @@
  * third-party: execa@8.0.1
  * pieces: chunk-t889g22j.js (8)
  * attribution: placement 2, esm-layout 1, esm-fingerprint 4, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { default as Fo } from "process";
 import path from "path";

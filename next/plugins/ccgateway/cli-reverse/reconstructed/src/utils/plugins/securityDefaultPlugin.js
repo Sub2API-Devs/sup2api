@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-f33rhb46.js (16), chunk-z20c443b.js (3)
  * attribution: placement 18, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { identity } from "../identity.js";
 import { OrderedListContext } from "../../components/ui/OrderedList.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionFileAccessHooks.ts
  * pieces: chunk-5xgkngpb.js (7)
  * attribution: fingerprint 3, facade-exports 2, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { resolve as resolve_2, sep, basename, dirname } from "path";
 import { FileReadTool } from "../tools/FileReadTool/FileReadTool.js";

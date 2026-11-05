@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/tokenEstimation.ts
  * pieces: chunk-1jwzj2da.js (11), chunk-5xgkngpb.js (12), chunk-exfmq47h.js (1)
  * attribution: affinity 1, callgraph-witnessed 2, layout 8, fingerprint 6, file-local 2, placement 5
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { jsonStringify } from "../utils/slowOperations.js";
 import { sumByAliasField } from "./artifacts/frameApi.js";

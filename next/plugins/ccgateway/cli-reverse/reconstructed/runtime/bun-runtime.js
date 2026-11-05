@@ -4,6 +4,7 @@
  * kind: runtime
  * pieces: chunk-gehzbwn8.js (11)
  * attribution: helper:bun-runtime 11
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-gehzbwn8.js:191-211 helper:bun-runtime

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/sessionStorage.ts
  * pieces: chunk-05hzzra9.js (1), chunk-0yn8vxcn.js (8), chunk-5s0qaz1x.js (1), chunk-5xgkngpb.js (518), chunk-66b9fbd5.js (2), chunk-775n2x67.js (1), chunk-807vb177.js (19), chunk-9ys74nhz.js (2), chunk-czq1j3j2.js (1), chunk-jd53r7dh.js (3), chunk-jndyh8cy.js (1), chunk-n44f9pt7.js (1), chunk-nvm0wye1.js (1), chunk-rytc8e8q.js (1), chunk-v6a0t823.js (1), chunk-xgvz6tdn.js (1)
  * attribution: fingerprint 31, placement 33, layout 164, callgraph-witnessed 3, facade-majority 294, file-local 4, affinity 3, sole-consumer 8, callgraph-fingerprint 6, facade-exports 16
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, dirname, basename, sep, isAbsolute, relative, resolve as resolve_2, normalize } from "path";
 import {

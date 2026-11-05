@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgeApi.ts
  * pieces: chunk-v3wm90pf.js (5)
  * attribution: fingerprint 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { readUntrustedDeviceRefusal, shouldRemoteControlEnroll } from "./codeSessionApi.js";
 import { BETA_ENVIRONMENTS, BETA_CCR_BYOC } from "../utils/betas.js";

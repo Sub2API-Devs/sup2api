@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/token-providers@3.936.0..3.939.0
  * pieces: chunk-t032zdr0.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../@smithy/property-provider/dist-cjs/index.js";

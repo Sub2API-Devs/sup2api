@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/PackageManagerAutoUpdater.tsx
  * pieces: chunk-18rrbwq1.js (7)
  * attribution: placement 6, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join } from "path";
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";

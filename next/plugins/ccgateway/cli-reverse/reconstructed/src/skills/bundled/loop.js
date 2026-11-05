@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/loop.ts
  * pieces: chunk-x774raa9.js (14)
  * attribution: fingerprint 1, placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAgentPushNotificationEnabled } from "../../tools/PushNotificationTool/prompt.js";
 import { PUSHNOTIFICATION } from "../../tools/PushNotificationTool/constants.js";

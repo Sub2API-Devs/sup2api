@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-65bt0307.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { splitAlnumWords, NON_ASCII_PATTERN, iterJoinedWordPrefixes, OFFICIAL_NAME_RE } from "./schemas.js";
 import { foldConfusableCharacters } from "../confusables.js";

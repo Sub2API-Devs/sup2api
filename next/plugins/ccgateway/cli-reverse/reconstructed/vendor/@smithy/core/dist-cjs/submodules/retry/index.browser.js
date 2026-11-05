@@ -4,6 +4,7 @@
  * third-party: @smithy/core@3.30.0
  * pieces: chunk-3p78mpxm.js (2)
  * attribution: cjs-fingerprint+context 1, cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 

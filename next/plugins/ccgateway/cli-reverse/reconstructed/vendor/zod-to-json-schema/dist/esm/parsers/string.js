@@ -4,6 +4,7 @@
  * third-party: zod-to-json-schema@3.25.2
  * pieces: chunk-efaj9q04.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-efaj9q04.js:11159-11238 esm-fingerprint

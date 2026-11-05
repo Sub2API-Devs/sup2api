@@ -4,6 +4,7 @@
  * third-party: onetime@7.0.0
  * pieces: chunk-t889g22j.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { mimicFunction } from "../mimic-function/index.js";
 

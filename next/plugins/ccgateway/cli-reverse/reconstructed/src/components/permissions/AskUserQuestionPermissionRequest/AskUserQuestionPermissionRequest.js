@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/AskUserQuestionPermissionRequest.tsx
  * pieces: chunk-czq1j3j2.js (28), chunk-nw81sbzb.js (1)
  * attribution: placement 4, fingerprint 3, sole-consumer 2, file-local 1, layout 17, callgraph-fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { sniffImageMediaType } from "../../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { maybeResizeAndDownsampleImageBlock, weakSet } from "../../../utils/imageResizer.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-aw801t9e.js (2), chunk-fb9qe48t.js (38)
  * attribution: placement 40
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../../utils/sanitization.js";
 import { READ } from "../../tools/FileReadTool/constants.js";

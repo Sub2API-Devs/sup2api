@@ -7,6 +7,7 @@
  * third-party: @aws-sdk/client-sso@3.936.0..3.940.0
  * pieces: chunk-tvcdn76c.js (15)
  * attribution: esm-fingerprint 5, placement 6, layout 1, esm-layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   import_schema_2,

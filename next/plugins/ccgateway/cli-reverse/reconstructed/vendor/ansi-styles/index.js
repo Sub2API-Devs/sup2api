@@ -4,6 +4,7 @@
  * third-party: ansi-styles@6.2.3
  * pieces: chunk-ngeq6w7y.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-ngeq6w7y.js:303-1316 esm-layout
 var wrapAnsi16 =

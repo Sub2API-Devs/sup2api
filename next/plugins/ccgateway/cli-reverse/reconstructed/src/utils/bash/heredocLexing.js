@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-5xgkngpb.js (13)
  * attribution: placement 13
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { CONTROL_CHAR_RE as CONTROL_CHAR_RE_2, LONE_SURROGATE_RE, UNICODE_WHITESPACE_RE } from "./ast.js";
 import { getParserModule } from "./bashParser.js";

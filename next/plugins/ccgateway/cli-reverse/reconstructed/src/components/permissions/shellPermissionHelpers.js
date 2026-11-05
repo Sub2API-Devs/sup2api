@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/shellPermissionHelpers.tsx
  * pieces: chunk-8prszgkd.js (1), chunk-czq1j3j2.js (1), chunk-gh96j5t0.js (2)
  * attribution: callgraph-fingerprint 1, fingerprint 2, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isValidHeaderValue } from "../../utils/peerMessageHeaders.js";
 import { sanitizeTeammateLabel } from "../../utils/swarm/teammateIds.js";

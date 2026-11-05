@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/CustomSelect/use-select-state.ts
  * pieces: chunk-p1yqn9ds.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useState, useCallback } from "../../../vendor/react/cjs/react.production.js";
 import { useSelectNavigation } from "./use-select-navigation.js";

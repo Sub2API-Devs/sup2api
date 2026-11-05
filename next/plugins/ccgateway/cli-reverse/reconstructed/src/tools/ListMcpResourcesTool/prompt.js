@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/ListMcpResourcesTool/prompt.ts
  * pieces: chunk-gg17c06d.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 //@ chunk-gg17c06d.js:5468-6164 fingerprint (2.1.88 match: DESCRIPTION, 0.508)
 /**

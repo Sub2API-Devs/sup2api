@@ -4,6 +4,7 @@
  * third-party: fflate@0.8.2
  * pieces: chunk-9h5cg2dh.js (33)
  * attribution: esm-layout 18, esm-fingerprint 11, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createRequire } from "module";
 

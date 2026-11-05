@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
  * pieces: chunk-3wgj3rdg.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { import_core_3, import_resources_2 } from "../esm/enums.js";
 import { loadDefaultConfig } from "./config.js";

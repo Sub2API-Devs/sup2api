@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/cli/transports/WorkerStateUploader.ts
  * pieces: chunk-qyz2x025.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-qyz2x025.js:16033-16252 fingerprint (2.1.88 match: coalescePatches, 1)

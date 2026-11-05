@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/native-ts/color-diff/index.ts
  * pieces: chunk-f2v3cjkz.js (1), chunk-td0w5pj1.js (54)
  * attribution: fingerprint 21, layout 20, callgraph-fingerprint 4, file-local 3, sole-consumer 2, affinity 1, callgraph-witnessed 1, placement 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename, extname } from "path";
 import { sequential } from "../../utils/sequential.js";

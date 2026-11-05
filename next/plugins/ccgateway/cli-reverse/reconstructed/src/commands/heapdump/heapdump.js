@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/heapdump/heapdump.ts
  * pieces: chunk-p4gzazpk.js (3)
  * attribution: fingerprint 1, affinity 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { basename } from "path";
 import { performHeapDump } from "../../utils/heapDumpService.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processSlashCommand.tsx
  * pieces: chunk-5xgkngpb.js (3), chunk-g88zyy4n.js (29), chunk-rkbsrtg1.js (1)
  * attribution: placement 3, affinity 4, facade-exports 7, layout 13, fingerprint 5, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import {

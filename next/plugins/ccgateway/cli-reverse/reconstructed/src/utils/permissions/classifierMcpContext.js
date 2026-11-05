@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-c378z4w4.js (17)
  * attribution: placement 17
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isChatHostSession, isCoworkAny } from "../entrypointKinds.js";
 import { isCoordinatorCommsMcpTool } from "../../coordinator/coordinatorMcpServers.js";

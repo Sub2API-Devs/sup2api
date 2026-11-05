@@ -4,6 +4,7 @@
  * third-party: @aws-sdk/middleware-user-agent@3.936.0..3.972.18
  * pieces: chunk-3p78mpxm.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core as require_core_3 } from "../../../@smithy/core/dist-cjs/index.js";

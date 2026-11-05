@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/LogoV2/Clawd.tsx
  * pieces: chunk-tvbhy3tn.js (11)
  * attribution: placement 4, callgraph-fingerprint 1, layout 4, fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { identity } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/EnterPlanModeTool/prompt.ts
  * pieces: chunk-6kmb8me5.js (2)
  * attribution: placement 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { hasEmbeddedSearchTools } from "../../utils/embeddedTools.js";
 import { isBashAvailable } from "../../utils/shell/shellToolUtils.js";

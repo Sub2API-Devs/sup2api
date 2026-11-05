@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/thinking.ts
  * pieces: chunk-exfmq47h.js (21)
  * attribution: placement 6, fingerprint 3, file-local 4, layout 8
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getInitialSettings, getSettingsWithErrors } from "./settings/settings.js";
 import { env } from "./env.js";

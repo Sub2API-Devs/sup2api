@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/hooks/notifs/useLspInitializationNotification.tsx
  * pieces: chunk-a8hqqf13.js (1), chunk-czq1j3j2.js (1)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isCoordinatorEnvSet } from "../../coordinator/coordinatorMode.js";
 import { logForDebugging } from "../../utils/debug.js";

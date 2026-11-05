@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/AddWorkspaceDirectory.tsx
  * pieces: chunk-0tbq6c3s.js (7), chunk-czq1j3j2.js (1)
  * attribution: placement 1, layout 2, fingerprint 4, callgraph-witnessed 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { logEvent } from "../../../services/analytics/index.js";

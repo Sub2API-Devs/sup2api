@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-qc9eqggq.js (3)
  * attribution: placement 2, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { ToolPermissionValueSchema, foldRequestTimeout } from "./types.js";
 import { copyCcrMarks } from "../analytics/metadata.js";

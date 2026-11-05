@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-ejn7s5p2.js (5)
  * attribution: placement 4, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { PERMISSION_RULE_SOURCES } from "./permissions.js";
 import { PATH_RULE_CARVE_OUT_RE } from "../settings/permissionRuleCarveOut.js";

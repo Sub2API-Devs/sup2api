@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/processUserInput/processUserInput.ts
  * pieces: chunk-g88zyy4n.js (1), chunk-m0ks5273.js (1), chunk-pwdsqzsj.js (33)
  * attribution: fingerprint 3, placement 29, layout 2, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomUUID } from "crypto";
 import { personalHooksProblem, personalSettingsProblem } from "../settings/settingsProblems.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/glob.ts
  * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 4, fingerprint 2, layout 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { normalize, join, relative, sep, isAbsolute, dirname, basename } from "path";
 import { realpath } from "fs/promises";

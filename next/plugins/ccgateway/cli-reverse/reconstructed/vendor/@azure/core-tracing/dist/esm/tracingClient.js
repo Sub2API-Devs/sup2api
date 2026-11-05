@@ -4,6 +4,7 @@
  * third-party: @azure/core-tracing@1.2.0..1.3.1
  * pieces: chunk-b5df2wx1.js (1)
  * attribution: esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getInstrumenter } from "./instrumenter.js";
 import { AZURE_TRACING_SYMBOLS } from "./tracingContext.js";

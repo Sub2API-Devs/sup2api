@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/jetbrains.ts
  * pieces: chunk-033d1naw.js (1), chunk-5xgkngpb.js (4)
  * attribution: fingerprint 4, affinity 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { homedir, platform } from "os";
 import { join } from "path";

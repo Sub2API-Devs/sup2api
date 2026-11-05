@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/nativeInstaller/packageManagers.ts
  * pieces: chunk-gvr4gxa7.js (4), chunk-tfmhpnyx.js (3)
  * attribution: placement 3, fingerprint 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { open, stat, mkdir, writeFile, link, unlink, readFile } from "fs/promises";
 import { join } from "path";

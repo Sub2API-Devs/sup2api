@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/constants/outputStyles.ts
  * pieces: chunk-5xgkngpb.js (8)
  * attribution: fingerprint 4, layout 4
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { getOrCreate, getHostState, keyOrNull } from "../utils/hostEnvironment.js";

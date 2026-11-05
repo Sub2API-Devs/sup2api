@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/rules/PermissionRuleDescription.tsx
  * pieces: chunk-69br0ssk.js (1), chunk-h5wy8vq5.js (2)
  * attribution: placement 2, callgraph-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
 import { permissionRuleValueFromString as permissionRuleValueFromString_2 } from "../../../utils/sandbox/sandbox-adapter.js";

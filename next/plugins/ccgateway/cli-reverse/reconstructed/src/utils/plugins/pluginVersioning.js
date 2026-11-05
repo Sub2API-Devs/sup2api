@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/pluginVersioning.ts
  * pieces: chunk-5s0qaz1x.js (2), chunk-5xgkngpb.js (18)
  * attribution: fingerprint 2, placement 18
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { join, resolve as resolve_2, relative, isAbsolute, sep } from "path";
 import { createHash } from "crypto";

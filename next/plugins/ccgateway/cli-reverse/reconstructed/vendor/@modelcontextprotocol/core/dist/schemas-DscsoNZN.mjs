@@ -4,6 +4,7 @@
  * third-party: @modelcontextprotocol/core@2.0.0
  * pieces: chunk-qq5knpkd.js (1), chunk-sywnjtqb.js (2)
  * attribution: esm-layout 2, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { MCP_PROTOCOL_NEXT, MCP_PROTOCOL_LATEST } from "../../../../src/services/mcp/mcpCallConstants.js";
 import { lit, fromEnum } from "../../../../src/services/analytics/safeMetadata.js";

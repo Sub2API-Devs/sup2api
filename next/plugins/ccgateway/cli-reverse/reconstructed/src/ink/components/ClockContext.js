@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/components/ClockContext.tsx
  * pieces: chunk-emhzq435.js (4), chunk-w63e462p.js (5)
  * attribution: placement 8, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { SCROLL_JUMP_LINES } from "../scrollConstants.js";
 import {

@@ -4,6 +4,7 @@
  * third-party: @opentelemetry/sdk-trace-base@2.2.0
  * pieces: chunk-3wgj3rdg.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_core } from "../../../../core/build/src/index.js";

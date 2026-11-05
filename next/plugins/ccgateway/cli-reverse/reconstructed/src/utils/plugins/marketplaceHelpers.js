@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/plugins/marketplaceHelpers.ts
  * pieces: chunk-5s0qaz1x.js (12), chunk-5xgkngpb.js (14)
  * attribution: fingerprint 12, layout 10, sole-consumer 1, affinity 1, file-local 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getSettingsForSource, getSettingsFilePathForSource } from "../settings/settings.js";
 import {

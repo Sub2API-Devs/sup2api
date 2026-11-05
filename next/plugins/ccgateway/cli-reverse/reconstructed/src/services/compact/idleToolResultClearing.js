@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-2c3jp4kn.js (2), chunk-5xgkngpb.js (12)
  * attribution: placement 14
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { STREAM_PREFIXES } from "../../utils/messages/untrustedArtifactContent.js";
 import { isObjectBlock } from "../../utils/toolResultStorage.js";

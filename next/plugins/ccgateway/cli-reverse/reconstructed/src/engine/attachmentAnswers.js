@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-r7pr5hxc.js (9)
  * attribution: placement 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __export } from "../../runtime/bun-runtime.js";
 import { classifyHookAttachmentSource } from "../utils/hooks/hookAttachmentTypes.js";

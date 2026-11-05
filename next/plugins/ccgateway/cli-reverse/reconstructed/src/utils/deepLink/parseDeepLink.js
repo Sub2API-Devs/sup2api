@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/deepLink/parseDeepLink.ts
  * pieces: chunk-6xpnm08k.js (7)
  * attribution: placement 6, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { OFFICIAL_MARKETPLACE_SOURCE } from "../plugins/officialMarketplace.js";
 import { NodeFsOperations, findIntermediateUncJunction } from "../fsOperations.js";

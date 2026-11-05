@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/xml.ts
  * pieces: chunk-1dbza2qv.js (1), chunk-72da5r6r.js (1)
  * attribution: fingerprint 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { escapeXml_2 } from "./confusables.js";
 import {

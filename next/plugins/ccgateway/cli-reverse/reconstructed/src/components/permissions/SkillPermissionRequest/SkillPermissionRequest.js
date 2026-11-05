@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/SkillPermissionRequest/SkillPermissionRequest.tsx
  * pieces: chunk-czq1j3j2.js (10)
  * attribution: sole-consumer 3, affinity 2, fingerprint 2, placement 2, layout 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   parseConsentSuggestions,

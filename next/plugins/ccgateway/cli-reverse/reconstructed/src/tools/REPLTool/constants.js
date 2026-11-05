@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/REPLTool/constants.ts
  * pieces: chunk-1ectaxf9.js (4), chunk-ap4nnw1y.js (1)
  * attribution: placement 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { LEGACY_TOOL_NAME_ALIASES } from "../../utils/permissions/permissionRuleParser.js";
 import { codeModeAccepted } from "../../utils/codeMode/accepted.js";

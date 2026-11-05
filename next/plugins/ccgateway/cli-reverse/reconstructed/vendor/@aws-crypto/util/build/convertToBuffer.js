@@ -4,6 +4,7 @@
  * third-party: @aws-crypto/util@3.0.0..4.0.0
  * pieces: chunk-jcm8ph2a.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_util_utf8 } from "../../../@smithy/util-utf8/dist-cjs/index.js";

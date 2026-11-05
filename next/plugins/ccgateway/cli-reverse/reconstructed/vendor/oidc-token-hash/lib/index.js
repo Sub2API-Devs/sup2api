@@ -4,6 +4,7 @@
  * third-party: oidc-token-hash@5.0.3..5.1.0
  * pieces: chunk-1hnjmk23.js (1)
  * attribution: cjs-fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_shake256 } from "./shake256.js";

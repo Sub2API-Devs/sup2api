@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/aws.ts
  * pieces: chunk-7kayq7nc.js (10), chunk-te3thhf2.js (3)
  * attribution: fingerprint 4, placement 2, layout 5, sole-consumer 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { findInCauseChain, errorMessage } from "./errors.js";
 import { env } from "./env.js";

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-s321jzex.js (7)
  * attribution: placement 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { STALE_GUARD_CONTENT_HEADER_LINE_RE, ArtifactInputError } from "./constants.js";
 import { zodEnumFieldIncludes, inputSchema } from "../../services/artifacts/artifactToolSchema.js";

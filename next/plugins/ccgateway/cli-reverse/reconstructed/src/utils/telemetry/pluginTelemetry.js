@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/telemetry/pluginTelemetry.ts
  * pieces: chunk-exfmq47h.js (2), chunk-jdfzheem.js (1), chunk-n0gp41wj.js (78), chunk-z20c443b.js (1)
  * attribution: fingerprint 8, callgraph-fingerprint 2, placement 53, layout 19
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createHash } from "crypto";
 import { sep } from "path";

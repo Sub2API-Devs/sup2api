@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/tools/FileEditTool/FileEditTool.ts
  * pieces: chunk-5xgkngpb.js (9)
  * attribution: placement 1, affinity 2, fingerprint 2, layout 1, sole-consumer 3
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isAbsolute, sep } from "path";
 import {

@@ -7,6 +7,7 @@
  * new in 2.1.318 (2.1.88 has no file at this path)
  * pieces: chunk-vn3g7zt8.js (6)
  * attribution: placement 6
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isUnparsedInputMarker } from "../../utils/json.js";
 import { X_CC_TENDER_QUILT_LIMIT, FALLBACK_HEADER_VALUE_LIMIT } from "./refusalFallbackHeaders.js";

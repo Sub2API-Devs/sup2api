@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/computerUse/executor.ts
  * pieces: chunk-p57a7983.js (11)
  * attribution: fingerprint 8, callgraph-witnessed 1, layout 2
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { execFileNoThrow } from "../execFileNoThrow.js";
 import { sleep } from "../sleep.js";

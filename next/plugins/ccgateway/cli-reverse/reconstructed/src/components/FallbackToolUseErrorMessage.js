@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/FallbackToolUseErrorMessage.tsx
  * pieces: chunk-em44trrz.js (3)
  * attribution: placement 1, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isTextBlock, MAX_LINES_THRESHOLD } from "../utils/messages/textLineCount.js";
 import { stripAnsiPerLine } from "../utils/stripAnsi.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/keybindings/shortcutFormat.ts
  * pieces: chunk-81c4jqdt.js (1), chunk-820m5cev.js (14), chunk-m2f3rb0f.js (3)
  * attribution: placement 12, affinity 5, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { logEvent } from "../services/analytics/index.js";
 import { toActionTelemetryId, toFallbackTelemetryValue } from "./resolver.js";

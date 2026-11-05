@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/bridge/bridgePermissionCallbacks.ts
  * pieces: chunk-rz26abj6.js (5)
  * attribution: placement 3, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { isPluginServerConfig } from "../services/mcp/types.js";
 import { startupCcrEnv } from "../tasks/RemoteAgentTask/remoteAgentKinds.js";

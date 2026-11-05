@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/design-system/Dialog.tsx
  * pieces: chunk-zjxrz3f0.js (8)
  * attribution: sole-consumer 2, affinity 1, fingerprint 1, layout 3, placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";

@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/services/mcp/channelPermissions.ts
  * pieces: chunk-e9h2v1vq.js (21)
  * attribution: fingerprint 5, layout 15, file-local 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { randomInt } from "crypto";
 import {

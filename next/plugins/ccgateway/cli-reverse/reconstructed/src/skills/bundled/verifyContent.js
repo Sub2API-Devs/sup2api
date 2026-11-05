@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/skills/bundled/verifyContent.ts
  * pieces: chunk-ate506mc.js (5)
  * attribution: sole-consumer 4, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import __cc_resource_0 from "../../../assets/cli-f091jpwx.md" with { type: "text" };
 import __cc_resource_1 from "../../../assets/server-6cyhjq09.md" with { type: "text" };

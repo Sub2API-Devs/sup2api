@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/log.ts
  * pieces: chunk-my2r02mp.js (12)
  * attribution: facade-exports 10, layout 1, fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { TICK } from "../constants/xml.js";
 import { unwrapReminderText, textOrReminderWrapped } from "./systemReminder.js";

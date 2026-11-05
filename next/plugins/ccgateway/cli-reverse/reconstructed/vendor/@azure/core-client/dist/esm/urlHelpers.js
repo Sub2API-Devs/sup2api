@@ -4,6 +4,7 @@
  * third-party: @azure/core-client@1.9.2..1.10.0
  * pieces: chunk-b5df2wx1.js (11)
  * attribution: esm-layout 2, esm-fingerprint 9
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { createDefaultHttpClient_2 } from "../../../core-rest-pipeline/dist/esm/defaultHttpClient.js";
 import { getOperationArgumentValueFromParameter } from "./operationHelpers.js";

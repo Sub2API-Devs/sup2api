@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/commands/context/context.tsx
  * pieces: chunk-qt8k81nz.js (1)
  * attribution: placement 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import { getRemoteCaps, hasRemoteCap, REMOTE_STOPPED_WAITING_NOTICE } from "../../remote/remoteMode.js";
 import { requestContextUsage } from "../../entrypoints/sdk/controlSchemas.js";

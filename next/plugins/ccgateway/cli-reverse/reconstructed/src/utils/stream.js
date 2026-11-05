@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/stream.ts
  * pieces: chunk-jd53r7dh.js (1)
  * attribution: fingerprint 1
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 
 //@ chunk-jd53r7dh.js:5253-6451 fingerprint (2.1.88 match: Stream, 0.864)

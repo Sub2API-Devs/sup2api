@@ -7,6 +7,7 @@
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/VirtualMessageList.tsx
  * pieces: chunk-hnxhr3bs.js (33)
  * attribution: placement 17, layout 3, file-local 2, fingerprint 4, sole-consumer 7
+ * (c) Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.
  */
 import {
   useSyncExternalStore,
