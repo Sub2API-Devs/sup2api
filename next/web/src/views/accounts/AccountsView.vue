@@ -543,10 +543,10 @@ function resetFilters() { for (const key of Object.keys(list.filters)) list.filt
   <div>
     <SPageHeader :title="t('accounts.title')" :description="t('accounts.subtitle')">
       <template #filters>
-        <SInput v-model="list.filters.q" icon="search" clearable class="w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
-        <SSelect v-model="typeFilter" :options="typeOptions" class="w-44" :aria-label="t('accounts.type')" />
-        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-36" :aria-label="t('accounts.groups')" />
-        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-32" :aria-label="t('common.status')" />
+        <SInput v-model="list.filters.q" icon="search" clearable class="w-44 2xl:w-56" :aria-label="t('accounts.listUi.search')" :placeholder="t('accounts.listUi.search')" />
+        <SSelect v-model="typeFilter" :options="typeOptions" class="w-36 2xl:w-44" :aria-label="t('accounts.type')" />
+        <SSelect v-model="list.filters.group_id" :options="groupOptions" class="w-32 2xl:w-36" :aria-label="t('accounts.groups')" />
+        <SSelect v-model="list.filters.status" :options="statusSelectOptions" class="w-28 2xl:w-32" :aria-label="t('common.status')" />
         <SButton :variant="hasAdvancedFilters ? 'primary' : 'secondary'" :aria-expanded="advancedFilters" @click="advancedFilters = !advancedFilters">{{ t('accounts.listUi.advanced') }}</SButton>
         <SButton v-if="filterCount" variant="ghost" @click="resetFilters">{{ t('accounts.listUi.clear', { count: filterCount }) }}</SButton>
       </template>
