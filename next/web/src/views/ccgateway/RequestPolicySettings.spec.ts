@@ -273,6 +273,47 @@ describe('CCGateway request levels', () => {
     expect(stored().build_attachment_sources).toEqual({ platform_name: 'client', os_version: 'client' })
     w.unmount()
   })
+  // Session memory (2026-11-05): two lifetimes in seconds, 24 hours unless
+  // chosen, quick choices of 1 hour, 24 hours and 7 days, at every level; a
+  // value outside 60 s .. 30 days is not saved.
+  it('sets the session memory lifetimes with the quick choices or in seconds', async () => {
+    const stored = storing()
+    let w = await render()
+    const card = w.get('[data-testid="session-memory"]')
+    expect(card.text()).toContain('线程状态有效期')
+    expect(card.text()).toContain('工具清单有效期')
+    const preset = (field: string) => `[data-testid="session-memory-${field}-preset"]`
+    const input = (field: string) => w.get<HTMLInputElement>(`input[data-testid="session-memory-${field}-input"]`)
+    expect(w.get(preset('thread_ttl_seconds')).findAll('label').map(l => l.text())).toEqual(['1 小时', '24 小时', '7 天'])
+    expect(picked(w, preset('thread_ttl_seconds'))).toBe(1)
+    expect(input('tools_ttl_seconds').element.value).toBe('86400')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(stored()).not.toHaveProperty('session_memory')
+    // At level 0 too.
+    await level(w, 'none')
+    await pick(w, preset('thread_ttl_seconds'), 0)
+    input('tools_ttl_seconds').element.value = '120'
+    await input('tools_ttl_seconds').trigger('change')
+    expect(picked(w, preset('tools_ttl_seconds'))).toBe(-1)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(stored().session_memory).toEqual({ thread_ttl_seconds: 3600, tools_ttl_seconds: 120 })
+    w.unmount()
+    w = await render()
+    expect(picked(w, preset('thread_ttl_seconds'))).toBe(0)
+    expect(input('tools_ttl_seconds').element.value).toBe('120')
+    // Too short: shown as an error and not saved.
+    mocks.put.mockClear()
+    input('thread_ttl_seconds').element.value = '30'
+    await input('thread_ttl_seconds').trigger('change')
+    expect(w.get('[data-testid="session-memory-thread_ttl_seconds"]').text()).toContain('60 秒到 30 天')
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(mocks.put).not.toHaveBeenCalled()
+    expect(w.text()).toContain('配置格式不正确')
+    await pick(w, preset('thread_ttl_seconds'), 2)
+    await w.get('form').trigger('submit'); await flushPromises()
+    expect(stored().session_memory).toEqual({ thread_ttl_seconds: 604800, tools_ttl_seconds: 120 })
+    w.unmount()
+  })
   // A policy saved before levels gets the level features.LegacyLevel gives it
   // (a retired mode read as build, as the core does); saving writes that level
   // and no relay mode.

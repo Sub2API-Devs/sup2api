@@ -3,6 +3,7 @@ package ccgateway
 import (
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -30,6 +31,7 @@ func sanitizePolicy(p *RequestPolicy) []string {
 	if invalid("build_billing_entrypoint", p.BuildBillingEntrypoint, features.ValidateBillingEntrypoint, &dropped) {
 		p.BuildBillingEntrypoint = ""
 	}
+	p.SessionMemory, dropped = keepValidSessionMemory(p.SessionMemory, dropped)
 	return sanitizeSources(&p.BuildAttachmentSources, &p.BuildBillingSources, &p.BuildInjection, dropped)
 }
 
@@ -44,7 +46,27 @@ func sanitizeOverrides(o *FeatureOverrides) []string {
 	if o.BuildBillingEntrypoint != nil && invalid("build_billing_entrypoint", *o.BuildBillingEntrypoint, features.ValidateBillingEntrypoint, &dropped) {
 		o.BuildBillingEntrypoint = nil
 	}
+	o.SessionMemory, dropped = keepValidSessionMemory(o.SessionMemory, dropped)
 	return sanitizeSources(&o.BuildAttachmentSources, &o.BuildBillingSources, &o.BuildInjection, dropped)
+}
+
+// keepValidSessionMemory is p without a lifetime outside the range a policy
+// may name (a copy; nil stays nil), which is named in dropped.
+func keepValidSessionMemory(p *features.SessionMemoryPolicy, dropped []string) (*features.SessionMemoryPolicy, []string) {
+	if p == nil {
+		return nil, dropped
+	}
+	out := *p
+	for _, f := range []struct {
+		name  string
+		value *int
+	}{{"thread_ttl_seconds", &out.ThreadTTLSeconds}, {"tools_ttl_seconds", &out.ToolsTTLSeconds}} {
+		if (&features.SessionMemoryPolicy{ThreadTTLSeconds: *f.value}).Validate() != nil {
+			dropped = append(dropped, "session_memory."+f.name+"="+strconv.Itoa(*f.value))
+			*f.value = 0
+		}
+	}
+	return &out, dropped
 }
 
 // invalid reports whether valid refuses v ("" is unset, never refused) and

@@ -44,7 +44,7 @@ export default {
       high: '低注入 + Claude Code 内置系统提示词和常用工具，可选更多工具'
     },
     defaultMark: '（默认）',
-    layerNames: { billing: '计费头', identity: '身份行', environment: '环境', prompt: '提示词与工具' },
+    layerNames: { billing: '计费头', identity: '身份行', environment: '环境', prompt: '提示词与工具', session: '会话记忆' },
     from: { billing: '所有等级', identity: '微注入起', environment: '低注入起', prompt: '提示词低注入起，工具高注入' },
     locked: '提升到{level}后生效；已保存的配置保留。',
     lockedPlain: '提升到{level}后生效。',
@@ -97,6 +97,19 @@ export default {
       ToolSearch: '选中时按官方带上延迟加载的占位工具，WebSearch、NotebookEdit 改为延迟加载、不发送',
       deferred: '没有 ToolSearch 时按完整定义发送；选了 ToolSearch 时不发送，与官方首轮一致'
     }
+  },
+  sessionMemory: {
+    title: '会话记忆',
+    from: '所有等级',
+    hint: 'Worker 按上游会话记住的内容多久不用就过期：线程状态（cc_prev_req、轮次、prompt 与 message id）和本会话用过的工具清单（x-claude-code-sandy-plover）。过期后下一个请求从它自己的消息历史重新开始累积。需要账号的 Worker 支持 session_memory_ttl_v1，较旧的 Worker 照旧按 24 小时',
+    thread: '线程状态有效期',
+    threadHint: 'cc_prev_req、轮次位置、prompt 哈希与 id、message id、子代理派生上下文',
+    tools: '工具清单有效期',
+    toolsHint: '本会话用过的工具名单，主线程与子代理共用，跨压缩保留',
+    presets: { 3600: '1 小时', 86400: '24 小时', 604800: '7 天' },
+    seconds: '秒',
+    custom: '自定义秒数',
+    range: '60 秒到 30 天（2592000 秒）的整数'
   },
   buildAttachments: {
     client: '保留客户端',

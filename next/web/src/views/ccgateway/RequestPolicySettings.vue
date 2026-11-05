@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Request policy of the CCGateway (CONTRACTS §53, request levels): the level and
 // the four layers it enables. The level card lives here; billing, environment
-// and prompt are the layer cards, which read the shared context below.
+// and prompt are the layer cards, which read the shared context below, as does
+// the session memory card (every level, 2026-11-05).
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SChip, SDisclosure, SSegmented, SSelect, SSettingRow, SSettingsGroup } from '@sub2api/ui'
@@ -14,6 +15,7 @@ import { providePolicyLayers } from './usePolicyLayerContext'
 import BillingLayerCard from './policy/BillingLayerCard.vue'
 import EnvironmentLayerCard from './policy/EnvironmentLayerCard.vue'
 import PromptLayerCard from './policy/PromptLayerCard.vue'
+import SessionMemoryCard from './policy/SessionMemoryCard.vue'
 
 const policy = defineModel<RequestPolicy>({ required: true })
 const overrides = defineModel<FeatureOverrides>('overrides', { default: () => ({}) })
@@ -180,6 +182,7 @@ const identityRules = computed(() => {
 
     <EnvironmentLayerCard />
     <PromptLayerCard />
+    <SessionMemoryCard />
     <SDisclosure :label="t('ccgateway.layers.rules')">
       <p>{{ t('ccgateway.layers.rulesHint') }}</p>
     </SDisclosure>

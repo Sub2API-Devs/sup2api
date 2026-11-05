@@ -75,7 +75,7 @@ async function remote(layer: 'global' | 'group') {
 }
 async function accountEditor() {
   const w = shallowMount(AccountEditor, { props: { account, accountType }, global: { plugins: [i18n], stubs: {
-    AccountFeatureSettings: false, RequestPolicySettings: false, BillingLayerCard: false, EnvironmentLayerCard: false, PromptLayerCard: false, SDisclosure: false, SSelect: false, SSegmented: false, SOptionMatrix: false, SChip: false, SSwitch: false,
+    AccountFeatureSettings: false, RequestPolicySettings: false, BillingLayerCard: false, EnvironmentLayerCard: false, PromptLayerCard: false, SessionMemoryCard: false, SDisclosure: false, SSelect: false, SSegmented: false, SOptionMatrix: false, SChip: false, SSwitch: false,
     SSettingsGroup: { template: '<section><slot name="actions" /><slot /></section>' }, SSettingRow: { template: '<div><slot /></div>' },
     SCard: { template: '<div><slot name="title" /><slot name="actions" /><slot /></div>' }, SField: { template: '<div><slot /></div>' }, SHint: { template: '<p><slot /></p>' },
     SInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
@@ -346,6 +346,45 @@ describe('editor payloads for the core contract', () => {
     expect(body.cc_feature_policy.overrides).toEqual({ build_billing_entrypoint: 'sdk-cli', build_billing_sources: { cc_version: 'client', cc_entrypoint: 'client' }, first_party_shape: false })
     cases.push({ name: 'account-first-party-shape-off', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
       expect: { level: 'low', first_party_shape: 'false' } })
+    editor.unmount()
+
+    // session_memory (2026-11-05, SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.7):
+    // 24 hours unless chosen; the core sends only what differs from the
+    // default, and nothing to a Worker without session_memory_ttl_v1 (the
+    // core fixture records that too). Global: thread state 1 hour, tools 120 s.
+    saved = savedConfig({})
+    w = await remote('global')
+    await pick(w, 'session-memory-thread_ttl_seconds-preset', 0)
+    const tools = w.get<HTMLInputElement>('input[data-testid="session-memory-tools_ttl_seconds-input"]')
+    tools.element.value = '120'
+    await tools.trigger('change')
+    body = await submit(w)
+    expect(body.request_policy.session_memory).toEqual({ thread_ttl_seconds: 3600, tools_ttl_seconds: 120 })
+    cases.push({ name: 'global-session-memory', layer: 'global', group_id: 0, saved: jsonCopy(saved), body,
+      expect: { level: 'low', 'session_memory.thread_ttl_seconds': '3600', 'session_memory.tools_ttl_seconds': '120' } })
+    w.unmount()
+    // Group 3 customizes it over a global with a 1-hour thread state: both
+    // are written, the tools set kept 7 days.
+    saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: {} } }, { ...defaultRequestPolicy(), session_memory: { thread_ttl_seconds: 3600 } })
+    w = await remote('group')
+    await layerMode(w, 'session', 'custom')
+    await pick(w, 'session-memory-tools_ttl_seconds-preset', 2)
+    body = await submit(w)
+    expect(body.cc_feature_groups[3].overrides).toEqual({ session_memory: { thread_ttl_seconds: 3600, tools_ttl_seconds: 604800 } })
+    cases.push({ name: 'group-session-memory', layer: 'group', group_id: 3, saved: jsonCopy(saved), body,
+      expect: { 'session_memory.thread_ttl_seconds': '3600', 'session_memory.tools_ttl_seconds': '604800' } })
+    w.unmount()
+    // Account 9 customizes it under group 3 (following the global 1 hour)
+    // and keeps its thread state 7 days: what is back at 24 hours is not sent.
+    saved = savedConfig({ 3: { enabled: true, allow_account_override: true, overrides: {} } }, { ...defaultRequestPolicy(), session_memory: { thread_ttl_seconds: 3600 } })
+    editor = await accountEditor()
+    await layerMode(editor, 'session', 'custom'); await settle()
+    await pick(editor, 'session-memory-thread_ttl_seconds-preset', 2); await settle()
+    body = await submit(editor)
+    expect(body.cc_feature_policy.overrides).toEqual({ session_memory: { thread_ttl_seconds: 604800, tools_ttl_seconds: 86400 } })
+    cases.push({ name: 'account-session-memory', layer: 'account', group_id: 3, saved: jsonCopy(saved), body: body.cc_feature_policy,
+      expect: { 'session_memory.thread_ttl_seconds': '604800', 'session_memory.tools_ttl_seconds': '86400' } })
+    editor.unmount()
 
     // No editor writes the retired identity lines any more.
     for (const c of cases) expect(JSON.stringify(c.body), c.name).not.toContain('build_identity_lines')
@@ -353,6 +392,6 @@ describe('editor payloads for the core contract', () => {
     const generated = JSON.stringify({ cases }, null, 2) + '\n'
     if (process.env.CCG_UPDATE_CONTRACT_FIXTURES) writeFileSync(fixturePath, generated)
     expect(JSON.parse(readFileSync(fixturePath, 'utf8')), 'editor payloads changed: regenerate with CCG_UPDATE_CONTRACT_FIXTURES=1 and run the core contract test').toEqual(JSON.parse(generated))
-  // Twenty-one editor mounts in one test: past the 5 s default under a full parallel run.
+  // Twenty-four editor mounts in one test: past the 5 s default under a full parallel run.
   }, 60000)
 })

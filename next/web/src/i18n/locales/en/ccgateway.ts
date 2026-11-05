@@ -44,7 +44,7 @@ export default {
       high: "Low + Claude Code's system prompt and common tools, more tools optional"
     },
     defaultMark: ' (default)',
-    layerNames: { billing: 'Billing header', identity: 'Identity line', environment: 'Environment', prompt: 'Prompt and tools' },
+    layerNames: { billing: 'Billing header', identity: 'Identity line', environment: 'Environment', prompt: 'Prompt and tools', session: 'Session memory' },
     from: { billing: 'Every level', identity: 'From micro', environment: 'From low', prompt: 'Prompt from low, tools at high' },
     locked: 'Applies from {level}; saved settings are kept.',
     lockedPlain: 'Applies from {level}.',
@@ -97,6 +97,19 @@ export default {
       ToolSearch: 'When chosen, the deferred placeholder tool goes with it as in official Claude Code, and WebSearch and NotebookEdit are deferred, not sent',
       deferred: 'Sent with the full definition without ToolSearch; with ToolSearch not sent, as on the official first turn'
     }
+  },
+  sessionMemory: {
+    title: 'Session memory',
+    from: 'Every level',
+    hint: "How long, unused, what the Worker remembers of an upstream session is kept: the thread state (cc_prev_req, turn, prompt and message IDs) and the tools the session used (x-claude-code-sandy-plover). After it expires the next request starts again from its own message history. Needs the account's Worker to support session_memory_ttl_v1; older Workers keep 24 hours",
+    thread: 'Thread state lifetime',
+    threadHint: 'cc_prev_req, turn position, prompt hash and ID, message ID, subagent spawn context',
+    tools: 'Tools-used lifetime',
+    toolsHint: 'The tools the session used, shared by the main thread and its subagents, kept across compaction',
+    presets: { 3600: '1 hour', 86400: '24 hours', 604800: '7 days' },
+    seconds: 's',
+    custom: 'Seconds',
+    range: 'A whole number from 60 seconds to 30 days (2592000 seconds)'
   },
   buildAttachments: {
     client: 'Keep client',

@@ -37,6 +37,7 @@ var (
 	reportedImage   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,299}$`)
 	reportedVersion = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 	resultLine      = regexp.MustCompile(`(?m)^CCG_RESULT=([a-z_]+)\s*$`)
+	stateLine       = regexp.MustCompile(`(?m)^CCG_STATE=([a-z_]+)\s*$`)
 	rollbackLine    = regexp.MustCompile(`(?m)^CCG_ROLLBACK=(restored|removed|restore_failed)\s*$`)
 
 	installScriptLimit = 15 * time.Minute
@@ -122,7 +123,7 @@ echo CCG_RESULT=not_installed
 // validImage only (no quotes, spaces or shell characters), never other
 // input.
 func installScript(img RuntimeImages, workloadOptional bool) (string, error) {
-	for _, ref := range []string{img.App, img.Egress, img.Controller, img.Guard} {
+	for _, ref := range []string{img.App, img.Egress, img.Controller, img.Guard, StateImage} {
 		if !validImage(ref) {
 			return "", errors.New("invalid runtime image reference")
 		}
@@ -143,6 +144,7 @@ APP='` + img.App + `'
 EGRESS='` + img.Egress + `'
 CTL='` + img.Controller + `'
 GUARD='` + img.Guard + `'
+STATEIMG='` + StateImage + `'
 ROOT='` + runtimeRoot + `'
 ENVF='` + runtimeEnvFile + `'
 DIR='` + composeDir + `'
@@ -573,6 +575,11 @@ func (s *Service) installRuntime(ctx context.Context, cfg Config, uid int64, wor
 			err = err.WithDetails(map[string]any{"rollback": rollback})
 		}
 		return cfg, err
+	}
+	// The session state Valkey is best effort (CCG_STATE, runtime_compose.go):
+	// without it the Workers keep their memory in process.
+	if m := stateLine.FindAllStringSubmatch(res.Output, -1); len(m) > 0 && m[len(m)-1][1] != "started" {
+		slog.WarnContext(ctx, "CCGateway session state not started; Workers keep their memory in process", "result", m[len(m)-1][1])
 	}
 	if !s.waitHealthy(ctx, cfg, img) {
 		restored := "rollback_failed"

@@ -472,6 +472,10 @@ func mergeStoredPolicy(p *RequestPolicy, old RequestPolicy) {
 	if p.FirstPartyShape == nil {
 		p.FirstPartyShape = old.FirstPartyShape
 	}
+	// Nor one from before 2026-11-05 session_memory.
+	if p.SessionMemory == nil {
+		p.SessionMemory = old.SessionMemory
+	}
 	p.BuildAttachmentSources = mergeSourceMap(p.BuildAttachmentSources, old.BuildAttachmentSources)
 	p.RequestIdentitySources = mergeSourceMap(p.RequestIdentitySources, old.RequestIdentitySources)
 	// A save without a level (a console from before levels) keeps the stored

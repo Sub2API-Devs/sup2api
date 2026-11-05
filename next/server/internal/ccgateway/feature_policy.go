@@ -33,6 +33,9 @@ type FeatureOverrides struct {
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
 	// FirstPartyShape overrides RequestPolicy.FirstPartyShape (2026-11-03).
 	FirstPartyShape *bool `json:"first_party_shape,omitempty"`
+	// SessionMemory overrides RequestPolicy.SessionMemory field by field
+	// (2026-11-05): a zero field inherits.
+	SessionMemory *features.SessionMemoryPolicy `json:"session_memory,omitempty"`
 }
 
 func featureRevisionConflict() error {
@@ -117,6 +120,7 @@ func copyPolicy(p RequestPolicy) RequestPolicy {
 	if p.FirstPartyShape != nil {
 		p.FirstPartyShape = firstPartyShapeOrDefault(p.FirstPartyShape)
 	}
+	p.SessionMemory = cloneSessionMemory(p.SessionMemory)
 	p.RequestIdentitySources = cloneSourceMap(p.RequestIdentitySources)
 	return p
 }
@@ -181,6 +185,7 @@ var layerFields = []layerField{
 		func(o FeatureOverrides) map[string]string { return o.BuildBillingSources },
 		func(p *RequestPolicy) *map[string]string { return (*map[string]string)(&p.BuildBillingSources) }),
 	boolField("first_party_shape", func(o FeatureOverrides) *bool { return o.FirstPartyShape }, func(p *RequestPolicy) **bool { return &p.FirstPartyShape }, true),
+	sessionMemoryField(),
 	injectionField(),
 	{keys: []string{"level", "relay_mode"}, apply: applyLevelOverride},
 }
@@ -255,6 +260,39 @@ func sourceField(name string, fields []string, from func(FeatureOverrides) map[s
 					(*m)[k] = "client"
 				}
 			}
+		}}
+}
+
+// sessionMemoryField: the two lifetimes override on their own; a zero one
+// inherits. An unset global lifetime is the default, so a resolved policy
+// shows both.
+func sessionMemoryField() layerField {
+	const thread, tools = "session_memory.thread_ttl_seconds", "session_memory.tools_ttl_seconds"
+	return layerField{keys: []string{thread, tools},
+		apply: func(p *RequestPolicy, o FeatureOverrides) []string {
+			if o.SessionMemory == nil {
+				return nil
+			}
+			out := features.SessionMemoryPolicy{}
+			if p.SessionMemory != nil {
+				out = *p.SessionMemory
+			}
+			var set []string
+			if v := o.SessionMemory.ThreadTTLSeconds; v != 0 {
+				out.ThreadTTLSeconds = v
+				set = append(set, thread)
+			}
+			if v := o.SessionMemory.ToolsTTLSeconds; v != 0 {
+				out.ToolsTTLSeconds = v
+				set = append(set, tools)
+			}
+			if set != nil {
+				p.SessionMemory = &out
+			}
+			return set
+		},
+		fill: func(p *RequestPolicy) {
+			p.SessionMemory = &features.SessionMemoryPolicy{ThreadTTLSeconds: p.SessionMemory.ThreadTTL(), ToolsTTLSeconds: p.SessionMemory.ToolsTTL()}
 		}}
 }
 
@@ -467,6 +505,11 @@ func workerPolicy(p RequestPolicy) features.WorkerPolicy {
 	// request path drops it for a Worker that does not declare the
 	// conversion (withConfirmedShape), so it is never a requirement.
 	wire.FirstPartyShape = firstPartyShapeOrDefault(p.FirstPartyShape)
+	// At every level, only the lifetimes off the default (2026-11-05); the
+	// request path drops it for a Worker that does not declare
+	// session_memory_ttl_v1 (withConfirmedSessionMemory), so it is never a
+	// requirement either.
+	wire.SessionMemory = wireSessionMemory(p.SessionMemory)
 	return wire
 }
 

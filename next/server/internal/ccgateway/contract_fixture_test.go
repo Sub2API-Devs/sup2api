@@ -14,8 +14,9 @@ import (
 
 // coreWorkerFixture is the producer half of the core → Worker contract: the
 // policy header the core sends for each editor case below to a Worker that
-// declares every capability (plus, for the first-party-shape cases, what a
-// Worker without build_first_party_shape_v1 gets). The Worker's tests
+// declares every capability (plus, for the first-party-shape and
+// session-memory cases, what a Worker without build_first_party_shape_v1 or
+// session_memory_ttl_v1 gets). The Worker's tests
 // (engine/contract_fixture_test.go) read the same bytes. Regenerate with
 // CCG_UPDATE_CONTRACT_FIXTURES=1 after an intended change.
 var coreWorkerFixture = filepath.Join("..", "..", "..", "plugins", "ccgateway", "companions", "contracts", "testdata", "core-worker-policies.json")
@@ -90,7 +91,7 @@ func TestEditorPayloadsDecodeInTheCore(t *testing.T) {
 			var keys map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal(raw, &keys))
 			for key := range keys {
-				require.Contains(t, []string{"schema_version", "relay_mode", "cli_version", "build_billing_sources", "build_billing_entrypoint", "build_attachment_sources", "build_injection", "first_party_shape"}, key)
+				require.Contains(t, []string{"schema_version", "relay_mode", "cli_version", "build_billing_sources", "build_billing_entrypoint", "build_attachment_sources", "build_injection", "first_party_shape", "session_memory"}, key)
 			}
 			require.NotNil(t, wire.FirstPartyShape, "explicit for a Worker that declares the conversion")
 			wires = append(wires, wireCase{Name: strings.ReplaceAll(tc.Layer+"/"+tc.Name, " ", "-"), Wire: string(raw)})
@@ -101,6 +102,14 @@ func TestEditorPayloadsDecodeInTheCore(t *testing.T) {
 				older, err := json.Marshal(withConfirmedShape(wire, nil))
 				require.NoError(t, err)
 				require.NotContains(t, string(older), "first_party_shape")
+				wires = append(wires, wireCase{Name: strings.ReplaceAll(tc.Layer+"/"+tc.Name, " ", "-") + "/worker-without-capability", Wire: string(older)})
+			}
+			// And for a Worker without session_memory_ttl_v1: no
+			// session_memory (withConfirmedSessionMemory, 2026-11-05).
+			if strings.Contains(tc.Name, "session-memory") {
+				older, err := json.Marshal(withConfirmedSessionMemory(wire, nil))
+				require.NoError(t, err)
+				require.NotContains(t, string(older), "session_memory")
 				wires = append(wires, wireCase{Name: strings.ReplaceAll(tc.Layer+"/"+tc.Name, " ", "-") + "/worker-without-capability", Wire: string(older)})
 			}
 		})

@@ -53,6 +53,11 @@ services:
       CCG_GUARD_PROJECT: ${CCG_PROJECT:-ccgateway}
       CCG_GUARD_PROJECT_DIR: ${CCG_PROJECT_DIR:-/opt/ccgateway}
       CCG_GUARD_RUNTIME_ROOT: ${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}
+      # New account containers get <runtime root>/state (the session state
+      # socket) read-only at /run/ccg-state; 0 keeps the two mounts of before
+      # (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4). The install script creates
+      # the directory before the guard starts.
+      CCG_GUARD_SESSION_STATE: "${CCG_GUARD_SESSION_STATE:-1}"
     volumes:
       - {type: bind, source: /var/run/docker.sock, target: /var/run/docker.sock, bind: {create_host_path: false}}
       - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}", target: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}", bind: {create_host_path: false}}
@@ -88,6 +93,8 @@ services:
       CCG_GUARD_TOKEN: ${CCG_GUARD_TOKEN:?}
     volumes:
       - {type: bind, source: "${CCG_CONTROLLER_DATA:-/opt/ccgateway-controller}", target: /data, bind: {create_host_path: false}}
+      # The session state socket, for the per-account ACL users (§7.5).
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state", target: /run/ccg-state, read_only: true, bind: {create_host_path: false}}
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     read_only: true
@@ -129,6 +136,40 @@ services:
     cpus: 2
     labels: {io.sup2api.ccgateway.shared: "${CCG_PREFIX:-ccg}"}
     logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+
+  # The session memory of the account Workers (SESSION-MEMORY-TOOLS-USED-DESIGN.md
+  # §5, §7.3): one Valkey per host, a unix socket only (no network at all),
+  # nothing persisted (a restart is every session expiring). The users are the
+  # admin user of the controller from the ACL file the install script writes and
+  # one user per account the controller adds at run time; default is off.
+  # The entrypoint of the image is bypassed: as root it chowns and drops to the
+  # valkey user, which needs CAP_CHOWN and CAP_SETUID (all dropped here).
+  state:
+    image: ${CCG_STATE_IMAGE:-valkey/valkey:9.1.2}
+    container_name: ${CCG_PREFIX:-ccg}-state
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    user: "0:0"
+    entrypoint: ["valkey-server"]
+    command: ["--port", "0", "--unixsocket", "/run/ccg-state/valkey.sock", "--unixsocketperm", "666",
+              "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru",
+              "--protected-mode", "yes", "--aclfile", "/etc/valkey/users.acl"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/data:size=16m,mode=0700"]
+    volumes:
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state", target: /run/ccg-state, bind: {create_host_path: false}}
+      # The directory, not the file: a rename by the installer then reaches the
+      # container on its next start.
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state-conf", target: /etc/valkey, read_only: true, bind: {create_host_path: false}}
+    mem_limit: 320m
+    pids_limit: 64
+    cpus: 1
+    stop_grace_period: 10s
+    labels: {io.sup2api.ccgateway.state: "${CCG_PREFIX:-ccg}"}
+    logging: *log
 
 networks:
   control:

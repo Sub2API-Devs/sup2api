@@ -342,7 +342,8 @@ func (a *attempt) attachPolicy(clone *http.Request, path string) *outcome {
 	// request and probe confirms the Worker/CLI first, whatever the global,
 	// group or account settings resolved to. A path not confirmed never
 	// carries a tool its CLI may not render, nor first_party_shape (a Worker
-	// that declares the conversion reads its absence as on).
+	// that declares the conversion reads its absence as on), nor
+	// session_memory (an older Worker refuses the key).
 	switch path {
 	case "/v1/messages", "/v1/ccgateway/probe":
 		if policy, err = a.t.s.requireRequestPolicyCapabilities(a.ctx, a.client, a.base, a.modelKey, a.route, policy); err != nil {

@@ -20,6 +20,12 @@ const (
 	// guardAPIFeature is what such a controller reports in /health.features.
 	guardAPILabel   = "io.sup2api.ccgateway.guard-api"
 	guardAPIFeature = "guard-api-v1"
+
+	// StateImage is the session state Valkey (SESSION-MEMORY-TOOLS-USED-DESIGN.md
+	// §5.1): the version the core's own cache runs on ovh (2026-11-05), pinned
+	// to its minor release. The install script writes it into .env as
+	// CCG_STATE_IMAGE; the compose template has it as the default too.
+	StateImage = "valkey/valkey:9.1.2"
 )
 
 // composeTemplate is /opt/ccgateway/compose.yml, written verbatim through a
@@ -172,7 +178,9 @@ compose_rollback() {
 // rename only (one file system), conflict fails, mount sources of account
 // and gateway containers stay. Every move is journaled in $DATA/.adopting
 // first; the finished list becomes $DATA/.adopted, and an existing .adopted
-// means done.
+// means done. state/ and state-conf/ are the session state Valkey's mount
+// sources (composeState makes them before adopt runs): they stay, like the
+// gateway's shared-egress files, and are not leftovers to journal.
 const composeAdopt = `restore_env() { [ -e "$DIR/.env.prev" ] && mv -f "$DIR/.env.prev" "$DIR/.env"; }
 restore_guard() { restore_env && dc up -d --no-deps guard >/dev/null 2>&1; }
 adopt_mv() {
@@ -200,7 +208,7 @@ adopt() {
     present "$f" || continue
     n=${f#"$ROOT"/}
     case "$n" in
-      shared-egress|shared-egress/boot.json|shared-egress/boot.nft|shared-egress/dns.json|shared-egress/active.nft|shared-egress/operation.json) continue ;;
+      shared-egress|shared-egress/boot.json|shared-egress/boot.nft|shared-egress/dns.json|shared-egress/active.nft|shared-egress/operation.json|state|state-conf) continue ;;
       */*) ;;
       *) if [ -d "$f" ] && [ ! -L "$f" ] && is_key "$n"; then continue; fi ;;
     esac
@@ -210,15 +218,56 @@ adopt() {
 }
 `
 
+// composeState sets up the session state Valkey (SESSION-MEMORY-TOOLS-USED-
+// DESIGN.md §5, §7.2, §7.3, §7.5). state_dirs is required: a guard with
+// CCG_GUARD_SESSION_STATE=1 checks state/ (root 0755) before every new
+// account container. state_up is best effort and prints CCG_STATE=<result>:
+// without Valkey the Workers keep their memory in process, so the install
+// goes on. The admin password is made once ($DATA/state-admin.secret, 0600,
+// one line of 64 hex digits) and never replaced; users.acl holds only its
+// SHA-256 and is rewritten from it every time (the same bytes unless the
+// secret changed, and then Valkey is recreated to load it: it reads the file
+// only at start). Every step is idempotent.
+const composeState = `state_dirs() {
+  mkdir -p "$ROOT/state" "$ROOT/state-conf" && chmod 755 "$ROOT/state" && chmod 700 "$ROOT/state-conf"
+}
+state_up() {
+  docker image inspect "$STATEIMG" >/dev/null 2>&1 || docker pull -q "$STATEIMG" >/dev/null 2>&1 || { echo CCG_STATE=image_pull_failed; return 1; }
+  if [ ! -e "$DATA/state-admin.secret" ]; then
+    if ! { { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; echo; } > "$DATA/state-admin.secret.tmp" \
+         && chmod 600 "$DATA/state-admin.secret.tmp" && mv -f "$DATA/state-admin.secret.tmp" "$DATA/state-admin.secret"; }; then
+      rm -f "$DATA/state-admin.secret.tmp"; echo CCG_STATE=secret_failed; return 1
+    fi
+  fi
+  # One line of 32-256 hex digits (the controller reads the same rule); the
+  # SHA-256 is of that line without its newline.
+  PW=$(sed -n '1{/^[0-9a-f]\{32,256\}$/p;}' "$DATA/state-admin.secret" 2>/dev/null)
+  [ -n "$PW" ] || { echo CCG_STATE=secret_invalid; return 1; }
+  H=$(printf '%s' "$PW" | sha256sum | sed 's/ .*//')
+  printf '%s\n' "$H" | grep -Eq '^[0-9a-f]{64}$' || { echo CCG_STATE=secret_failed; return 1; }
+  ACL=$ROOT/state-conf/users.acl
+  if ! { printf 'user default off\nuser ccg-controller on #%s resetkeys resetchannels -@all +acl|setuser +acl|deluser +acl|list +acl|getuser +info +ping\n' "$H" > "$ACL.tmp" \
+       && chmod 644 "$ACL.tmp"; }; then
+    rm -f "$ACL.tmp"; echo CCG_STATE=acl_failed; return 1
+  fi
+  RECREATE=
+  [ ! -e "$ACL" ] || [ "$(cat "$ACL.tmp")" = "$(cat "$ACL")" ] || RECREATE=--force-recreate
+  mv -f "$ACL.tmp" "$ACL" || { rm -f "$ACL.tmp"; echo CCG_STATE=acl_failed; return 1; }
+  dc up -d --no-deps $RECREATE state >/dev/null 2>&1 || { echo CCG_STATE=state_unavailable; return 1; }
+  echo CCG_STATE=started
+}
+`
+
 // composeInstallBody is the compose path of the install script, after the
 // docker run branch.
 func composeInstallBody() string {
 	return `# ---- compose path (CONTRACTS §76) ----
-` + composeCommon + composeAdopt + `docker compose version >/dev/null 2>&1 || { echo CCG_RESULT=compose_unavailable; exit 1; }
+` + composeCommon + composeAdopt + composeState + `docker compose version >/dev/null 2>&1 || { echo CCG_RESULT=compose_unavailable; exit 1; }
 # The old bridge guard would fight the guard over the same chain.
 if systemctl is-active --quiet ccgateway-bridge-guard 2>/dev/null; then echo CCG_RESULT=bridge_guard_active; exit 1; fi
 docker image inspect "$GUARD" >/dev/null 2>&1 || docker pull -q "$GUARD" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
 mkdir -p "$ROOT" "$DATA" "$DIR" "$STATE" && chmod 700 "$ROOT" "$DATA" "$DIR" "$STATE" || { echo CCG_RESULT=install_failed; exit 1; }
+state_dirs || { echo CCG_RESULT=install_failed; exit 1; }
 # Moving the data must be a rename on one file system.
 [ "$(stat -c %d "$ROOT")" = "$(stat -c %d "$DATA")" ] || { echo CCG_RESULT=data_cross_device; exit 1; }
 lock || { echo CCG_RESULT=compose_locked; exit 1; }
@@ -239,8 +288,8 @@ printf '%s\n' "$TOKEN" | grep -Eq '^[0-9a-f]{64}$' || { echo CCG_RESULT=install_
 GW=$(sed -n 's/^CCG_GATEWAY_IMAGE=\([A-Za-z0-9][A-Za-z0-9._\/:@-]*\)$/\1/p' "$DIR/.env" 2>/dev/null | head -n 1)
 [ -n "$GW" ] || GW=$EGRESS
 [ -e "$DIR/.env.prev" ] || [ ! -e "$DIR/.env" ] || cp -p "$DIR/.env" "$DIR/.env.prev" || { echo CCG_RESULT=install_failed; exit 1; }
-if ! { { grep -E '^CCG_[A-Z0-9_]+=' "$DIR/.env" 2>/dev/null | grep -Ev '^CCG_(GUARD_IMAGE|CONTROLLER_IMAGE|GATEWAY_IMAGE|GUARD_TOKEN)='
-       printf 'CCG_GUARD_IMAGE=%s\nCCG_CONTROLLER_IMAGE=%s\nCCG_GATEWAY_IMAGE=%s\nCCG_GUARD_TOKEN=%s\n' "$GUARD" "$CTL" "$GW" "$TOKEN"; } > "$DIR/.env.tmp" \
+if ! { { grep -E '^CCG_[A-Z0-9_]+=' "$DIR/.env" 2>/dev/null | grep -Ev '^CCG_(GUARD_IMAGE|CONTROLLER_IMAGE|GATEWAY_IMAGE|GUARD_TOKEN|STATE_IMAGE)='
+       printf 'CCG_GUARD_IMAGE=%s\nCCG_CONTROLLER_IMAGE=%s\nCCG_GATEWAY_IMAGE=%s\nCCG_GUARD_TOKEN=%s\nCCG_STATE_IMAGE=%s\n' "$GUARD" "$CTL" "$GW" "$TOKEN" "$STATEIMG"; } > "$DIR/.env.tmp" \
      && chmod 600 "$DIR/.env.tmp" && mv -f "$DIR/.env.tmp" "$DIR/.env"; }; then
   rm -f "$DIR/.env.tmp"; restore_env; echo CCG_RESULT=install_failed; exit 1
 fi
@@ -252,6 +301,8 @@ if [ -z "$NET" ]; then
     || { restore_env; echo CCG_RESULT=control_network_conflict; exit 1; }
 elif [ "$NET" != 172.29.255.0/29 ]; then restore_env; echo CCG_RESULT=control_network_conflict; exit 1; fi
 dc config -q >/dev/null 2>&1 || { restore_env; echo CCG_RESULT=compose_config_failed; exit 1; }
+# The session state before the guard that mounts it into new containers.
+state_up
 # The guard first: only an explicit install updates it.
 if ! dc up -d --no-deps guard >/dev/null 2>&1; then
   restore_guard; echo CCG_RESULT=guard_unavailable; exit 1

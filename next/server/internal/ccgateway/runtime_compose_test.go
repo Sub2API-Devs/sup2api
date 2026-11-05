@@ -45,7 +45,7 @@ func legacyBranch(t *testing.T, script string) string {
 			break
 		}
 		switch {
-		case strings.HasPrefix(l, "GUARD='"), strings.HasPrefix(l, "DIR='"), strings.HasPrefix(l, "DATA='"), strings.HasPrefix(l, "STATE='"):
+		case strings.HasPrefix(l, "GUARD='"), strings.HasPrefix(l, "DIR='"), strings.HasPrefix(l, "DATA='"), strings.HasPrefix(l, "STATE='"), strings.HasPrefix(l, "STATEIMG='"):
 			// New constants: assignments only.
 			if strings.ContainsAny(strings.TrimSuffix(strings.SplitN(l, "=", 2)[1], "\n"), "$`;|&") {
 				t.Fatalf("new line is more than an assignment: %q", l)
@@ -103,6 +103,11 @@ func TestInstallScriptLegacyBranchUnchanged(t *testing.T) {
 // composeService is the subset of a compose service the policy checks.
 type composeService struct {
 	Image       string            `yaml:"image"`
+	User        string            `yaml:"user"`
+	Entrypoint  []string          `yaml:"entrypoint"`
+	Command     []string          `yaml:"command"`
+	Tmpfs       []string          `yaml:"tmpfs"`
+	Labels      map[string]string `yaml:"labels"`
 	NetworkMode string            `yaml:"network_mode"`
 	Pid         string            `yaml:"pid"`
 	Privileged  bool              `yaml:"privileged"`
@@ -150,7 +155,7 @@ func TestComposeTemplatePolicy(t *testing.T) {
 		names = append(names, n)
 	}
 	sort.Strings(names)
-	if strings.Join(names, ",") != "controller,egress,guard" {
+	if strings.Join(names, ",") != "controller,egress,guard,state" {
 		t.Fatalf("services: %v", names)
 	}
 
@@ -161,7 +166,10 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	if strings.Join(ctl.CapDrop, ",") != "ALL" || !ctl.ReadOnly || strings.Join(ctl.SecurityOpt, ",") != "no-new-privileges:true" {
 		t.Fatalf("controller hardening: %v %v %v", ctl.CapDrop, ctl.ReadOnly, ctl.SecurityOpt)
 	}
-	if len(ctl.Volumes) != 1 || ctl.Volumes[0].Target != "/data" || ctl.Volumes[0].Source != "${CCG_CONTROLLER_DATA:-/opt/ccgateway-controller}" {
+	// The data, and the session state socket read-only (§7.3).
+	if len(ctl.Volumes) != 2 || ctl.Volumes[0].Target != "/data" || ctl.Volumes[0].Source != "${CCG_CONTROLLER_DATA:-/opt/ccgateway-controller}" ||
+		ctl.Volumes[1].Target != "/run/ccg-state" || ctl.Volumes[1].Source != "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state" || !ctl.Volumes[1].ReadOnly ||
+		ctl.Volumes[1].Bind.CreateHostPath == nil || *ctl.Volumes[1].Bind.CreateHostPath {
 		t.Fatalf("controller volumes: %+v", ctl.Volumes)
 	}
 	if len(ctl.Ports) != 1 || !strings.HasPrefix(ctl.Ports[0], "127.0.0.1:") {
@@ -220,7 +228,8 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	if strings.Join(g.Healthcheck.Test, " ") != "CMD /usr/local/bin/ccgateway-guard ready" {
 		t.Fatalf("guard healthcheck: %v", g.Healthcheck.Test)
 	}
-	if g.Environment["CCG_GUARD_TOKEN"] != "${CCG_GUARD_TOKEN:?}" || g.Environment["CCG_GUARD_CONTROL_DNS"] != "${CCG_CONTROL_DNS:-1}" {
+	if g.Environment["CCG_GUARD_TOKEN"] != "${CCG_GUARD_TOKEN:?}" || g.Environment["CCG_GUARD_CONTROL_DNS"] != "${CCG_CONTROL_DNS:-1}" ||
+		g.Environment["CCG_GUARD_SESSION_STATE"] != "${CCG_GUARD_SESSION_STATE:-1}" {
 		t.Fatalf("guard environment: %v", g.Environment)
 	}
 	// L7 2026-11-01: on a 384-CPU host Go's default thread pool exceeds
@@ -239,6 +248,43 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	if e := doc.Services["egress"]; strings.Join(e.Profiles, ",") != "egress" || e.NetworkMode != "" || e.Privileged {
 		t.Fatalf("egress: %+v", e)
 	}
+	// The session state Valkey (§5.1, §7.3): no network at all, root in the
+	// container (it creates the socket in the root 0755 state/), nothing
+	// added back, the image's chown-and-setuid entrypoint bypassed, the ACL
+	// directory read-only, no persistence, no password on the command line,
+	// never in the egress profile and never labelled as the shared gateway.
+	st := doc.Services["state"]
+	if st.Image != "${CCG_STATE_IMAGE:-"+StateImage+"}" || st.NetworkMode != "none" || st.User != "0:0" || st.Privileged || len(st.CapAdd) != 0 || len(st.Ports) != 0 || len(st.Profiles) != 0 {
+		t.Fatalf("state: %+v", st)
+	}
+	if strings.Join(st.CapDrop, ",") != "ALL" || !st.ReadOnly || strings.Join(st.SecurityOpt, ",") != "no-new-privileges:true" || st.MemLimit != "320m" {
+		t.Fatalf("state hardening: %+v", st)
+	}
+	if strings.Join(st.Entrypoint, " ") != "valkey-server" {
+		t.Fatalf("state entrypoint: %v", st.Entrypoint)
+	}
+	cmd := strings.Join(st.Command, " ")
+	for _, want := range []string{"--port 0 ", "--unixsocket /run/ccg-state/valkey.sock ", "--unixsocketperm 666 ", "--save  ", "--appendonly no ",
+		"--maxmemory 256mb ", "--maxmemory-policy volatile-lru ", "--protected-mode yes ", "--aclfile /etc/valkey/users.acl"} {
+		if !strings.Contains(cmd+" ", want) {
+			t.Fatalf("state command lacks %q: %v", want, st.Command)
+		}
+	}
+	if strings.Contains(cmd, "requirepass") || strings.Contains(serviceBlock(t, "state"), "docker.sock") {
+		t.Fatalf("state command: %v", st.Command)
+	}
+	if len(st.Volumes) != 2 || st.Volumes[0].Source != "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state" || st.Volumes[0].Target != "/run/ccg-state" || st.Volumes[0].ReadOnly ||
+		st.Volumes[1].Source != "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state-conf" || st.Volumes[1].Target != "/etc/valkey" || !st.Volumes[1].ReadOnly {
+		t.Fatalf("state volumes: %+v", st.Volumes)
+	}
+	for _, v := range st.Volumes {
+		if v.Type != "bind" || v.Bind.CreateHostPath == nil || *v.Bind.CreateHostPath {
+			t.Fatalf("state mount %+v: the install script creates the directories", v)
+		}
+	}
+	if _, shared := st.Labels["io.sup2api.ccgateway.shared"]; shared {
+		t.Fatal("the state service carries the shared gateway label")
+	}
 	for name, n := range doc.Networks {
 		if !n.External {
 			t.Fatalf("network %s is not external", name)
@@ -251,6 +297,7 @@ func TestComposeTemplatePolicy(t *testing.T) {
 		"CCG_CONTROL_BRIDGE": "ccg-control0", "CCG_CONTROL_SUBNET": "172.29.255.0/29", "CCG_CONTROL_DNS": "1", "CCG_CHAIN_PREFIX": "CCG",
 		"CCG_PROJECT": "ccgateway", "CCG_PROJECT_DIR": composeDir, "CCG_RUNTIME_HOST_ROOT": runtimeRoot, "CCG_RUNTIME_ENV": runtimeEnvFile,
 		"CCG_GUARD_STATE": guardState, "CCG_CONTROLLER_PUBLISH": "8787", "CCG_CONTROLLER_DATA": controllerData,
+		"CCG_GUARD_SESSION_STATE": "1", "CCG_STATE_IMAGE": StateImage,
 	}
 	required := map[string]bool{"CCG_GUARD_IMAGE": true, "CCG_GUARD_TOKEN": true, "CCG_CONTROLLER_IMAGE": true, "CCG_GATEWAY_IMAGE": true}
 	seen := map[string]bool{}
@@ -282,6 +329,61 @@ func TestComposeTemplatePolicy(t *testing.T) {
 	script, _ := installScript(placeholderImages, false)
 	if !strings.Contains(script, "--subnet 172.29.255.0/29 --gateway 172.29.255.1") || !strings.Contains(script, "bridge.name=ccg-control0") {
 		t.Fatal("install script and template disagree on the control network")
+	}
+	// ... and writes the state image the template defaults to.
+	if !strings.Contains(script, "STATEIMG='"+StateImage+"'\n") || !validImage(StateImage) {
+		t.Fatal("install script and template disagree on the state image")
+	}
+}
+
+// covers: SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.3, §7.5, §11 step 3: what
+// the install script does for the session state Valkey, read off the text
+// (the Linux test runs it).
+func TestInstallScriptSessionState(t *testing.T) {
+	script, err := installScript(placeholderImages, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ordered := func(parts ...string) {
+		t.Helper()
+		at := 0
+		for _, p := range parts {
+			i := strings.Index(script[at:], p)
+			if i < 0 {
+				t.Fatalf("install script lacks %q after offset %d", p, at)
+			}
+			at += i + len(p)
+		}
+	}
+	// The directories before the guard that checks them, Valkey up before
+	// the guard, the guard before the controller.
+	ordered("\nstate_dirs || { echo CCG_RESULT=install_failed; exit 1; }\n", "\ndc config -q ", "\nstate_up\n", "\nif ! dc up -d --no-deps guard ", "dc up -d --no-deps controller")
+	for _, want := range []string{
+		`chmod 755 "$ROOT/state"`,
+		`if [ ! -e "$DATA/state-admin.secret" ]; then`,
+		`chmod 600 "$DATA/state-admin.secret.tmp"`,
+		`'1{/^[0-9a-f]\{32,256\}$/p;}'`,
+		`sha256sum`,
+		`printf 'user default off\nuser ccg-controller on #%s resetkeys resetchannels -@all +acl|setuser +acl|deluser +acl|list +acl|getuser +info +ping\n' "$H"`,
+		`chmod 644 "$ACL.tmp"`,
+		`dc up -d --no-deps $RECREATE state >/dev/null 2>&1`,
+		`CCG_STATE_IMAGE=%s\n`,
+		`GUARD_TOKEN|STATE_IMAGE)=`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("install script lacks %s", want)
+		}
+	}
+	// The password never reaches a command line or the output.
+	if strings.Contains(script, "requirepass") || strings.Contains(script, `echo "$PW"`) || strings.Contains(script, `CCG_STATE=$PW`) {
+		t.Fatal("the state password leaves the files")
+	}
+	// up only with a service name, never down (yml header).
+	named := regexp.MustCompile(`\bdc up -d --no-deps (\$RECREATE )?(guard|controller|state)\b`)
+	for _, l := range strings.Split(script, "\n") {
+		if strings.Contains(l, "dc down") || strings.Contains(l, "dc up") && !named.MatchString(l) {
+			t.Fatalf("dc up/down without a service: %q", l)
+		}
 	}
 }
 

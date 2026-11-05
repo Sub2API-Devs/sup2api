@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { attachmentAction, attachmentGroups, setAttachmentAction, customizeLayer, defaultRequestPolicy, featureDifferenceCount, featureLayers, followLayer, injectionTools, layerCustomized, legacyLevel, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelHasTools, levelInjection, levelOf, mergeFeaturePolicy, normalizeRequestPolicy, relayModeForLevel, savedOverrides, validFeatureOverrides, validRequestPolicy, type BuildInjection, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
+import { attachmentAction, attachmentGroups, setAttachmentAction, customizeLayer, defaultRequestPolicy, featureDifferenceCount, featureLayers, followLayer, injectionTools, layerCustomized, legacyLevel, levelHasEnvironment, levelHasIdentity, levelHasPrompt, levelHasTools, levelInjection, levelOf, mergeFeaturePolicy, normalizeRequestPolicy, relayModeForLevel, savedOverrides, sessionMemoryTTL, validFeatureOverrides, validRequestPolicy, type BuildInjection, type FeatureOverrides, type RequestPolicy } from './requestPolicy'
 
 describe('CCGateway request policy', () => {
   it.each(Object.keys(attachmentGroups) as Array<keyof typeof attachmentGroups>)('customizes %s children without changing siblings or other groups', group => {
@@ -218,6 +218,34 @@ describe('CCGateway request levels mirror the contracts', () => {
     expect(layerCustomized({ first_party_shape: false }, 'billing')).toBe(true)
     expect(followLayer({ level: 'high', first_party_shape: false }, 'billing')).toEqual({ level: 'high' })
     expect(customizeLayer({}, { ...parent, first_party_shape: false }, 'billing').first_party_shape).toBe(false)
+  })
+  // session_memory (2026-11-05, SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.7):
+  // absent or 0 is 24 hours; each lifetime inherits on its own; a group or an
+  // account customizes both together as the session layer.
+  it('reads session_memory as 24 hours when absent and inherits each lifetime', () => {
+    expect(normalizeRequestPolicy(defaultRequestPolicy())).not.toHaveProperty('session_memory')
+    expect(normalizeRequestPolicy({ ...defaultRequestPolicy(), session_memory: { thread_ttl_seconds: 3600, stray: 1 } as never }).session_memory).toEqual({ thread_ttl_seconds: 3600 })
+    expect(sessionMemoryTTL(undefined, 'thread_ttl_seconds')).toBe(86400)
+    expect(sessionMemoryTTL({ tools_ttl_seconds: 0 }, 'tools_ttl_seconds')).toBe(86400)
+    for (const ok of [{}, { thread_ttl_seconds: 60 }, { tools_ttl_seconds: 2592000 }, { thread_ttl_seconds: 0 }]) expect(validRequestPolicy({ ...defaultRequestPolicy(), session_memory: ok }), JSON.stringify(ok)).toBe(true)
+    for (const bad of [{ thread_ttl_seconds: 59 }, { tools_ttl_seconds: 2592001 }, { thread_ttl_seconds: 3600.5 }, { thread_ttl_seconds: -60 }, { ttl: 3600 }]) {
+      expect(validRequestPolicy({ ...defaultRequestPolicy(), session_memory: bad as never }), JSON.stringify(bad)).toBe(false)
+      expect(validFeatureOverrides({ session_memory: bad as never }), JSON.stringify(bad)).toBe(false)
+    }
+    expect(validFeatureOverrides({ session_memory: { tools_ttl_seconds: 3600 } })).toBe(true)
+    expect(validFeatureOverrides({ session_memory: null as never })).toBe(false)
+    expect(validFeatureOverrides({ session_memory: [3600] as never })).toBe(false)
+    const parent: RequestPolicy = { ...defaultRequestPolicy(), session_memory: { thread_ttl_seconds: 3600 } }
+    expect(mergeFeaturePolicy(defaultRequestPolicy(), {})).not.toHaveProperty('session_memory')
+    expect(mergeFeaturePolicy(parent, {}).session_memory).toEqual({ thread_ttl_seconds: 3600 })
+    expect(mergeFeaturePolicy(parent, { session_memory: { tools_ttl_seconds: 120 } }).session_memory).toEqual({ thread_ttl_seconds: 3600, tools_ttl_seconds: 120 })
+    expect(mergeFeaturePolicy(parent, { session_memory: { thread_ttl_seconds: 0, tools_ttl_seconds: 120 } }).session_memory).toEqual({ thread_ttl_seconds: 3600, tools_ttl_seconds: 120 })
+    expect(featureDifferenceCount(parent, { session_memory: { thread_ttl_seconds: 3600, tools_ttl_seconds: 86400 } })).toBe(0)
+    expect(featureDifferenceCount(parent, { session_memory: { thread_ttl_seconds: 86400, tools_ttl_seconds: 120 } })).toBe(2)
+    expect(layerCustomized({}, 'session')).toBe(false)
+    expect(layerCustomized({ session_memory: { tools_ttl_seconds: 120 } }, 'session')).toBe(true)
+    expect(customizeLayer({ level: 'high' }, parent, 'session')).toEqual({ level: 'high', session_memory: { thread_ttl_seconds: 3600, tools_ttl_seconds: 86400 } })
+    expect(followLayer({ level: 'high', session_memory: { thread_ttl_seconds: 60 } }, 'session')).toEqual({ level: 'high' })
   })
   it('customizes a layer with every inherited value explicit and follows it again by deleting them', () => {
     const parent: RequestPolicy = { ...defaultRequestPolicy(), level: 'high', build_billing_sources: { cc_version: 'worker' }, build_attachment_sources: { platform_name: 'worker', shell: 'erase' }, build_injection: { attachments: { date: false }, tools: { Agent: true } } }

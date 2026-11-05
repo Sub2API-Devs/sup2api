@@ -4,6 +4,7 @@ APP='placeholder-app:0'
 EGRESS='placeholder-egress:0'
 CTL='placeholder-controller:0'
 GUARD='placeholder-guard:0'
+STATEIMG='valkey/valkey:9.1.2'
 ROOT='/opt/ccgateway-runtime'
 ENVF='/opt/ccgateway-runtime.env'
 DIR='/opt/ccgateway'
@@ -151,7 +152,7 @@ adopt() {
     present "$f" || continue
     n=${f#"$ROOT"/}
     case "$n" in
-      shared-egress|shared-egress/boot.json|shared-egress/boot.nft|shared-egress/dns.json|shared-egress/active.nft|shared-egress/operation.json) continue ;;
+      shared-egress|shared-egress/boot.json|shared-egress/boot.nft|shared-egress/dns.json|shared-egress/active.nft|shared-egress/operation.json|state|state-conf) continue ;;
       */*) ;;
       *) if [ -d "$f" ] && [ ! -L "$f" ] && is_key "$n"; then continue; fi ;;
     esac
@@ -159,11 +160,40 @@ adopt() {
   done
   mv -f "$J" "$DATA/.adopted"
 }
+state_dirs() {
+  mkdir -p "$ROOT/state" "$ROOT/state-conf" && chmod 755 "$ROOT/state" && chmod 700 "$ROOT/state-conf"
+}
+state_up() {
+  docker image inspect "$STATEIMG" >/dev/null 2>&1 || docker pull -q "$STATEIMG" >/dev/null 2>&1 || { echo CCG_STATE=image_pull_failed; return 1; }
+  if [ ! -e "$DATA/state-admin.secret" ]; then
+    if ! { { od -An -N32 -tx1 /dev/urandom | tr -d ' \n'; echo; } > "$DATA/state-admin.secret.tmp" \
+         && chmod 600 "$DATA/state-admin.secret.tmp" && mv -f "$DATA/state-admin.secret.tmp" "$DATA/state-admin.secret"; }; then
+      rm -f "$DATA/state-admin.secret.tmp"; echo CCG_STATE=secret_failed; return 1
+    fi
+  fi
+  # One line of 32-256 hex digits (the controller reads the same rule); the
+  # SHA-256 is of that line without its newline.
+  PW=$(sed -n '1{/^[0-9a-f]\{32,256\}$/p;}' "$DATA/state-admin.secret" 2>/dev/null)
+  [ -n "$PW" ] || { echo CCG_STATE=secret_invalid; return 1; }
+  H=$(printf '%s' "$PW" | sha256sum | sed 's/ .*//')
+  printf '%s\n' "$H" | grep -Eq '^[0-9a-f]{64}$' || { echo CCG_STATE=secret_failed; return 1; }
+  ACL=$ROOT/state-conf/users.acl
+  if ! { printf 'user default off\nuser ccg-controller on #%s resetkeys resetchannels -@all +acl|setuser +acl|deluser +acl|list +acl|getuser +info +ping\n' "$H" > "$ACL.tmp" \
+       && chmod 644 "$ACL.tmp"; }; then
+    rm -f "$ACL.tmp"; echo CCG_STATE=acl_failed; return 1
+  fi
+  RECREATE=
+  [ ! -e "$ACL" ] || [ "$(cat "$ACL.tmp")" = "$(cat "$ACL")" ] || RECREATE=--force-recreate
+  mv -f "$ACL.tmp" "$ACL" || { rm -f "$ACL.tmp"; echo CCG_STATE=acl_failed; return 1; }
+  dc up -d --no-deps $RECREATE state >/dev/null 2>&1 || { echo CCG_STATE=state_unavailable; return 1; }
+  echo CCG_STATE=started
+}
 docker compose version >/dev/null 2>&1 || { echo CCG_RESULT=compose_unavailable; exit 1; }
 # The old bridge guard would fight the guard over the same chain.
 if systemctl is-active --quiet ccgateway-bridge-guard 2>/dev/null; then echo CCG_RESULT=bridge_guard_active; exit 1; fi
 docker image inspect "$GUARD" >/dev/null 2>&1 || docker pull -q "$GUARD" >/dev/null 2>&1 || { echo CCG_RESULT=image_pull_failed; exit 1; }
 mkdir -p "$ROOT" "$DATA" "$DIR" "$STATE" && chmod 700 "$ROOT" "$DATA" "$DIR" "$STATE" || { echo CCG_RESULT=install_failed; exit 1; }
+state_dirs || { echo CCG_RESULT=install_failed; exit 1; }
 # Moving the data must be a rename on one file system.
 [ "$(stat -c %d "$ROOT")" = "$(stat -c %d "$DATA")" ] || { echo CCG_RESULT=data_cross_device; exit 1; }
 lock || { echo CCG_RESULT=compose_locked; exit 1; }
@@ -226,6 +256,11 @@ services:
       CCG_GUARD_PROJECT: ${CCG_PROJECT:-ccgateway}
       CCG_GUARD_PROJECT_DIR: ${CCG_PROJECT_DIR:-/opt/ccgateway}
       CCG_GUARD_RUNTIME_ROOT: ${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}
+      # New account containers get <runtime root>/state (the session state
+      # socket) read-only at /run/ccg-state; 0 keeps the two mounts of before
+      # (SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.4). The install script creates
+      # the directory before the guard starts.
+      CCG_GUARD_SESSION_STATE: "${CCG_GUARD_SESSION_STATE:-1}"
     volumes:
       - {type: bind, source: /var/run/docker.sock, target: /var/run/docker.sock, bind: {create_host_path: false}}
       - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}", target: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}", bind: {create_host_path: false}}
@@ -261,6 +296,8 @@ services:
       CCG_GUARD_TOKEN: ${CCG_GUARD_TOKEN:?}
     volumes:
       - {type: bind, source: "${CCG_CONTROLLER_DATA:-/opt/ccgateway-controller}", target: /data, bind: {create_host_path: false}}
+      # The session state socket, for the per-account ACL users (§7.5).
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state", target: /run/ccg-state, read_only: true, bind: {create_host_path: false}}
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     read_only: true
@@ -303,6 +340,40 @@ services:
     labels: {io.sup2api.ccgateway.shared: "${CCG_PREFIX:-ccg}"}
     logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
 
+  # The session memory of the account Workers (SESSION-MEMORY-TOOLS-USED-DESIGN.md
+  # §5, §7.3): one Valkey per host, a unix socket only (no network at all),
+  # nothing persisted (a restart is every session expiring). The users are the
+  # admin user of the controller from the ACL file the install script writes and
+  # one user per account the controller adds at run time; default is off.
+  # The entrypoint of the image is bypassed: as root it chowns and drops to the
+  # valkey user, which needs CAP_CHOWN and CAP_SETUID (all dropped here).
+  state:
+    image: ${CCG_STATE_IMAGE:-valkey/valkey:9.1.2}
+    container_name: ${CCG_PREFIX:-ccg}-state
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    user: "0:0"
+    entrypoint: ["valkey-server"]
+    command: ["--port", "0", "--unixsocket", "/run/ccg-state/valkey.sock", "--unixsocketperm", "666",
+              "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru",
+              "--protected-mode", "yes", "--aclfile", "/etc/valkey/users.acl"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs: ["/data:size=16m,mode=0700"]
+    volumes:
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state", target: /run/ccg-state, bind: {create_host_path: false}}
+      # The directory, not the file: a rename by the installer then reaches the
+      # container on its next start.
+      - {type: bind, source: "${CCG_RUNTIME_HOST_ROOT:-/opt/ccgateway-runtime}/state-conf", target: /etc/valkey, read_only: true, bind: {create_host_path: false}}
+    mem_limit: 320m
+    pids_limit: 64
+    cpus: 1
+    stop_grace_period: 10s
+    labels: {io.sup2api.ccgateway.state: "${CCG_PREFIX:-ccg}"}
+    logging: *log
+
 networks:
   control:
     external: true
@@ -323,8 +394,8 @@ printf '%s\n' "$TOKEN" | grep -Eq '^[0-9a-f]{64}$' || { echo CCG_RESULT=install_
 GW=$(sed -n 's/^CCG_GATEWAY_IMAGE=\([A-Za-z0-9][A-Za-z0-9._\/:@-]*\)$/\1/p' "$DIR/.env" 2>/dev/null | head -n 1)
 [ -n "$GW" ] || GW=$EGRESS
 [ -e "$DIR/.env.prev" ] || [ ! -e "$DIR/.env" ] || cp -p "$DIR/.env" "$DIR/.env.prev" || { echo CCG_RESULT=install_failed; exit 1; }
-if ! { { grep -E '^CCG_[A-Z0-9_]+=' "$DIR/.env" 2>/dev/null | grep -Ev '^CCG_(GUARD_IMAGE|CONTROLLER_IMAGE|GATEWAY_IMAGE|GUARD_TOKEN)='
-       printf 'CCG_GUARD_IMAGE=%s\nCCG_CONTROLLER_IMAGE=%s\nCCG_GATEWAY_IMAGE=%s\nCCG_GUARD_TOKEN=%s\n' "$GUARD" "$CTL" "$GW" "$TOKEN"; } > "$DIR/.env.tmp" \
+if ! { { grep -E '^CCG_[A-Z0-9_]+=' "$DIR/.env" 2>/dev/null | grep -Ev '^CCG_(GUARD_IMAGE|CONTROLLER_IMAGE|GATEWAY_IMAGE|GUARD_TOKEN|STATE_IMAGE)='
+       printf 'CCG_GUARD_IMAGE=%s\nCCG_CONTROLLER_IMAGE=%s\nCCG_GATEWAY_IMAGE=%s\nCCG_GUARD_TOKEN=%s\nCCG_STATE_IMAGE=%s\n' "$GUARD" "$CTL" "$GW" "$TOKEN" "$STATEIMG"; } > "$DIR/.env.tmp" \
      && chmod 600 "$DIR/.env.tmp" && mv -f "$DIR/.env.tmp" "$DIR/.env"; }; then
   rm -f "$DIR/.env.tmp"; restore_env; echo CCG_RESULT=install_failed; exit 1
 fi
@@ -336,6 +407,8 @@ if [ -z "$NET" ]; then
     || { restore_env; echo CCG_RESULT=control_network_conflict; exit 1; }
 elif [ "$NET" != 172.29.255.0/29 ]; then restore_env; echo CCG_RESULT=control_network_conflict; exit 1; fi
 dc config -q >/dev/null 2>&1 || { restore_env; echo CCG_RESULT=compose_config_failed; exit 1; }
+# The session state before the guard that mounts it into new containers.
+state_up
 # The guard first: only an explicit install updates it.
 if ! dc up -d --no-deps guard >/dev/null 2>&1; then
   restore_guard; echo CCG_RESULT=guard_unavailable; exit 1

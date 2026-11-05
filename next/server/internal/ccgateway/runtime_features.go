@@ -76,17 +76,32 @@ func withConfirmedShape(p features.WorkerPolicy, capabilities []string) features
 	return p
 }
 
+// withConfirmedSessionMemory is p without session_memory for a Worker that
+// does not declare session_memory_ttl_v1 (2026-11-05,
+// SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.7): an older Worker refuses an
+// unknown policy key, so it never gets the field and keeps its own lifetimes.
+// It is not a required capability either. capabilities nil is a Worker not
+// asked (none confirmed).
+func withConfirmedSessionMemory(p features.WorkerPolicy, capabilities []string) features.WorkerPolicy {
+	if !slices.Contains(capabilities, features.SessionMemoryCapability) {
+		p.SessionMemory = nil
+	}
+	return p
+}
+
 // withConfirmedCapabilities is p as it may be sent to a Worker declaring
-// capabilities: withConfirmedTools and withConfirmedShape.
+// capabilities: withConfirmedTools, withConfirmedShape and
+// withConfirmedSessionMemory.
 func withConfirmedCapabilities(p features.WorkerPolicy, capabilities []string) features.WorkerPolicy {
-	return withConfirmedShape(withConfirmedTools(p, capabilities), capabilities)
+	return withConfirmedSessionMemory(withConfirmedShape(withConfirmedTools(p, capabilities), capabilities), capabilities)
 }
 
 // requireRequestPolicyCapabilities confirms the Worker behind r (nil: a
 // connection of this request only) can apply p, reusing r's health answer
 // while it is fresh, and returns p as it may be sent: without the tools its
-// CLI cannot render and without first_party_shape unless it declares the
-// conversion (withConfirmedCapabilities).
+// CLI cannot render, without first_party_shape unless it declares the
+// conversion and without session_memory unless it declares the lifetimes
+// (withConfirmedCapabilities).
 func (s *Service) requireRequestPolicyCapabilities(ctx context.Context, client *http.Client, base, key string, r *accountRoute, p features.WorkerPolicy) (features.WorkerPolicy, error) {
 	h, err := s.currentWorkerHealth(ctx, client, base, key, r)
 	if err != nil {

@@ -41,6 +41,14 @@ type RequestPolicy struct {
 	// Sent as features.WorkerPolicy.FirstPartyShape, at every level, only to
 	// a Worker declaring features.FirstPartyShapeCapability.
 	FirstPartyShape *bool `json:"first_party_shape,omitempty"`
+	// SessionMemory is how long the Worker keeps what it remembers of an
+	// upstream session: thread state and the tools-used set
+	// (SESSION-MEMORY-TOOLS-USED-DESIGN.md §4.7, 2026-11-05). nil or a zero
+	// field is the default (features.DefaultSessionMemoryTTL); groups and
+	// accounts override each field like the other settings. Sent as
+	// features.WorkerPolicy.SessionMemory, only what differs from the
+	// default, and only to a Worker declaring features.SessionMemoryCapability.
+	SessionMemory *features.SessionMemoryPolicy `json:"session_memory,omitempty"`
 	// RequestIdentitySources: stored only. The identity is mapped, not
 	// configurable (2026-10-21).
 	RequestIdentitySources features.RequestIdentitySources `json:"request_identity_sources,omitempty"`
@@ -191,6 +199,11 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 		p.CLIVersion = PinnedCLIVersion
 	}
 	p.FirstPartyShape = firstPartyShapeOrDefault(p.FirstPartyShape)
+	// {} is the defaults, the same as none.
+	p.SessionMemory = cloneSessionMemory(p.SessionMemory)
+	if p.SessionMemory != nil && *p.SessionMemory == (features.SessionMemoryPolicy{}) {
+		p.SessionMemory = nil
+	}
 	p.Betas = defaultRequestPolicy().Betas
 	return p
 }
@@ -200,6 +213,33 @@ func (c Config) EffectiveRequestPolicy() RequestPolicy {
 func firstPartyShapeOrDefault(v *bool) *bool {
 	on := v == nil || *v
 	return &on
+}
+
+// cloneSessionMemory is a copy of p (nil stays nil), so a resolved policy
+// never shares the stored one.
+func cloneSessionMemory(p *features.SessionMemoryPolicy) *features.SessionMemoryPolicy {
+	if p == nil {
+		return nil
+	}
+	out := *p
+	return &out
+}
+
+// wireSessionMemory is the lifetimes the Worker is sent: only those that
+// differ from the default, nil when none do (the Worker's default is the same,
+// so a policy at the defaults sends nothing).
+func wireSessionMemory(p *features.SessionMemoryPolicy) *features.SessionMemoryPolicy {
+	out := features.SessionMemoryPolicy{}
+	if v := p.ThreadTTL(); v != features.DefaultSessionMemoryTTL {
+		out.ThreadTTLSeconds = v
+	}
+	if v := p.ToolsTTL(); v != features.DefaultSessionMemoryTTL {
+		out.ToolsTTLSeconds = v
+	}
+	if out == (features.SessionMemoryPolicy{}) {
+		return nil
+	}
+	return &out
 }
 
 func validateRequestPolicy(p RequestPolicy) error {
@@ -222,6 +262,9 @@ func validateRequestPolicy(p RequestPolicy) error {
 		return err
 	}
 	if err := p.RequestIdentitySources.Validate(); err != nil {
+		return err
+	}
+	if err := p.SessionMemory.Validate(); err != nil {
 		return err
 	}
 	if p.SchemaVersion != 0 && p.SchemaVersion != features.PolicySchemaVersion {

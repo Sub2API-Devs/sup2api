@@ -78,6 +78,15 @@ func matrixValue(p RequestPolicy, field string) string {
 	// Resolved policies carry it explicitly (on unless turned off).
 	case "first_party_shape":
 		return strconv.FormatBool(p.FirstPartyShape != nil && *p.FirstPartyShape)
+	// The lifetime in seconds, the default when unset.
+	case "session_memory":
+		switch key {
+		case "thread_ttl_seconds":
+			return strconv.Itoa(p.SessionMemory.ThreadTTL())
+		case "tools_ttl_seconds":
+			return strconv.Itoa(p.SessionMemory.ToolsTTL())
+		}
+		panic("unknown session_memory field: " + field)
 	// build_injection.system_prompt, build_injection.attachments.<name> and
 	// build_injection.tools.<name> read the resolved choice, "true" or "false";
 	// an unset choice reads "false", though within the level it is added by

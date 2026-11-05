@@ -58,6 +58,39 @@ export const defaultInjectionTools = ['Bash', 'Read', 'Edit', 'Write'] as const
 export const injectionToolsV2 = ['ListAgents', 'ReportFindings', 'ScheduleWakeup', 'Skill', 'ToolSearch', 'Workflow'] as const
 export const injectionTools = [...defaultInjectionTools, 'Agent', ...injectionToolsV2, 'WebSearch', 'NotebookEdit'] as const
 export type InjectionTool = (typeof injectionTools)[number]
+// How long the Worker keeps what it remembers of an upstream session, in
+// seconds (contracts features.SessionMemoryPolicy, 2026-11-05): the thread
+// state (cc_prev_req, turn, prompt and message IDs) and the session's
+// tools-used set. Absent or 0 is the default, 24 hours; every level. Only a
+// Worker declaring session_memory_ttl_v1 receives it (the core drops it for
+// an older one, and sends only what differs from the default).
+export const sessionMemoryFields = ['thread_ttl_seconds', 'tools_ttl_seconds'] as const
+export type SessionMemoryField = (typeof sessionMemoryFields)[number]
+export type SessionMemory = Partial<Record<SessionMemoryField, number>>
+export const defaultSessionMemoryTTL = 86400
+export const minSessionMemoryTTL = 60
+export const maxSessionMemoryTTL = 30 * 86400
+// The quick choices: 1 hour, 24 hours, 7 days.
+export const sessionMemoryPresets = [3600, 86400, 604800] as const
+export const validSessionMemoryTTL = (v: unknown): boolean =>
+  v === undefined || v === 0 || (Number.isInteger(v) && (v as number) >= minSessionMemoryTTL && (v as number) <= maxSessionMemoryTTL)
+export function validSessionMemory(p?: SessionMemory): boolean {
+  if (p === undefined) return true
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return false
+  return Object.entries(p).every(([field, v]) => (sessionMemoryFields as readonly string[]).includes(field) && validSessionMemoryTTL(v))
+}
+/** The lifetime a policy gives one field (absent or 0: the default). */
+export const sessionMemoryTTL = (p: SessionMemory | undefined, field: SessionMemoryField) => p?.[field] || defaultSessionMemoryTTL
+// The known numeric fields of a saved value, nothing else.
+function knownSessionMemory(p: unknown): SessionMemory | undefined {
+  if (!p || typeof p !== 'object' || Array.isArray(p)) return undefined
+  const out: SessionMemory = {}
+  for (const field of sessionMemoryFields) {
+    const v = (p as Record<string, unknown>)[field]
+    if (typeof v === 'number') out[field] = v
+  }
+  return out
+}
 export interface BuildInjection {
   system_prompt?: boolean
   attachments?: Partial<Record<InjectionAttachment, boolean>>
@@ -200,6 +233,8 @@ export interface RequestPolicy {
   // first-party shape (CONTRACTS §53.23, 2026-11-03); absent is on. Only a
   // Worker that declares build_first_party_shape_v1 receives it.
   first_party_shape?: boolean
+  // Session memory lifetimes in seconds (absent: 24 hours each).
+  session_memory?: SessionMemory
   // Which layers apply; relay_mode follows from it (none is direct).
   level: RequestLevel
   request_identity_sources?: Partial<Record<IdentityField, IdentitySource>>
@@ -273,6 +308,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
   const level = !policy ? defaults.level : isLevel(policy.level) ? policy.level
     : legacyLevel(savedRelayMode(policy.relay_mode), policy.build_attachment_sources, policy.build_injection) || defaults.level
   const injection = knownInjection(legacy ? legacyInjection(level, policy?.build_injection) : policy?.build_injection)
+  const sessionMemory = knownSessionMemory(policy?.session_memory)
   // Pick the editor's fields rather than spreading historical or server-defaulted policy data.
   return {
     ...(policy?.schema_version === undefined ? {} : { schema_version: policy.schema_version }),
@@ -289,6 +325,7 @@ export function normalizeRequestPolicy(policy?: SavedRequestPolicy): RequestPoli
     ...(policy?.build_billing_entrypoint === undefined ? {} : { build_billing_entrypoint: policy.build_billing_entrypoint }),
     ...(injection === undefined ? {} : { build_injection: injection }),
     ...(typeof policy?.first_party_shape === 'boolean' ? { first_party_shape: policy.first_party_shape } : {}),
+    ...(sessionMemory === undefined ? {} : { session_memory: sessionMemory }),
     request_identity_sources: { ...policy?.request_identity_sources },
     level,
     cli_version: policy?.cli_version || defaults.cli_version,
@@ -323,6 +360,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
     (p.build_billing_entrypoint === undefined || (billingEntrypoints as readonly string[]).includes(p.build_billing_entrypoint)) &&
     validInjection(p.build_injection) &&
     (p.first_party_shape === undefined || typeof p.first_party_shape === 'boolean') &&
+    validSessionMemory(p.session_memory) &&
     (!p.custom_tool_prefix || (/^[A-Za-z0-9_-]{1,32}$/.test(p.custom_tool_prefix) && !p.custom_tool_prefix.includes('__'))) &&
     (!p.tool_search || ['request', 'false', 'true', 'auto'].includes(p.tool_search) || /^auto:(0|[1-9][0-9]?|100)$/.test(p.tool_search)) &&
     ['reject', 'ignore'].includes(p.unknown_field) &&
@@ -337,7 +375,7 @@ export function validRequestPolicy(p: RequestPolicy): boolean {
 
 // An absent key follows its parent; this also applies independently to nested
 // fields. relay_mode is only read: an override saved before levels.
-export type FeatureOverrides = Partial<Pick<RequestPolicy, 'level' | 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_injection' | 'first_party_shape' | 'request_identity_sources'>>
+export type FeatureOverrides = Partial<Pick<RequestPolicy, 'level' | 'relay_mode' | 'unknown_field' | 'tool_search' | 'thinking_disabled_compat' | 'custom_tool_prefix' | 'build_attachment_sources' | 'build_billing_sources' | 'build_billing_entrypoint' | 'build_injection' | 'first_party_shape' | 'session_memory' | 'request_identity_sources'>>
 export interface FeatureGroup { enabled: boolean; allow_account_override: boolean; overrides: FeatureOverrides }
 export interface AccountFeaturePolicy { mode: 'follow' | 'custom'; overrides: FeatureOverrides; revision: number }
 export interface FeaturePreview {
@@ -358,6 +396,10 @@ export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOver
   delete own.relay_mode
   const out: RequestPolicy = { ...parent, ...own, build_attachment_sources: { ...parent.build_attachment_sources, ...overrides.build_attachment_sources }, build_billing_sources: { ...parent.build_billing_sources, ...overrides.build_billing_sources }, build_injection: mergeInjection(parent.build_injection, overrides.build_injection), request_identity_sources: { ...parent.request_identity_sources, ...overrides.request_identity_sources } }
   delete out.relay_mode
+  // Each lifetime overrides on its own (0 inherits, as in the core).
+  const sessionMemory = mergeSessionMemory(parent.session_memory, overrides.session_memory)
+  if (sessionMemory) out.session_memory = sessionMemory
+  else delete out.session_memory
   // A resolved parent from the core may still carry the retired identity lines.
   for (const key of retiredOverrideKeys) delete (out as unknown as Record<string, unknown>)[key]
   out.level = levelOf(parent)
@@ -370,6 +412,14 @@ export function mergeFeaturePolicy(parent: RequestPolicy, overrides: FeatureOver
     out.level = legacyLevel('build', out.build_attachment_sources, out.build_injection) || defaultRequestLevel
     out.build_injection = legacyInjection(out.level, out.build_injection)
   }
+  return out
+}
+// The parent's lifetimes with the ones an override sets (non-zero); undefined
+// when neither has any.
+function mergeSessionMemory(parent?: SessionMemory, own?: SessionMemory): SessionMemory | undefined {
+  if (!parent && !own) return undefined
+  const out: SessionMemory = { ...parent }
+  for (const field of sessionMemoryFields) if (own?.[field]) out[field] = own[field]
   return out
 }
 export function featureDifferenceCount(parent: RequestPolicy, overrides: FeatureOverrides): number {
@@ -400,6 +450,12 @@ export function featureDifferenceCount(parent: RequestPolicy, overrides: Feature
     } else if (key === 'first_party_shape') {
       // Absent is on.
       if ((parent.first_party_shape ?? true) !== value) count++
+    } else if (key === 'session_memory') {
+      // Absent or 0 is the default; a 0 override inherits.
+      for (const field of sessionMemoryFields) {
+        const own = (value as SessionMemory)[field]
+        if (own && sessionMemoryTTL(parent.session_memory, field) !== own) count++
+      }
     } else if (parent[key as keyof RequestPolicy] !== value) count++
   }
   return count
@@ -415,13 +471,14 @@ export function savedOverrides(overrides: FeatureOverrides): FeatureOverrides {
 export function validFeatureOverrides(input: FeatureOverrides): boolean {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return false
   const value = savedOverrides(input)
-  const allowed = ['level', 'relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_injection', 'first_party_shape', 'request_identity_sources']
+  const allowed = ['level', 'relay_mode', 'unknown_field', 'tool_search', 'thinking_disabled_compat', 'custom_tool_prefix', 'build_attachment_sources', 'build_billing_sources', 'build_billing_entrypoint', 'build_injection', 'first_party_shape', 'session_memory', 'request_identity_sources']
   if (Object.entries(value).some(([key, v]) => !allowed.includes(key) || v == null || v === '')) return false
   if (value.level !== undefined && !isLevel(value.level)) return false
   if (value.relay_mode !== undefined && !['direct', 'build'].includes(value.relay_mode)) return false
-  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_injection', 'request_identity_sources'] as const) {
+  for (const key of ['build_attachment_sources', 'build_billing_sources', 'build_injection', 'session_memory', 'request_identity_sources'] as const) {
     if (value[key] !== undefined && (typeof value[key] !== 'object' || Array.isArray(value[key]))) return false
   }
+  if (!validSessionMemory(value.session_memory)) return false
   return validRequestPolicy(mergeFeaturePolicy(defaultRequestPolicy(), value))
 }
 
@@ -431,8 +488,9 @@ export function validFeatureOverrides(input: FeatureOverrides): boolean {
 // its keys; customizing writes every field of the layer, so it overrides the
 // parent entirely. An override saved before that holds only some keys counts
 // as customized (its unset fields still inherit). The identity line has no
-// settings, so it is not a layer here.
-export const featureLayers = ['level', 'billing', 'environment', 'prompt'] as const
+// settings, so it is not a layer here. Session memory (2026-11-05) is not
+// one of the level's layers but follows or customizes the same way.
+export const featureLayers = ['level', 'billing', 'environment', 'prompt', 'session'] as const
 export type FeatureLayer = (typeof featureLayers)[number]
 const present = (value: unknown) => value !== undefined && value !== null &&
   !(typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length)
@@ -443,6 +501,7 @@ export function layerCustomized(overrides: FeatureOverrides, layer: FeatureLayer
     case 'billing': return present(overrides.build_billing_entrypoint) || present(overrides.build_billing_sources) || overrides.first_party_shape !== undefined
     case 'environment': return present(overrides.build_attachment_sources) || present(injection?.attachments)
     case 'prompt': return injection?.system_prompt !== undefined || present(injection?.tools)
+    case 'session': return present(overrides.session_memory)
   }
 }
 // Follow: the layer's keys removed (a legacy relay_mode with the level).
@@ -453,6 +512,7 @@ export function followLayer(overrides: FeatureOverrides, layer: FeatureLayer): F
   if (layer === 'billing') { delete next.build_billing_entrypoint; delete next.build_billing_sources; delete next.first_party_shape }
   if (layer === 'environment') { delete next.build_attachment_sources; delete injection?.attachments }
   if (layer === 'prompt') { delete injection?.system_prompt; delete injection?.tools }
+  if (layer === 'session') delete next.session_memory
   if (injection && !Object.keys(injection).length) delete next.build_injection
   return next
 }
@@ -477,6 +537,9 @@ export function customizeLayer(overrides: FeatureOverrides, inherited: RequestPo
   }
   if (layer === 'prompt') {
     next.build_injection = { ...next.build_injection, system_prompt: from?.system_prompt ?? injectionDefault(level, 'system_prompt'), tools: choices('tools', injectionTools) }
+  }
+  if (layer === 'session') {
+    next.session_memory = Object.fromEntries(sessionMemoryFields.map(field => [field, sessionMemoryTTL(inherited.session_memory, field)])) as SessionMemory
   }
   return next
 }

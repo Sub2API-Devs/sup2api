@@ -4,6 +4,8 @@ package ccgateway
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -81,7 +83,7 @@ compose)
       [ -e "$F/fail/up-$s" ] && exit 1
       d=$(c "ccg-$s")
       if [ -d "$d" ] && [ "$(cat "$d/project")" != "$proj" ]; then exit 1; fi
-      case "$s" in guard) img=$(val CCG_GUARD_IMAGE) ;; controller) img=$(val CCG_CONTROLLER_IMAGE) ;; *) exit 94 ;; esac
+      case "$s" in guard) img=$(val CCG_GUARD_IMAGE) ;; controller) img=$(val CCG_CONTROLLER_IMAGE) ;; state) img=$(val CCG_STATE_IMAGE) ;; *) exit 94 ;; esac
       mkdir -p "$d"; echo "$proj" > "$d/project"; printf '%s' "$img" > "$d/image"; : > "$d/running"
       echo "$s $img" >> "$F/ups"
     done ;;
@@ -115,7 +117,7 @@ type fakeHost struct {
 
 func newFakeHost(t *testing.T) *fakeHost {
 	t.Helper()
-	for _, tool := range []string{"sh", "flock", "stat", "od", "sed", "grep", "tr", "head", "tail", "mv", "cp", "mkdir", "chmod", "rmdir"} {
+	for _, tool := range []string{"sh", "flock", "stat", "od", "sed", "grep", "tr", "head", "tail", "mv", "cp", "mkdir", "chmod", "rmdir", "sha256sum", "cat"} {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Fatalf("the compose script test needs %s on PATH: %v", tool, err)
 		}
@@ -136,7 +138,7 @@ func newFakeHost(t *testing.T) *fakeHost {
 		}
 	}
 	h.path = bin + ":" + os.Getenv("PATH")
-	for _, ref := range []string{h.app, h.egress, h.guard} {
+	for _, ref := range []string{h.app, h.egress, h.guard, StateImage} {
 		h.image(ref, "")
 	}
 	h.image(h.ctl, "1")
@@ -317,6 +319,8 @@ var adoptedData = []string{
 	"21/", "21/state.json", "21/egress-desired.json", "21/worker-backups/", "21/worker-backups/20261101-abc/", "21/worker-backups/20261101-abc/worker",
 	"21/cli-backups/", "21/cli-backups/2.1.310/", "21/cli-backups/2.1.310/cli", "21/worker-backups-before-0.1.114/", "21/worker-backups-before-0.1.114/old",
 	"21/weird.bin", "21/.hidden", "d0123456789abcdef/", "d0123456789abcdef/state.json",
+	// The session state secret, made in the controller data (§7.5).
+	"state-admin.secret",
 }
 
 var keptRoot = []string{
@@ -324,6 +328,18 @@ var keptRoot = []string{
 	"shared-egress/", "shared-egress/boot.json", "shared-egress/boot.nft", "shared-egress/dns.json", "shared-egress/active.nft",
 	"shared-egress/operation.json", "shared-egress/x.tmp", "controller-before-0.1.115/", "controller-before-0.1.115/state.json",
 	"0notakey/", "0notakey/f", "stray.txt",
+	// The session state directories (§7.2), kept in the runtime root.
+	"state/", "state-conf/", "state-conf/users.acl",
+}
+
+// stateRoot is what an install adds to the runtime root for the session
+// state, and keeps through a rollback (the old controller ignores it).
+var stateRoot = []string{"state/", "state-conf/", "state-conf/users.acl"}
+
+// onlySecret: the controller data holds only the session state secret (what
+// a rollback leaves there; the old controller ignores it).
+func onlySecret(t *testing.T, data string) bool {
+	return strings.Join(tree(t, data), ",") == "state-admin.secret"
 }
 
 // covers: §76 compose install, transition, rollback, finish (04 §2.10 nine scenarios)
@@ -338,7 +354,7 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 			t.Fatal("environment file or compose.yml not written verbatim")
 		}
 		env := h.read(h.dir + "/.env")
-		if !regexp.MustCompile(`^CCG_GUARD_IMAGE=placeholder-guard:0\nCCG_CONTROLLER_IMAGE=placeholder-controller:0\nCCG_GATEWAY_IMAGE=placeholder-egress:0\nCCG_GUARD_TOKEN=[0-9a-f]{64}\n$`).MatchString(env) {
+		if !regexp.MustCompile(`^CCG_GUARD_IMAGE=placeholder-guard:0\nCCG_CONTROLLER_IMAGE=placeholder-controller:0\nCCG_GATEWAY_IMAGE=placeholder-egress:0\nCCG_GUARD_TOKEN=[0-9a-f]{64}\nCCG_STATE_IMAGE=valkey/valkey:9\.1\.2\n$`).MatchString(env) {
 			t.Fatalf(".env:\n%s", env)
 		}
 		for _, p := range []string{h.dir + "/.env", h.dir + "/compose.yml", h.envf} {
@@ -357,12 +373,12 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 		if h.read(h.fake+"/networks/ccg-control") != "172.29.255.0/29\n" {
 			t.Fatal("control network")
 		}
-		if strings.Join(h.ups(), ",") != "guard=placeholder-guard:0,controller=placeholder-controller:0" {
+		if strings.Join(h.ups(), ",") != "state="+StateImage+",guard=placeholder-guard:0,controller=placeholder-controller:0" {
 			t.Fatalf("ups: %v", h.ups())
 		}
 		calls := h.calls()
 		order := []string{"docker compose version", "systemctl is-active --quiet ccgateway-bridge-guard", "docker network create",
-			" config -q", " up -d --no-deps guard", " exec -T guard ccgateway-guard ready", " up -d --no-deps controller"}
+			" config -q", " up -d --no-deps state", " up -d --no-deps guard", " exec -T guard ccgateway-guard ready", " up -d --no-deps controller"}
 		at := 0
 		for _, c := range order {
 			i := strings.Index(calls[at:], c)
@@ -378,6 +394,83 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 		token := env[strings.Index(env, "CCG_GUARD_TOKEN="):]
 		if _, res = h.install(testEnvFile); res != "started" || !strings.Contains(h.read(h.dir+"/.env"), token) {
 			t.Fatalf("reinstall: %s %s", res, h.read(h.dir+"/.env"))
+		}
+	})
+
+	// SESSION-MEMORY-TOOLS-USED-DESIGN.md §7.2, §7.3, §7.5: the state
+	// directories, the admin secret made once, the ACL file from its hash,
+	// Valkey recreated only when that file changed, and a Valkey that does not
+	// start never failing the install.
+	t.Run("session state", func(t *testing.T) {
+		h := newFakeHost(t)
+		out, res := h.install(testEnvFile)
+		if res != "started" || !strings.Contains(out, "CCG_STATE=started\n") {
+			t.Fatalf("result %q:\n%s\n%s", res, out, h.calls())
+		}
+		for p, mode := range map[string]os.FileMode{h.root + "/state": 0o755, h.root + "/state-conf": 0o700, h.root + "/state-conf/users.acl": 0o644, h.data + "/state-admin.secret": 0o600} {
+			if st, err := os.Stat(p); err != nil || st.Mode().Perm() != mode {
+				t.Fatalf("%s: %v %v, want %v", p, err, st, mode)
+			}
+		}
+		if tree(t, h.root+"/state") != nil {
+			t.Fatal("the install script left something in state/")
+		}
+		secret := h.read(h.data + "/state-admin.secret")
+		if !regexp.MustCompile(`^[0-9a-f]{64}\n$`).MatchString(secret) {
+			t.Fatalf("secret %q", secret)
+		}
+		acl := func(pw string) string {
+			sum := sha256.Sum256([]byte(pw))
+			return "user default off\nuser ccg-controller on #" + hex.EncodeToString(sum[:]) +
+				" resetkeys resetchannels -@all +acl|setuser +acl|deluser +acl|list +acl|getuser +info +ping\n"
+		}
+		if got := h.read(h.root + "/state-conf/users.acl"); got != acl(strings.TrimSuffix(secret, "\n")) {
+			t.Fatalf("users.acl:\n%s", got)
+		}
+		if strings.Contains(out, strings.TrimSpace(secret)) || strings.Contains(h.calls(), strings.TrimSpace(secret)) {
+			t.Fatal("the secret reached the output or a command line")
+		}
+		// Again: the same secret and file, Valkey not recreated.
+		if out, res = h.install(testEnvFile); res != "started" || h.read(h.data+"/state-admin.secret") != secret || strings.Contains(h.calls(), "--force-recreate") {
+			t.Fatalf("reinstall: %s\n%s\n%s", res, out, h.calls())
+		}
+		// A secret replaced by hand (32-256 hex digits): the file follows and
+		// Valkey is recreated to load it.
+		other := strings.Repeat("0123456789abcdef", 4)
+		h.write(h.data+"/state-admin.secret", other)
+		if out, res = h.install(testEnvFile); res != "started" || h.read(h.root+"/state-conf/users.acl") != acl(other) || !strings.Contains(h.calls(), " up -d --no-deps --force-recreate state") {
+			t.Fatalf("changed secret: %s\n%s\n%s", res, out, h.calls())
+		}
+		if h.read(h.data+"/state-admin.secret") != other {
+			t.Fatal("an existing secret was replaced")
+		}
+		// An unusable secret is never replaced; Valkey is not started, the
+		// controller is.
+		h.write(h.data+"/state-admin.secret", "not hex\n")
+		before := h.read(h.root + "/state-conf/users.acl")
+		if out, res = h.install(testEnvFile); res != "started" || !strings.Contains(out, "CCG_STATE=secret_invalid\n") || h.read(h.data+"/state-admin.secret") != "not hex\n" || h.read(h.root+"/state-conf/users.acl") != before {
+			t.Fatalf("invalid secret: %s\n%s", res, out)
+		}
+		// Valkey failing to start: the install goes on.
+		h = newFakeHost(t)
+		h.fail("up-state")
+		if out, res = h.install(testEnvFile); res != "started" || !strings.Contains(out, "CCG_STATE=state_unavailable\n") || !exists(h.root+"/state") {
+			t.Fatalf("state up failed: %s\n%s", res, out)
+		}
+		if strings.Join(h.ups(), ",") != "guard=placeholder-guard:0,controller=placeholder-controller:0" {
+			t.Fatalf("ups: %v", h.ups())
+		}
+		// No image: pulled; a pull failure only skips Valkey.
+		h = newFakeHost(t)
+		h.must(os.RemoveAll(h.fake + "/images/" + san(StateImage)))
+		if _, res = h.install(testEnvFile); res != "started" || !strings.Contains(h.calls(), "docker pull -q "+StateImage) {
+			t.Fatalf("state pull: %s\n%s", res, h.calls())
+		}
+		h = newFakeHost(t)
+		h.must(os.RemoveAll(h.fake + "/images/" + san(StateImage)))
+		h.fail("pull")
+		if out, res = h.install(testEnvFile); res != "started" || !strings.Contains(out, "CCG_STATE=image_pull_failed\n") {
+			t.Fatalf("state pull failed: %s\n%s", res, out)
 		}
 	})
 
@@ -410,7 +503,7 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 			t.Fatal("transition marks")
 		}
 		env := h.read(h.dir + "/.env")
-		if env != "CCG_CONTROL_DNS=1\nCCG_GUARD_IMAGE=placeholder-guard:0\nCCG_CONTROLLER_IMAGE=placeholder-controller:0\nCCG_GATEWAY_IMAGE=ccgateway-egress:live\nCCG_GUARD_TOKEN="+strings.Repeat("ab", 32)+"\n" {
+		if env != "CCG_CONTROL_DNS=1\nCCG_GUARD_IMAGE=placeholder-guard:0\nCCG_CONTROLLER_IMAGE=placeholder-controller:0\nCCG_GATEWAY_IMAGE=ccgateway-egress:live\nCCG_GUARD_TOKEN="+strings.Repeat("ab", 32)+"\nCCG_STATE_IMAGE="+StateImage+"\n" {
 			t.Fatalf(".env keeps the token, the gateway and other variables:\n%s", env)
 		}
 		// 7: finish drops the previous controller and the marks, keeps the data.
@@ -436,8 +529,8 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 		if res != "controller_unhealthy" || scriptRollback(out) != "restored" {
 			t.Fatalf("%s:\n%s", res, out)
 		}
-		sameTree(t, "runtime root", tree(t, h.root), before)
-		if tree(t, h.data) != nil || exists(h.dir+"/.transition") || exists(h.dir+"/.env.prev") || h.read(h.dir+"/.env") != s1 {
+		sameTree(t, "runtime root", tree(t, h.root), append(before, stateRoot...))
+		if !onlySecret(t, h.data) || exists(h.dir+"/.transition") || exists(h.dir+"/.env.prev") || h.read(h.dir+"/.env") != s1 {
 			t.Fatalf("not restored: data %v", tree(t, h.data))
 		}
 		if ok, p, img, running := h.containerState("ccg-controller"); !ok || p != "" || img != h.oldC || !running {
@@ -461,11 +554,11 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 		if res != "restored" {
 			t.Fatalf("rollback %s:\n%s", res, out)
 		}
-		sameTree(t, "runtime root", tree(t, h.root), append(before, "55/", "55/state.json", "55/resolv.conf"))
+		sameTree(t, "runtime root", tree(t, h.root), append(append(before, stateRoot...), "55/", "55/state.json", "55/resolv.conf"))
 		if h.read(h.root+"/shared-egress/state.json") != "creds" || h.read(h.root+"/21/state.json") != "s21" {
 			t.Fatal("contents changed")
 		}
-		if tree(t, h.data) != nil || exists(h.dir+"/.transition") || h.read(h.dir+"/.env") != s1 {
+		if !onlySecret(t, h.data) || exists(h.dir+"/.transition") || h.read(h.dir+"/.env") != s1 {
 			t.Fatalf("not released: %v", tree(t, h.data))
 		}
 		if ok, p, img, running := h.containerState("ccg-controller"); !ok || p != "" || img != h.oldC || !running {
@@ -492,13 +585,13 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 		if out, res := h.install(testEnvFile); res != "started" {
 			t.Fatalf("%s:\n%s", res, out)
 		}
-		if env := h.read(h.dir + "/.env"); env != "CCG_CONTROL_DNS=0\nCCG_GUARD_IMAGE=placeholder-guard:0\nCCG_CONTROLLER_IMAGE=placeholder-controller:0\nCCG_GATEWAY_IMAGE=gw:live\nCCG_GUARD_TOKEN="+strings.Repeat("cd", 32)+"\n" {
+		if env := h.read(h.dir + "/.env"); env != "CCG_CONTROL_DNS=0\nCCG_GUARD_IMAGE=placeholder-guard:0\nCCG_CONTROLLER_IMAGE=placeholder-controller:0\nCCG_GATEWAY_IMAGE=gw:live\nCCG_GUARD_TOKEN="+strings.Repeat("cd", 32)+"\nCCG_STATE_IMAGE="+StateImage+"\n" {
 			t.Fatalf(".env:\n%s", env)
 		}
 		if h.read(h.dir+"/.env.prev") != old || exists(h.dir+"/.transition") || strings.Contains(h.calls(), "network create") {
 			t.Fatal("reinstall marks")
 		}
-		sameTree(t, "data", tree(t, h.data), []string{".adopted", "21/", "21/state.json"})
+		sameTree(t, "data", tree(t, h.data), []string{".adopted", "21/", "21/state.json", "state-admin.secret"})
 		if out, res := h.run(rollbackScript, ""); res != "restored" {
 			t.Fatalf("rollback %s:\n%s", res, out)
 		}
@@ -572,7 +665,7 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 			t.Fatal("previous controller")
 		}
 		// And it can still be released completely.
-		if _, res := h.run(rollbackScript, ""); res != "restored" || tree(t, h.data) != nil || !exists(h.root+"/.lock") {
+		if _, res := h.run(rollbackScript, ""); res != "restored" || !onlySecret(t, h.data) || !exists(h.root+"/.lock") {
 			t.Fatalf("release after an interrupted adopt: %s %v", res, tree(t, h.data))
 		}
 	})
@@ -585,8 +678,8 @@ func TestComposeScriptsBehaviour(t *testing.T) {
 		if res != "adopt_failed" || scriptRollback(out) != "restored" {
 			t.Fatalf("%s:\n%s", res, out)
 		}
-		sameTree(t, "runtime root", tree(t, h.root), before)
-		sameTree(t, "data", tree(t, h.data), []string{"runtime.json"})
+		sameTree(t, "runtime root", tree(t, h.root), append(before, stateRoot...))
+		sameTree(t, "data", tree(t, h.data), []string{"runtime.json", "state-admin.secret"})
 		if ok, p, _, running := h.containerState("ccg-controller"); !ok || p != "" || !running {
 			t.Fatal("old controller not restarted")
 		}
