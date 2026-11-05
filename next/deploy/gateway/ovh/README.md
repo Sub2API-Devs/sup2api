@@ -4,6 +4,16 @@
 >
 > 2026-10-27 清理：文中引用的本机 `artifacts/` 与 ovh 上 `~/sup2api/checks/`、旧 `release-*`、`~/sup2api-managed/{stage,backups,publish,ccgateway-images}/` 下的旧版本原始记录已删除，路径仅作出处；现存位置见 [CLI-TEST-PLAN](../../../plugins/ccgateway/docs/CLI-TEST-PLAN.md)。
 
+2026-11-05～06 ccgateway **0.1.130** + 核心 **0.1.247** + 控制器宿主启用会话记忆 Valkey（都是 `45297934c`；北京时间 11-05 22:56 起至 11-06 00:22）：
+- 内容：新账号的 CLI 换成 Claude Code 2.1.318（v56b），带工具清单头 `x-claude-code-sandy-plover`；Worker 会话记忆改存控制器宿主上的 Valkey，按账号 ACL 隔离、TTL 24 小时（[迁移文档](../../../plugins/ccgateway/docs/CLAUDE-CODE-2.1.318-MIGRATION.md)、[设计文档](../../../plugins/ccgateway/docs/SESSION-MEMORY-TOOLS-USED-DESIGN.md)）；核心加会话记忆设置。老账号保持原 CLI 与 Worker。
+- **手工删库（迁移脚本做不到）**：上传 0.1.130 时外壳回 503 "plugin package store is full"（外壳 0.1.132 起插件包存储上限 16 GiB，ovh 已用约 43 GB）。经用户同意，删除 `plugin_versions` 中 ccgateway 0.1.0～0.1.125 共 125 行，保留 0.1.126（builtin 绑定）～0.1.129；外壳 GC 随后回收 125 个包文件，存储降到 2.5 GB。删除前的行（`rows.csv`、`delete-list.csv`）和 40 GB 包文件（`blobs/`，逐个核对 `shas.txt`）在 `backups/plugin-versions-20261105/`，恢复时把行插回并把包文件放回外壳存储。
+- 插件：rollout 232，两节点 0.1.130，原有权限同意沿用；镜像 app/egress/controller/guard 0.1.130（`images.txt`），包 sha256 `25eb259f…993d`。
+- 控制器换 `ccgateway-controller:0.1.130`；新账号镜像（bundled-roles app，不带 update_existing）改为 `ccgateway-app:0.1.130`。前后容器对比（`containers-before.txt`/`containers-after.txt`）只有控制器变化。
+- 核心 0.1.247：manifest `ce8493b0…04b9`，计划 `1dc51a332385deb3ee962adaac0ec0fd` completed/13，约 58 秒，没有暂停；没有迁移，Host API 仍 9；两节点 0.1.247，`/readyz` 200，错误日志 0。备份 `backups/core-0.1.247`（`2ec4c589…ec7a`）。
+- **Valkey 手工启用**：CCGateway 配置是 `mode: controller`，控制台一键安装在这种模式下只推镜像、不跑装 Valkey 的脚本，完整重装又会换管理密钥、重装 HTTPS 网关，所以按安装脚本 `composeState` 在宿主手工执行（脚本 `/tmp/ccg-state-abc.sh`、`/tmp/ccg-state-de.sh`）：建 `/opt/ccgateway-runtime/state`（0755）、`state-conf`（0700），生成 `/opt/ccgateway-controller/state-admin.secret`（0600）和 `state-conf/users.acl`；`/opt/ccgateway/compose.yml` 换成核心模板（与原文件只差 guard 的 `CCG_GUARD_SESSION_STATE`、控制器的 socket 挂载、`state` 服务三处），`.env` 的 `CCG_GUARD_IMAGE` 改为 `ccgateway-guard:0.1.130`、加 `CCG_STATE_IMAGE=valkey/valkey:9.1.2`；依次 `up -d --no-deps` state → guard（1 秒就绪）→ controller（5 秒 healthy）。控制器日志 "session state Valkey reachable (0 account users)"；默认用户 NOAUTH，`ccg-controller` 只有 ACL/INFO/PING。26 个账号容器没有重建，核心日志无控制器错误。
+- 回滚：Valkey 用 `/opt/ccgateway/compose.yml.pre-state`、`.env.pre-state`（另一份在 `backups/ccgateway-compose-20261106/`）还原后 `up -d --no-deps guard controller`，再 `docker rm -f ccg-state`；插件回 0.1.129（`stage/ccgateway-0.1.130/rollout.py`），新账号镜像改回 `ccgateway-app:0.1.129`；核心回 0.1.246 不涉及 schema。
+- 脚本 `stage/ccgateway-0.1.130/`、`stage/0.1.247/`。
+
 2026-11-05 核心 **0.1.246**（`03f641100`，北京时间 18:25–18:26；计划 `dd68c4cec96e18f7bcd6397dec031376` completed/13，约 60 秒，没有暂停；**迁移 0088**（只新增 `user_access_keys`），schema `1d892be5…34a5` → `dc1a1d43…b9cc`；Host API 仍 9；内置插件与 0.1.245 相同，插件和外壳不变）：
 - 内容：访问密钥（CONTRACTS §80）；修复权限勾选框真实点击触发两次（`b2383df43`）。
 - 核验：两节点 0.1.246，api.prophey.ai `/readyz` 200，发布后 5 分钟错误日志 0；`/me/access-keys` 未登录回 401，伪造的 `sak_` 密钥回 401；线上前端资源含访问密钥页面。没有在线上创建过真实密钥，也没有查库。
